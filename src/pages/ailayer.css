@@ -1,0 +1,212 @@
+/* AI Layer page styles — every class carries the ail- prefix. */
+
+.ail-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1.1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.ail-col {
+  display: grid;
+  gap: 14px;
+}
+
+.ail-mission-card {
+  display: grid;
+  gap: 8px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.ail-mission-card > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ail-mission-card strong {
+  font-size: 14px;
+  flex: 1;
+}
+
+.ail-mission-card .ail-intent {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.ail-task-mini {
+  display: grid;
+  gap: 5px;
+}
+
+.ail-task-mini span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.ail-task-mini span em {
+  font-style: normal;
+  color: var(--muted);
+  margin-inline-start: auto;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ail-flow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ail-flow-chip {
+  padding: 7px 11px;
+  border: 1.5px solid var(--amber);
+  border-radius: var(--radius);
+  background: var(--amber-soft);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.ail-flow-arrow {
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.ail-drive-group {
+  display: grid;
+  gap: 8px;
+}
+
+.ail-drive-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.ail-drive-head strong {
+  font-size: 13px;
+}
+
+.ail-drive-head small {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.ail-agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.ail-agent-card {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: start;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.ail-agent-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.ail-agent-card header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ail-agent-card header strong {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.ail-agent-meta {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.ail-decision-row {
+  display: grid;
+  gap: 5px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.ail-decision-row header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ail-decision-row header strong {
+  flex: 1;
+  font-size: 13px;
+}
+
+.ail-decision-row small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ail-note {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.ail-activity-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+}
+
+.ail-activity-row:last-child {
+  border-bottom: 0;
+}
+
+.ail-activity-row .ail-activity-main {
+  display: grid;
+  gap: 3px;
+}
+
+.ail-activity-row small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+@media (max-width: 1240px) {
+  .ail-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

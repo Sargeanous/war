@@ -1,0 +1,179 @@
+/* Foundation page styles — every class carries the fnd- prefix. */
+
+.fnd-engine-grid,
+.fnd-domain-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.fnd-card {
+  display: grid;
+  gap: 8px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.fnd-card header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fnd-card header strong {
+  flex: 1;
+  font-size: 13.5px;
+  line-height: 1.3;
+}
+
+.fnd-card .fnd-meta {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.fnd-card .fnd-desc {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.fnd-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.fnd-caption {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.fnd-onto {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.fnd-tree {
+  display: grid;
+  gap: 3px;
+  max-height: 520px;
+  overflow: auto;
+  padding-inline-end: 6px;
+}
+
+.fnd-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  text-align: start;
+  font-size: 12.5px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.fnd-tree-row:hover {
+  background: var(--surface-2);
+}
+
+.fnd-tree-row.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.fnd-tree-row strong {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+
+.fnd-tree-row small {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.fnd-class-detail {
+  display: grid;
+  gap: 12px;
+}
+
+.fnd-class-detail > p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.fnd-rel-list {
+  display: grid;
+  gap: 6px;
+}
+
+.fnd-rel {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+
+.fnd-rel em {
+  font-style: normal;
+  font-weight: 800;
+  color: var(--primary-dark);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11.5px;
+}
+
+@media (max-width: 1000px) {
+  .fnd-onto {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fnd-designer-section {
+  display: grid;
+  gap: 8px;
+}
+
+.fnd-designer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.fnd-designer-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.fnd-designer-row.weapons {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 0.8fr) auto;
+}
+
+.fnd-designer-row input {
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+}

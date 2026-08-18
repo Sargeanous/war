@@ -1,0 +1,371 @@
+/* ScenarioDesign page styles — every class carries the sd- prefix. */
+
+button.sd-scn-selected.sd-scn-selected {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.sd-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.sd-tab-stack {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.sd-desc {
+  margin: 0 0 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.sd-meta-grid {
+  margin-bottom: 14px;
+}
+
+.sd-orbat-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sd-controls-hint {
+  margin: 0;
+  max-width: 460px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.sd-palette {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.sd-palette-group {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.sd-palette-head {
+  padding-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.sd-palette-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sd-chip {
+  padding: 5px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.sd-chip:hover {
+  border-color: var(--primary);
+  color: var(--primary-dark);
+}
+
+.sd-chip.sd-armed {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.sd-placement-note {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 13px;
+  border: 1px solid #b8dbd0;
+  border-radius: var(--radius);
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sd-placement-note span {
+  flex: 1;
+}
+
+.sd-note-cancel {
+  padding: 4px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sd-note-cancel:hover {
+  border-color: var(--primary);
+  color: var(--primary-dark);
+}
+
+.sd-force-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 9px;
+}
+
+.sd-force-head strong {
+  flex: 1;
+  font-size: 14.5px;
+}
+
+.sd-side-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+
+.sd-unit-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary-dark);
+  font-weight: 800;
+  text-align: start;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.sd-unit-link:hover {
+  color: var(--primary);
+}
+
+button.sd-danger {
+  border-color: var(--red);
+  background: var(--red);
+  color: #fff;
+}
+
+button.sd-danger:hover {
+  background: #9a1d13;
+}
+
+.sd-obj-column {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.sd-obj-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sd-obj-head strong {
+  display: block;
+  font-size: 14.5px;
+}
+
+.sd-obj-head small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+}
+
+.sd-obj-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.sd-obj-row strong {
+  display: block;
+  font-size: 14.5px;
+}
+
+.sd-obj-row p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.sd-obj-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.sd-obj-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.sd-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sd-icon-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary-dark);
+}
+
+.sd-icon-btn.sd-danger-link {
+  border-color: #f4c3bd;
+  color: var(--red);
+}
+
+.sd-icon-btn.sd-danger-link:hover {
+  border-color: var(--red);
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.sd-weight-warn {
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid #efd7a8;
+  border-radius: var(--radius);
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.sd-issue-list {
+  display: grid;
+  gap: 8px;
+}
+
+.sd-issue-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.sd-issue-row strong {
+  display: block;
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+
+.sd-issue-row small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+}
+
+.sd-checked-at {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sd-validate-note {
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border: 1px solid #efd7a8;
+  border-radius: var(--radius);
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.sd-env-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 11px 13px;
+  border-inline-start: 4px solid var(--blue);
+  border-radius: var(--radius);
+  background: var(--blue-soft);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.sd-env-note svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--blue);
+}
+
+.sd-span-full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 860px) {
+  .sd-palette-group {
+    grid-template-columns: 1fr;
+  }
+
+  .sd-palette-head {
+    padding-top: 0;
+  }
+
+  .sd-orbat-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sd-obj-row {
+    grid-template-columns: 1fr;
+  }
+
+  .sd-obj-actions {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+  }
+}

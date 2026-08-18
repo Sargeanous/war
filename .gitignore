@@ -1,0 +1,6 @@
+node_modules
+dist
+server/state.json
+.env
+logs
+tmp
