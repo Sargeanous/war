@@ -99,7 +99,7 @@ export default function Admin({ notify, profile }: PageProps) {
 
   return (
     <div className="page-body">
-      <div className="adm-banner">EXERCISE USE ONLY — ALL DATA FICTIONAL · Unified user, permission and log management (L1)</div>
+      <div className="adm-banner">EXERCISE USE ONLY — ALL DATA FICTIONAL · Unified user, permission and log management</div>
 
       <MetricGrid>
         <Metric label="Users" value={String(users.length)} helper={`${users.filter((u) => u.status === "active").length} active`} tone="info" />

@@ -16,6 +16,7 @@ import {
   Sparkles,
   Target,
   X,
+  FlaskConical,
 } from "lucide-react";
 import type { PageProps } from "../shell";
 import type {
@@ -28,6 +29,8 @@ import type {
   PlatformInfo,
   Scenario,
   SubTask,
+  CoaAnalysisStep,
+  CoaStrategy,
 } from "../types";
 import {
   createMission,
@@ -38,6 +41,7 @@ import {
   fetchPlatform,
   fetchScenarios,
   generateCoas,
+  silentEvalCoa,
   updateCoa,
 } from "../api";
 import {
@@ -111,6 +115,10 @@ export default function CoaGeneration(props: PageProps) {
   const [count, setCount] = useState<CandidateCount>("3");
   const [decomposing, setDecomposing] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [strategy, setStrategy] = useState<CoaStrategy>("balanced");
+  const [analysis, setAnalysis] = useState<CoaAnalysisStep[]>([]);
+  const [analysisShown, setAnalysisShown] = useState(0);
+  const [evalBusyId, setEvalBusyId] = useState<string | null>(null);
   const [creatingMission, setCreatingMission] = useState(false);
   const [busyCoaId, setBusyCoaId] = useState<string | null>(null);
   const [missionTitle, setMissionTitle] = useState("");
@@ -253,21 +261,47 @@ export default function CoaGeneration(props: PageProps) {
     if (!mission || !scenarioId) return;
     setGenerating(true);
     try {
-      const arrived = await generateCoas({
+      const result = await generateCoas({
         scenarioId,
         missionId: mission.id,
         count: Number(count),
+        strategy,
       });
       const all = await fetchCoas(scenarioId);
       if (!alive.current) return;
       setCoas(all);
+      setAnalysis(result.analysis);
+      setAnalysisShown(0);
+      result.analysis.forEach((_, i) =>
+        window.setTimeout(() => {
+          if (alive.current) setAnalysisShown((n) => Math.max(n, i + 1));
+        }, 420 * (i + 1))
+      );
+      const rec = result.coas.find((c) => c.grade === "recommended");
       notify(
-        `${arrived.length} candidate COA${arrived.length === 1 ? "" : "s"} generated and scored — review feasibility, risk and effect below`
+        `${result.coas.length} candidate COA${result.coas.length === 1 ? "" : "s"} generated under "${strategy}" — ${rec ? `"${rec.name}" recommended` : "review the grades below"}`
       );
     } catch (e) {
       notify(errorMessage(e));
     } finally {
       if (alive.current) setGenerating(false);
+    }
+  }
+
+  async function handleSilentEval(coa: Coa) {
+    if (evalBusyId) return;
+    setEvalBusyId(coa.id);
+    try {
+      const updated = await silentEvalCoa(coa.id);
+      if (!alive.current) return;
+      setCoas((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      notify(
+        `Silent deduction of "${updated.name}": objectives ${updated.silentEval?.projected.objectiveScore}%, BLUE ${updated.silentEval?.projected.blueStrength}% vs RED ${updated.silentEval?.projected.redStrength}%`
+      );
+    } catch (e) {
+      notify(errorMessage(e));
+    } finally {
+      if (alive.current) setEvalBusyId(null);
     }
   }
 
@@ -494,6 +528,16 @@ export default function CoaGeneration(props: PageProps) {
         action={
           <ActionRow>
             <Segmented
+              value={strategy}
+              onChange={(v) => setStrategy(v as CoaStrategy)}
+              items={[
+                { id: "results-first", label: "Results" },
+                { id: "loss-control", label: "Loss control" },
+                { id: "speed-first", label: "Speed" },
+                { id: "balanced", label: "Balanced" },
+              ]}
+            />
+            <Segmented
               value={count}
               onChange={handleCountChange}
               items={[
@@ -513,6 +557,22 @@ export default function CoaGeneration(props: PageProps) {
           </ActionRow>
         }
       >
+        {analysis.length ? (
+          <div className="coa-analysis">
+            <p className="coa-analysis-head">SAGE planning analysis</p>
+            {analysis.map((step, i) => (
+              <div
+                key={step.step}
+                className={`coa-analysis-step${i < analysisShown ? " done" : i === analysisShown ? " running" : ""}`}
+              >
+                <span className="coa-analysis-mark">{i < analysisShown ? "✓" : i === analysisShown ? "…" : String(i + 1)}</span>
+                <span className="coa-analysis-name">{step.step}</span>
+                <span className="coa-analysis-detail">{i < analysisShown ? step.detail : ""}</span>
+                <span className="coa-analysis-ms">{i < analysisShown ? `${step.ms.toFixed(1)}s` : ""}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
         {scenarioLoading ? (
           <EmptyState
             icon={Compass}
@@ -544,6 +604,12 @@ export default function CoaGeneration(props: PageProps) {
                 <article key={coa.id} className="coa-card" style={{ borderTopColor: coa.color }}>
                   <div className="coa-card-head">
                     <strong>{coa.name}</strong>
+                    {coa.grade ? (
+                      <Tag
+                        label={coa.grade}
+                        color={coa.grade === "recommended" ? "var(--primary)" : coa.grade === "steady" ? "var(--blue)" : undefined}
+                      />
+                    ) : null}
                     <StatusPill label={coa.status} tone={statusTone(coa.status)} />
                   </div>
                   <div className="coa-card-sub">
@@ -579,6 +645,16 @@ export default function CoaGeneration(props: PageProps) {
                       <small>of 100</small>
                     </div>
                   </div>
+                  {coa.silentEval ? (
+                    <div className="coa-projection">
+                      <span>Silent deduction @ T+{coa.silentEval.projected.durationH}h</span>
+                      <strong>
+                        OBJ {coa.silentEval.projected.objectiveScore}% · BLUE {Math.round(coa.silentEval.projected.blueStrength)}% · RED{" "}
+                        {Math.round(coa.silentEval.projected.redStrength)}% · net {coa.silentEval.projected.net >= 0 ? "+" : ""}
+                        {coa.silentEval.projected.net}
+                      </strong>
+                    </div>
+                  ) : null}
                   <ActionRow>
                     <Button
                       icon={Check}
@@ -586,6 +662,14 @@ export default function CoaGeneration(props: PageProps) {
                       disabled={busyCoaId === coa.id || coa.status === "selected"}
                     >
                       Select
+                    </Button>
+                    <Button
+                      icon={FlaskConical}
+                      variant="secondary"
+                      onClick={() => handleSilentEval(coa)}
+                      disabled={evalBusyId === coa.id}
+                    >
+                      {evalBusyId === coa.id ? "Deduction running…" : "Silent deduction"}
                     </Button>
                     <Button
                       icon={X}

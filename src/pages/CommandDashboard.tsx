@@ -45,7 +45,7 @@ const PAGE_LABELS: Partial<Record<PageId, string>> = {
   scenario: "Scenario Design",
   deduction: "Full-Process Deduction",
   assessment: "Assessment & Replay",
-  ailayer: "AI Layer",
+  ailayer: "AI Command Layer",
   foundation: "Platform Foundation",
 };
 
@@ -414,8 +414,7 @@ export default function CommandDashboard(props: PageProps) {
       <div className="cmd-layer-grid">
         <section className="panel cmd-layer-card">
           <header className="cmd-layer-head">
-            <span className="layer-badge">L3</span>
-            <h3>Applications</h3>
+            <h3>Planning &amp; Simulation</h3>
           </header>
           <p className="cmd-layer-sub">From scenario to assessment — design, generate COAs, configure rules, deduce, assess.</p>
           <DetailGrid>
@@ -433,8 +432,7 @@ export default function CommandDashboard(props: PageProps) {
 
         <section className="panel cmd-layer-card">
           <header className="cmd-layer-head">
-            <span className="layer-badge l2">L2</span>
-            <h3>AI layer</h3>
+            <h3>AI Command</h3>
           </header>
           <p className="cmd-layer-sub">
             Strategic task decomposition, tactical agent library and human-AI collaborative decision over the OODA loop.
@@ -447,15 +445,14 @@ export default function CommandDashboard(props: PageProps) {
           </DetailGrid>
           <ActionRow>
             <Button icon={BrainCircuit} variant="secondary" onClick={() => openPage("ailayer")} disabled={!canOpen("ailayer")}>
-              AI layer
+              AI Command Layer
             </Button>
           </ActionRow>
         </section>
 
         <section className="panel cmd-layer-card">
           <header className="cmd-layer-head">
-            <span className="layer-badge l1">L1</span>
-            <h3>Platform foundation</h3>
+            <h3>Platform Foundation</h3>
           </header>
           <p className="cmd-layer-sub">
             One platform, multiple simulation engines and a unified data foundation with ontology-backed low-code design.

@@ -16,6 +16,7 @@ const MAX_SALVOS_PER_TICK = 6;
 
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 const round1 = (n) => Math.round(n * 10) / 10;
+const round2 = (n) => Math.round(n * 100) / 100;
 const round4 = (n) => Math.round(n * 10000) / 10000;
 const nowIso = () => new Date().toISOString();
 const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
@@ -160,6 +161,7 @@ export function createRun({ scenario, coas, ruleSet, engine, speed, label, id })
       color: coa.color,
       status: "running",
       currentPhaseId: coa.phases.length ? coa.phases[0].id : null,
+      currentPhaseName: coa.phases.length ? coa.phases[0].name : null,
       units,
       recentEvents: [],
       eventCount: 0,
@@ -183,6 +185,7 @@ export function createRun({ scenario, coas, ruleSet, engine, speed, label, id })
     branch._initialBlue = sideStrength(branch.units, "blue");
     branch._initialAmmo = totalAmmo(branch.units, "blue");
     branch.metrics = computeMetrics(branch, scenario);
+    branch.score = computeScore(branch, scenario);
     snapshot(branch);
     pushEvent(branch, {
       type: "info",
@@ -300,6 +303,35 @@ function computeMetrics(branch, scenario) {
   };
 }
 
+// Mirrored wargame scoreboard: objective points (weighted objective completion +
+// accumulated victory-rule points for BLUE), force points (remaining strength),
+// combat points (enemy units destroyed). Net is BLUE total minus RED total.
+function computeScore(branch, scenario) {
+  const forcePoints = (side) =>
+    Math.round(
+      branch.units.filter((u) => u.side === side && u.status !== "destroyed").reduce((sum, u) => sum + u.strength, 0)
+    );
+  const blueObjective = objectiveScoreFor(branch, scenario, "blue") * 2 + Math.round(branch._victoryPoints);
+  const redObjective = objectiveScoreFor(branch, scenario, "red") * 2;
+  const blue = {
+    objective: blueObjective,
+    force: forcePoints("blue"),
+    combat: branch.metrics.redLosses * 150,
+  };
+  const red = {
+    objective: redObjective,
+    force: forcePoints("red"),
+    combat: branch.metrics.blueLosses * 150,
+  };
+  const blueTotal = blue.objective + blue.force + blue.combat;
+  const redTotal = red.objective + red.force + red.combat;
+  return {
+    blue: { ...blue, total: blueTotal },
+    red: { ...red, total: redTotal },
+    net: blueTotal - redTotal,
+  };
+}
+
 function snapshot(branch) {
   branch._full.snapshots.push({
     tick: branch._tick,
@@ -363,6 +395,7 @@ function tickBranch(run, branch, ctx) {
   if (phase && branch.currentPhaseId !== phase.id) {
     const isFirst = coa.phases.length && coa.phases[0].id === phase.id;
     branch.currentPhaseId = phase.id;
+    branch.currentPhaseName = phase.name;
     if (!isFirst) {
       pushEvent(branch, {
         type: "phase",
@@ -509,7 +542,15 @@ function tickBranch(run, branch, ctx) {
       actor.detectedByEnemy = true;
     }
 
-    const hit = die(branch, ruleSet) < pk;
+    const rollValue = die(branch, ruleSet);
+    const hit = rollValue < pk;
+    const damage = hit ? damageFor(weapon, branch, ruleSet) : 0;
+    const pkModifiers = effects
+      .filter(({ effect }) => effect.type === "modify-pk")
+      .map(({ rule, effect }) => ({ rule: rule.name, factor: round2(Number(effect.params.factor) || 1) }));
+    if (actor.side === "blue" && modActive && branch._mod.pkFactor !== 1) {
+      pkModifiers.push({ rule: "Commander decision effect", factor: round2(branch._mod.pkFactor) });
+    }
     pushEvent(branch, {
       type: "engagement",
       severity: "warn",
@@ -518,10 +559,22 @@ function tickBranch(run, branch, ctx) {
       title: `${actor.name} engaged ${target.name}`,
       detail: `${weapon.type.toUpperCase()} salvo at ${Math.round(rangeKm)} km (pk ${pk.toFixed(2)}) — ${hit ? "HIT" : "miss"}.`,
       position: { ...target.position },
+      adjudication: {
+        attacker: actor.name,
+        target: target.name,
+        weapon: weapon.type.toUpperCase(),
+        weaponType: weapon.type,
+        rangeKm: round1(rangeKm),
+        basePk: round2(weapon.pk),
+        modifiers: pkModifiers,
+        finalPk: round2(pk),
+        roll: round2(rollValue),
+        result: hit ? "hit" : "miss",
+        damage: round1(damage),
+      },
     });
 
     if (hit) {
-      const damage = damageFor(weapon, branch, ruleSet);
       target.strength = round1(clamp(target.strength - damage, 0, 100));
       if (weapon.type === "cyber-effect") target.supply = clamp(target.supply - 12, 0, 100);
       if (target.strength <= 0) {
@@ -616,6 +669,7 @@ function tickBranch(run, branch, ctx) {
 
   // --- Metrics, snapshots ---------------------------------------------------------------------
   branch.metrics = computeMetrics(branch, scenario);
+  branch.score = computeScore(branch, scenario);
   if (branch.metrics.objectiveScore >= 50 && branch._objHalfTick === null) branch._objHalfTick = branch._tick;
   if (branch._tick % SNAPSHOT_EVERY === 0) {
     branch.metricsHistory.push({ tick: branch._tick, simTimeH: round1(branch._simTimeH), ...branch.metrics });
@@ -1045,6 +1099,7 @@ export function applyIntervention(run, branchId, request, ctx) {
       throw new Error(`Unknown intervention type "${request.type}".`);
   }
   branch.metrics = computeMetrics(branch, ctx.scenario);
+  branch.score = computeScore(branch, ctx.scenario);
 }
 
 // ---------------------------------------------------------------------------

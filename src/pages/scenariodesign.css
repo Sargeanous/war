@@ -369,3 +369,85 @@ button.sd-danger:hover {
     justify-content: flex-start;
   }
 }
+
+/* --- Intelligent Documents (OPORD wizard) ------------------------------------ */
+
+.sd-lib-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.sd-opord-text {
+  width: 100%;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.sd-opord-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.sd-opord-src {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sd-opord-src small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sd-opord-review {
+  display: grid;
+  gap: 10px;
+  max-height: 46vh;
+  overflow: auto;
+  padding-inline-end: 4px;
+}
+
+.sd-opord-sidecard {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.sd-opord-sidehead {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.sd-opord-sidehead.blue {
+  color: #4f8fca;
+}
+
+.sd-opord-sidehead.red {
+  color: #c9564a;
+}
+
+.sd-opord-obj {
+  margin: 0;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sd-opord-warn {
+  margin: 0;
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 700;
+}

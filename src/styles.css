@@ -451,8 +451,9 @@ button:disabled {
 
 .panel-header {
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px 12px;
   margin-bottom: 16px;
+  flex-wrap: wrap; /* actions drop below the title instead of crushing it */
 }
 
 .panel-header > div:first-child {
@@ -464,7 +465,7 @@ button:disabled {
 
 .panel-header h2 {
   margin: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal; /* 'anywhere' let titles collapse to one letter per line */
   font-size: 22px;
   line-height: 1.2;
 }
@@ -957,6 +958,16 @@ button:disabled {
   color: var(--primary-dark);
 }
 
+/* Grid items default to min-width:auto — wide tables must shrink and scroll
+   inside .table-card instead of stretching their grid track past the viewport. */
+.split-grid > *,
+.cms-grid > *,
+.sd-stack > *,
+.detail-stack > *,
+.coa-compare > * {
+  min-width: 0;
+}
+
 .table-card {
   width: 100%;
   overflow-x: auto;
@@ -1437,7 +1448,26 @@ select:focus {
   }
 
   .nav-groups {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* Compact chip nav: group label on its own line, pages flow as wrapped chips */
+  .nav-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .nav-group p {
+    width: 100%;
+  }
+
+  .nav-group button {
+    width: auto;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
   }
 
   .workspace {
@@ -2065,9 +2095,11 @@ select:focus {
   font-size: 12px;
 }
 
+.svg-radar { overflow: visible; }
+
 .svg-radar .radar-label {
   fill: var(--muted);
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 700;
 }
 
@@ -2138,6 +2170,69 @@ select:focus {
 .map-unit-icon {
   background: transparent;
   border: none;
+}
+
+/* NATO-style wargame counters */
+.map-counter {
+  position: relative;
+  width: 28px;
+  height: 24px;
+  border: 1.5px solid rgba(255, 255, 255, 0.92);
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+.map-counter .mc-glyph {
+  display: block;
+  width: 19px;
+  height: 11px;
+  margin-top: -2px;
+}
+
+.map-counter .mc-glyph svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.map-counter .mc-str {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 1.5px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.map-counter .mc-str i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+}
+
+.map-counter .mc-dead {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+/* Hex board coordinate labels (visible at high zoom) */
+.hex-coord-label {
+  color: rgba(214, 233, 240, 0.42);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 8.5px;
+  letter-spacing: 0.05em;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+  pointer-events: none;
 }
 
 @keyframes event-pulse {

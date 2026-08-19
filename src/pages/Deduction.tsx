@@ -1,19 +1,20 @@
 import {
-  Activity,
   AlertTriangle,
   BrainCircuit,
   CheckCircle2,
   ChevronLeft,
   Clock,
-  Crosshair,
-  Gauge,
   ListChecks,
-  MapPinned,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pause,
   Play,
   Radar,
   Rocket,
+  ScrollText,
   SkipForward,
+  Swords,
+  Trophy,
   Wand2,
   X,
 } from "lucide-react";
@@ -22,6 +23,7 @@ import "./deduction.css";
 import {
   ApiError,
   controlRun,
+  explainBranch,
   decideBranch,
   fetchBootstrap,
   fetchCoas,
@@ -55,6 +57,8 @@ import TheaterMap from "../map";
 import type { PageProps } from "../shell";
 import type {
   Bootstrap,
+  Branch,
+  ExplainTopic,
   Coa,
   EngineKind,
   InterventionType,
@@ -63,9 +67,13 @@ import type {
   RunSummary,
   Scenario,
   SimRun,
+  Unit,
 } from "../types";
 
 const errMsg = (error: unknown) => (error instanceof ApiError ? error.message : "Backend unreachable");
+
+type ViewSide = "all" | "blue" | "red";
+type DrawerId = "score" | "events" | "adjudication" | "decisions" | "sage";
 
 export default function Deduction({ notify, goTo, profile }: PageProps) {
   const [boot, setBoot] = useState<Bootstrap | null>(null);
@@ -77,6 +85,13 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
   const [rationale, setRationale] = useState("");
   const [showIntervene, setShowIntervene] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
+  const [viewSide, setViewSide] = useState<ViewSide>("all");
+  const [drawer, setDrawer] = useState<DrawerId | null>("score");
+  const [orbatSide, setOrbatSide] = useState<"blue" | "red">("blue");
+  const [orbatOpen, setOrbatOpen] = useState(true);
+  const [sageLog, setSageLog] = useState<Array<{ topic: ExplainTopic; label: string; answer: string; source: string }>>([]);
+  const [sageBusy, setSageBusy] = useState<ExplainTopic | null>(null);
   const trailsRef = useRef<Record<string, LatLng[]>>({});
   const canIntervene = profile.id === "operator" || profile.id === "admin";
 
@@ -245,6 +260,19 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
     }
   }
 
+  async function doExplain(topic: ExplainTopic, label: string) {
+    if (!run || !branch || sageBusy) return;
+    setSageBusy(topic);
+    try {
+      const result = await explainBranch(run.id, branch.id, topic);
+      setSageLog((log) => [{ topic, label, answer: result.answer, source: result.source }, ...log].slice(0, 8));
+    } catch (error) {
+      notify(errMsg(error));
+    } finally {
+      setSageBusy(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="page-body">
@@ -293,6 +321,21 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
     }
   }
 
+  const simTimeH = run.clock.simTimeH;
+  const round = Math.floor(simTimeH / 24) + 1;
+  const phaseName = branch?.currentPhaseName ?? "Free play";
+  const hourOfDay = simTimeH % 24;
+  const daylight = hourOfDay >= 6 && hourOfDay < 18;
+  const env = run.environment ?? scenario?.environment;
+  const fogSide = viewSide === "all" ? null : viewSide;
+
+  // Fog of war applies to the ORBAT roster too — a side only lists what it sees.
+  const rosterVisible = (u: Unit) =>
+    !fogSide || u.side === fogSide || u.detectedByEnemy || u.status === "destroyed";
+  const roster = (branch?.units ?? []).filter((u) => u.side === orbatSide && rosterVisible(u));
+  const selectedUnit = branch?.units.find((u) => u.id === selectedUnitId && rosterVisible(u)) ?? null;
+  const adjudicated = (branch?.recentEvents ?? []).filter((e) => e.adjudication);
+
   return (
     <div className="page-body">
       <div className="ded-header">
@@ -302,17 +345,29 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
           onClick={() => {
             setActiveRunId(null);
             setRun(null);
+            setSelectedUnitId(null);
             fetchRuns().then(setRuns).catch(() => undefined);
           }}
         >
           <ChevronLeft size={16} />
           Runs
         </button>
-        <span className="sim-clock">
-          <Clock size={15} />
-          {simClock(run.clock.simTimeH)}
-          <small>tick {run.clock.tick}</small>
-        </span>
+        <div className="ded-phase-banner">
+          <strong>
+            R{round} · {phaseName}
+          </strong>
+          <span>
+            <Clock size={12} style={{ verticalAlign: "-2px" }} /> {simClock(simTimeH)} · tick {run.clock.tick}
+          </span>
+        </div>
+        {env ? (
+          <div className="ded-env-pills">
+            <span className="ded-env-pill">{env.weather}</span>
+            <span className="ded-env-pill">sea {env.seaState}</span>
+            <span className="ded-env-pill">EMCON {env.emcon}</span>
+            <span className="ded-env-pill">{daylight ? "day" : "night"}</span>
+          </div>
+        ) : null}
         <StatusPill label={run.status} tone={statusTone(run.status)} />
         <Tag label={`${run.engine} · ${run.clock.speed}x`} />
         <span className="spacer" />
@@ -424,8 +479,76 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
       ) : null}
 
       {branch && scenario ? (
-        <div className="split-grid wide-left">
-          <Panel icon={MapPinned} title={`Theater — ${branch.name}`} action={<Tag label={`${branch.units.filter((u) => u.status === "active" || u.status === "damaged").length} pieces active`} />}>
+        <div className={`ded-console${orbatOpen ? "" : " orbat-closed"}`}>
+          {orbatOpen ? (
+            <aside className="ded-orbat">
+              <div className="ded-orbat-head">
+                <button
+                  type="button"
+                  className={`ded-orbat-side blue${orbatSide === "blue" ? " active" : ""}`}
+                  onClick={() => setOrbatSide("blue")}
+                >
+                  BLUE {branch.units.filter((u) => u.side === "blue" && u.status !== "destroyed").length}
+                </button>
+                <button
+                  type="button"
+                  className={`ded-orbat-side red${orbatSide === "red" ? " active" : ""}`}
+                  onClick={() => setOrbatSide("red")}
+                >
+                  RED {branch.units.filter((u) => u.side === "red" && u.status !== "destroyed").length}
+                </button>
+                <button type="button" className="ded-orbat-collapse" title="Collapse ORBAT" onClick={() => setOrbatOpen(false)}>
+                  <PanelLeftClose size={15} />
+                </button>
+              </div>
+              <div className="ded-orbat-list">
+                {roster.length ? (
+                  roster.map((unit) => (
+                    <button
+                      key={unit.id}
+                      type="button"
+                      className={`ded-orbat-row${unit.id === selectedUnitId ? " active" : ""}${unit.status === "destroyed" ? " dead" : ""}`}
+                      onClick={() => setSelectedUnitId(unit.id === selectedUnitId ? null : unit.id)}
+                    >
+                      <span className="ded-orbat-chip" style={{ background: unit.status === "destroyed" ? "#5b6663" : sideColors[unit.side] }}>
+                        {unit.domain[0].toUpperCase()}
+                      </span>
+                      <span className="ded-orbat-name">{unit.name}</span>
+                      <span className="ded-orbat-str">
+                        <i
+                          style={{
+                            width: `${Math.max(0, Math.min(100, unit.strength))}%`,
+                            background: unit.strength > 60 ? "#35c26e" : unit.strength > 30 ? "#f5a524" : "#f04438",
+                          }}
+                        />
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="ded-orbat-empty">
+                    {fogSide ? `No ${orbatSide.toUpperCase()} contacts held in the ${fogSide.toUpperCase()} picture.` : "No units."}
+                  </p>
+                )}
+              </div>
+              {selectedUnit ? (
+                <div className="ded-unit-card">
+                  <strong>{selectedUnit.name}</strong>
+                  <DetailGrid>
+                    <Detail label="Status" value={selectedUnit.status} />
+                    <Detail label="Strength" value={`${Math.round(selectedUnit.strength)}%`} />
+                    <Detail label="Supply" value={`${Math.round(selectedUnit.supply)}%`} />
+                    <Detail label="Speed" value={`${Math.round(selectedUnit.speedKts)} kts`} />
+                  </DetailGrid>
+                  <small>
+                    {selectedUnit.taskForce ?? selectedUnit.domain} · {selectedUnit.position.lat.toFixed(2)},{" "}
+                    {selectedUnit.position.lng.toFixed(2)}
+                  </small>
+                </div>
+              ) : null}
+            </aside>
+          ) : null}
+
+          <div className="ded-map-zone">
             <TheaterMap
               center={scenario.mapCenter}
               zoom={scenario.mapZoom}
@@ -434,68 +557,191 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
               objectives={scenario.objectives}
               trails={trails}
               events={branch.recentEvents.filter((e) => e.position).slice(0, 6)}
-              height={470}
+              selectedUnitId={selectedUnitId}
+              onSelectUnit={(id) => setSelectedUnitId(id)}
+              showHexGrid
+              fogSide={fogSide}
+              height={560}
             />
-          </Panel>
-          <div className="ded-metric-stack">
-            <Panel icon={Gauge} title="Correlation of forces">
-              <div className="detail-stack">
-                <ProgressBar label="BLUE strength" value={branch.metrics.blueStrength} tone="info" />
-                <ProgressBar label="RED strength" value={branch.metrics.redStrength} tone="danger" />
-                <ProgressBar label="Objectives" value={branch.metrics.objectiveScore} tone="good" />
-                <ProgressBar label="BLUE supply" value={branch.metrics.supplyLevel} tone="warn" />
-                <DetailGrid>
-                  <Detail label="BLUE losses" value={String(branch.metrics.blueLosses)} />
-                  <Detail label="RED losses" value={String(branch.metrics.redLosses)} />
-                  <Detail label="Events" value={String(branch.eventCount)} />
-                  <Detail label="Decisions" value={`${decidedDecisions.length}/${branch.decisions.length}`} />
-                </DetailGrid>
-                <div className="ded-spark-row">
-                  <small>BLUE strength over time</small>
-                  <Sparkline values={branch.metricsHistory.map((m) => m.blueStrength)} color={sideColors.blue} />
-                </div>
-                <div className="ded-spark-row">
-                  <small>RED strength over time</small>
-                  <Sparkline values={branch.metricsHistory.map((m) => m.redStrength)} color={sideColors.red} />
-                </div>
-              </div>
-            </Panel>
-          </div>
-        </div>
-      ) : null}
-
-      {branch ? (
-        <div className="split-grid equal">
-          <Panel icon={Activity} title="Event stream" action={<Tag label={`${branch.eventCount} total`} />}>
-            <div className="ded-event-list">
-              <ObjectList
-                rows={branch.recentEvents.map((event) => ({
-                  id: event.id,
-                  title: event.title,
-                  meta: `${simClock(event.simTimeH)} · ${event.detail}`,
-                  tone: eventTones[event.type] ?? "neutral",
-                  status: event.type,
-                }))}
+            {!orbatOpen ? (
+              <button type="button" className="ded-map-reopen" title="Open ORBAT" onClick={() => setOrbatOpen(true)}>
+                <PanelLeftOpen size={15} />
+              </button>
+            ) : null}
+            <div className="ded-map-float">
+              <Segmented
+                value={viewSide}
+                onChange={(v) => setViewSide(v as ViewSide)}
+                items={[
+                  { id: "blue", label: "BLUE view" },
+                  { id: "all", label: "Umpire" },
+                  { id: "red", label: "RED view" },
+                ]}
               />
             </div>
-          </Panel>
-          <Panel icon={Crosshair} title="Decision record">
-            {decidedDecisions.length ? (
-              <div className="ded-decided-list">
-                {decidedDecisions.map((d) => (
-                  <div key={d.id} className="ded-decided-row">
-                    <strong>{d.title}</strong>
-                    <span>→ {d.options.find((o) => o.id === d.decidedOptionId)?.label}</span>
-                    <span className="spacer" />
-                    <Tag label={d.followedAi ? "Followed SAGE" : "Commander override"} color={d.followedAi ? "var(--blue)" : "var(--amber)"} />
-                    <small>{simClock(d.simTimeH)}</small>
+            <div className="ded-hintbar">
+              wheel zoom · drag pan · click a counter or ORBAT row to inspect · hex coordinates appear at close zoom
+              {fogSide ? ` · ${fogSide.toUpperCase()} picture: undetected enemy pieces are hidden` : ""}
+            </div>
+          </div>
+
+          <div className="ded-drawer-zone">
+            {drawer ? (
+              <div className="ded-drawer">
+                {drawer === "score" ? <ScoreDrawer branch={branch} decidedCount={decidedDecisions.length} /> : null}
+                {drawer === "events" ? (
+                  <div className="ded-drawer-body">
+                    <ObjectList
+                      rows={branch.recentEvents.map((event) => ({
+                        id: event.id,
+                        title: event.title,
+                        meta: `${simClock(event.simTimeH)} · ${event.detail}`,
+                        tone: eventTones[event.type] ?? "neutral",
+                        status: event.type,
+                      }))}
+                    />
                   </div>
-                ))}
+                ) : null}
+                {drawer === "adjudication" ? (
+                  <div className="ded-drawer-body">
+                    {adjudicated.length ? (
+                      adjudicated.map((event) => {
+                        const a = event.adjudication!;
+                        return (
+                          <div key={event.id} className={`ded-adj-card ${a.result}`}>
+                            <header>
+                              <strong>
+                                {a.attacker} → {a.target}
+                              </strong>
+                              <Tag label={a.result.toUpperCase()} color={a.result === "hit" ? "var(--red)" : "var(--muted)"} />
+                            </header>
+                            <div className="ded-adj-grid">
+                              <span>Weapon</span>
+                              <em>
+                                {a.weapon} · {a.rangeKm} km
+                              </em>
+                              <span>Base pk</span>
+                              <em>{a.basePk.toFixed(2)}</em>
+                              {a.modifiers.map((m) => (
+                                <FragmentRow key={m.rule} rule={m.rule} factor={m.factor} />
+                              ))}
+                              <span>Final pk</span>
+                              <em>{a.finalPk.toFixed(2)}</em>
+                              <span>Random roll</span>
+                              <em>
+                                {a.roll.toFixed(2)} {a.roll < a.finalPk ? "<" : "≥"} {a.finalPk.toFixed(2)} → {a.result.toUpperCase()}
+                              </em>
+                              {a.result === "hit" ? (
+                                <>
+                                  <span>Raw damage</span>
+                                  <em>{a.damage}%</em>
+                                </>
+                              ) : null}
+                            </div>
+                            <small>{simClock(event.simTimeH)}</small>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <EmptyState
+                        icon={Swords}
+                        title="No adjudicated engagements yet"
+                        hint="Every salvo is resolved openly: weapon, range, rule modifiers, the random roll and raw damage appear here as they happen."
+                      />
+                    )}
+                  </div>
+                ) : null}
+                {drawer === "sage" ? (
+                  <div className="ded-drawer-body">
+                    <div className="ded-sage-chips">
+                      {(
+                        [
+                          { topic: "adjudication" as const, label: "Why this adjudication?" },
+                          { topic: "risk" as const, label: "Biggest risk?" },
+                          { topic: "next-step" as const, label: "Suggest next step" },
+                          { topic: "enemy" as const, label: "Explain RED" },
+                        ] as Array<{ topic: ExplainTopic; label: string }>
+                      ).map((chip) => (
+                        <button
+                          key={chip.topic}
+                          type="button"
+                          className="ded-sage-chip"
+                          disabled={sageBusy !== null}
+                          onClick={() => doExplain(chip.topic, chip.label)}
+                        >
+                          {sageBusy === chip.topic ? "Thinking…" : chip.label}
+                        </button>
+                      ))}
+                    </div>
+                    {sageLog.length ? (
+                      sageLog.map((entry, i) => (
+                        <div key={i} className="ded-sage-answer">
+                          <header>
+                            <strong>{entry.label}</strong>
+                            <Tag
+                              label={entry.source === "anthropic" ? "reasoning service" : "offline knowledge"}
+                              color={entry.source === "anthropic" ? "var(--blue)" : undefined}
+                            />
+                          </header>
+                          <p>{entry.answer}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <EmptyState
+                        icon={BrainCircuit}
+                        title="Ask SAGE about the battle"
+                        hint="Answers are grounded in this branch's live state: the latest adjudication, metrics, supply, detections and doctrine."
+                      />
+                    )}
+                  </div>
+                ) : null}
+                {drawer === "decisions" ? (
+                  <div className="ded-drawer-body">
+                    {decidedDecisions.length ? (
+                      <div className="ded-decided-list">
+                        {decidedDecisions.map((d) => (
+                          <div key={d.id} className="ded-decided-row">
+                            <strong>{d.title}</strong>
+                            <span>→ {d.options.find((o) => o.id === d.decidedOptionId)?.label}</span>
+                            <span className="spacer" />
+                            <Tag label={d.followedAi ? "Followed SAGE" : "Commander override"} color={d.followedAi ? "var(--blue)" : "var(--amber)"} />
+                            <small>{simClock(d.simTimeH)}</small>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <EmptyState
+                        icon={BrainCircuit}
+                        title="No decisions yet"
+                        hint="Decision points pause the branch and surface options with a SAGE recommendation. Intent and decision are retained by the commander."
+                      />
+                    )}
+                  </div>
+                ) : null}
               </div>
-            ) : (
-              <EmptyState icon={BrainCircuit} title="No decisions yet" hint="Decision points pause the branch and surface options with a SAGE recommendation. Intent and decision are retained by the commander." />
-            )}
-          </Panel>
+            ) : null}
+            <div className="ded-drawer-rail">
+              {(
+                [
+                  { id: "score" as const, label: "Score", icon: Trophy },
+                  { id: "events" as const, label: "Orders", icon: ScrollText },
+                  { id: "adjudication" as const, label: "Adjudication", icon: Swords },
+                  { id: "decisions" as const, label: "Decisions", icon: ListChecks },
+                  { id: "sage" as const, label: "SAGE", icon: BrainCircuit },
+                ] as Array<{ id: DrawerId; label: string; icon: typeof Trophy }>
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`ded-drawer-tab${drawer === tab.id ? " active" : ""}`}
+                  onClick={() => setDrawer(drawer === tab.id ? null : tab.id)}
+                >
+                  <tab.icon size={13} />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -514,6 +760,71 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+// Adjudication modifier row (keeps the two-column key/value rhythm).
+function FragmentRow({ rule, factor }: { rule: string; factor: number }) {
+  return (
+    <>
+      <span className="ded-adj-rule">{rule}</span>
+      <em>× {factor.toFixed(2)}</em>
+    </>
+  );
+}
+
+function ScoreDrawer({ branch, decidedCount }: { branch: Branch; decidedCount: number }) {
+  const score = branch.score;
+  return (
+    <div className="ded-drawer-body">
+      {score ? (
+        <>
+          <div className="ded-score-head">
+            <span className="blue">{score.blue.total}</span>
+            <span className="ded-score-net">{score.net >= 0 ? `BLUE +${score.net}` : `RED +${Math.abs(score.net)}`}</span>
+            <span className="red">{score.red.total}</span>
+          </div>
+          <div className="ded-score-rows">
+            {(
+              [
+                ["Objective points", score.blue.objective, score.red.objective],
+                ["Remaining force", score.blue.force, score.red.force],
+                ["Combat score", score.blue.combat, score.red.combat],
+                ["Total", score.blue.total, score.red.total],
+              ] as Array<[string, number, number]>
+            ).map(([label, blue, red]) => (
+              <div key={label} className="ded-score-row">
+                <span className="blue">{blue}</span>
+                <span className="ded-score-label">{label}</span>
+                <span className="red">{red}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="ded-orbat-empty">Scoreboard is computed live for runs started after this update.</p>
+      )}
+      <div className="detail-stack">
+        <ProgressBar label="Objectives" value={branch.metrics.objectiveScore} tone="good" />
+        <ProgressBar label="BLUE strength" value={branch.metrics.blueStrength} tone="info" />
+        <ProgressBar label="RED strength" value={branch.metrics.redStrength} tone="danger" />
+        <ProgressBar label="BLUE supply" value={branch.metrics.supplyLevel} tone="warn" />
+        <DetailGrid>
+          <Detail label="BLUE losses" value={String(branch.metrics.blueLosses)} />
+          <Detail label="RED losses" value={String(branch.metrics.redLosses)} />
+          <Detail label="Events" value={String(branch.eventCount)} />
+          <Detail label="Decisions" value={`${decidedCount}/${branch.decisions.length}`} />
+        </DetailGrid>
+        <div className="ded-spark-row">
+          <small>BLUE strength over time</small>
+          <Sparkline values={branch.metricsHistory.map((m) => m.blueStrength)} color={sideColors.blue} />
+        </div>
+        <div className="ded-spark-row">
+          <small>RED strength over time</small>
+          <Sparkline values={branch.metricsHistory.map((m) => m.redStrength)} color={sideColors.red} />
+        </div>
+      </div>
     </div>
   );
 }

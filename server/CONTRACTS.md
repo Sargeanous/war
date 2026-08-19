@@ -124,3 +124,37 @@ Files and ownership:
 
 Determinism: use a small seeded PRNG (mulberry32) everywhere randomness is needed;
 never `Math.random()` for engine outcomes.
+
+## Addendum — war-room console fields (2026-08-19)
+
+- `Branch.currentPhaseName: string | null` — set at branch creation and on every phase
+  transition; drives the console's "R{n} · {phase}" banner. Optional in old state files.
+- `Branch.score: { blue, red: {objective, force, combat, total}, net }` — recomputed by
+  `computeScore(branch, scenario)` every tick and after interventions. Objective points
+  = weighted objective completion ×2 (+ victory-rule points for BLUE); force = remaining
+  strength sum; combat = enemy kills ×150; net = BLUE total − RED total.
+- Engagement events carry `adjudication`: `{attacker, target, weapon, weaponType,
+  rangeKm, basePk, modifiers[{rule, factor}], finalPk, roll, result: hit|miss, damage}`.
+  The random roll is drawn once (`roll < finalPk` = hit); damage rolls only on hits so
+  the RNG sequence stays deterministic.
+- Run payloads (GET /api/runs/:id and control/decide/intervene responses) are built by
+  `serializeRun(run)` = `stripInternal(run)` + `environment` (the scenario's live
+  environment, so umpire weather changes reach the console without a bootstrap refetch).
+
+## Addendum — Phase 3 AI endpoints (2026-08-19)
+
+- `POST /api/opord/parse` {text} → OpordParse (source anthropic|offline; offline
+  parser covers the bullet + "at lat, lng" convention; Claude output validated and
+  class-ids salvaged via the alias matcher). `POST /api/scenarios/from-opord`
+  {parse, name?, codename?} → Scenario (unit stats cloned from seed units of the same
+  classId, else class defaults, else domain baselines; objectives weighted per side).
+- `POST /api/coas/generate` now takes {strategy: results-first|loss-control|
+  speed-first|balanced} and returns {coas, analysis, strategy}; COAs carry strategy +
+  grade (recommended = top composite, steady = lowest-risk of the rest). Weights in
+  agents.mjs COA_STRATEGIES.
+- `POST /api/coas/:id/silent-eval` → runs a throwaway headless deduction (active rule
+  set, AI recommendations auto-accepted), stamps coa.silentEval.projected and flips
+  candidate → simulated. Nothing else is persisted.
+- `POST /api/runs/:id/branches/:bid/explain` {topic: adjudication|risk|next-step|
+  enemy} → {answer, source, latencyMs}; grounded context built by
+  branchExplainContext(); deterministic offlineExplain() fallback.

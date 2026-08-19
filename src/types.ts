@@ -94,6 +94,7 @@ export interface Unit {
   sensors: SensorSpec[];
   weapons: WeaponSpec[];
   status: UnitStatus;
+  detectedByEnemy?: boolean; // set by the engine on live branch units
   taskForce?: string;
   notes?: string;
 }
@@ -115,6 +116,29 @@ export interface ScenarioEnvironment {
   visibilityKm: number;
   emcon: "free" | "restricted" | "silent";
   cyberThreat: "low" | "elevated" | "severe";
+}
+
+
+// --- Intelligent Documents (OPORD pipeline) ---------------------------------
+
+export interface OpordEntity {
+  name: string | null;
+  classId: string;
+  classLabel: string;
+  domain: Domain;
+  count: number;
+  position: LatLng;
+  taskForce: string | null;
+}
+
+export interface OpordParse {
+  source: "anthropic" | "offline";
+  title: string;
+  summary: string;
+  sides: Array<{ side: "blue" | "red"; entities: OpordEntity[] }>;
+  objectives: Array<{ side: "blue" | "red"; title: string; kind: Objective["kind"] }>;
+  constraints: string[];
+  unparsed: string[];
 }
 
 export type ScenarioStatus = "draft" | "ready" | "running" | "completed";
@@ -278,8 +302,50 @@ export interface Coa {
   phases: CoaPhase[];
   scores: CoaScores;
   status: CoaStatus;
+  strategy?: CoaStrategy; // commander weighting strategy used at generation
+  grade?: "recommended" | "steady" | "alternate";
+  silentEval?: CoaSilentEval; // headless deduction projection
   color: string; // branch color for charts/map
   createdAt: string;
+}
+
+export type ExplainTopic = "adjudication" | "risk" | "next-step" | "enemy";
+
+export interface ExplainResult {
+  topic: ExplainTopic;
+  answer: string;
+  source: "anthropic" | "offline";
+  latencyMs: number;
+}
+
+export type CoaStrategy = "results-first" | "loss-control" | "speed-first" | "balanced";
+
+export interface CoaAnalysisStep {
+  step: string;
+  detail: string;
+  ms: number;
+}
+
+export interface CoaGenerationResult {
+  coas: Coa[];
+  analysis: CoaAnalysisStep[];
+  strategy: CoaStrategy;
+}
+
+export interface CoaSilentEval {
+  evaluatedAt: string;
+  ruleSetId: string;
+  projected: {
+    objectiveScore: number;
+    blueStrength: number;
+    redStrength: number;
+    blueLosses: number;
+    redLosses: number;
+    supplyLevel: number;
+    decisions: number;
+    durationH: number;
+    net: number;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -364,6 +430,21 @@ export type RunStatus = "initializing" | "running" | "paused" | "awaiting-decisi
 export type BranchStatus = "running" | "paused" | "awaiting-decision" | "completed" | "aborted";
 export type EngineKind = "realtime" | "turn-based";
 
+// Full adjudication math behind an engagement event — "show the dice".
+export interface EngagementAdjudication {
+  attacker: string;
+  target: string;
+  weapon: string; // display label, e.g. "SSM"
+  weaponType: string;
+  rangeKm: number;
+  basePk: number;
+  modifiers: Array<{ rule: string; factor: number }>;
+  finalPk: number;
+  roll: number;
+  result: "hit" | "miss";
+  damage: number; // 0 on a miss
+}
+
 export interface SimEvent {
   id: string;
   tick: number;
@@ -387,6 +468,7 @@ export interface SimEvent {
   title: string;
   detail: string;
   position?: LatLng;
+  adjudication?: EngagementAdjudication;
 }
 
 export interface DecisionOption {
@@ -438,6 +520,20 @@ export interface ReplaySnapshot {
   metrics: BranchMetrics;
 }
 
+// Mirrored per-side wargame scoreboard, recomputed every tick.
+export interface SideScore {
+  objective: number;
+  force: number;
+  combat: number;
+  total: number;
+}
+
+export interface BranchScore {
+  blue: SideScore;
+  red: SideScore;
+  net: number; // BLUE total minus RED total
+}
+
 export interface Branch {
   id: string;
   coaId: string;
@@ -445,6 +541,8 @@ export interface Branch {
   color: string;
   status: BranchStatus;
   currentPhaseId: string | null;
+  currentPhaseName?: string | null; // absent on runs recorded before phase names shipped
+  score?: BranchScore; // absent on runs recorded before the scoreboard shipped
   units: Unit[]; // live unit states
   recentEvents: SimEvent[]; // capped tail, newest first
   eventCount: number;
@@ -470,6 +568,7 @@ export interface SimRun {
   startedAt: string;
   completedAt?: string;
   label: string;
+  environment?: ScenarioEnvironment | null; // live scenario environment (reflects umpire changes)
 }
 
 export interface RunSummary {

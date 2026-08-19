@@ -347,7 +347,33 @@ function axisWaypoints(from, to, axis, rng) {
 
 const roundPos = (p) => ({ lat: round1(p.lat * 10) / 10, lng: round1(p.lng * 10) / 10 });
 
-export function generateCoas(scenario, mission, count, existingCount) {
+
+// Commander weighting strategies for COA scoring (per the planning-assistant
+// pattern: results-first / loss-control / speed-first / balanced).
+export const COA_STRATEGIES = {
+  "results-first": { label: "Results first", feasibility: 0.15, acceptability: 0.1, effect: 0.45, safety: 0.15, economy: 0.15, tempo: 0 },
+  "loss-control": { label: "Loss control", feasibility: 0.2, acceptability: 0.25, effect: 0.1, safety: 0.35, economy: 0.1, tempo: 0 },
+  "speed-first": { label: "Speed first", feasibility: 0.2, acceptability: 0.1, effect: 0.2, safety: 0.1, economy: 0.05, tempo: 0.35 },
+  balanced: { label: "Balanced", feasibility: 0.25, acceptability: 0.2, effect: 0.2, safety: 0.2, economy: 0.15, tempo: 0 },
+};
+
+// Visible reasoning trace for the planning assistant panel.
+export function buildCoaAnalysis(scenario, mission, strategyKey, generated) {
+  const own = (scenario.units || []).filter((u) => u.side === (mission.side || "blue") && u.status === "active");
+  const cap = capabilityGroups(own);
+  const w = COA_STRATEGIES[strategyKey] || COA_STRATEGIES.balanced;
+  const ranked = [...generated].sort((a, b) => b.scores.composite - a.scores.composite);
+  return [
+    { step: "Scenario parsing", detail: `${scenario.codename}: ${scenario.units.length} pieces, ${scenario.objectives.length} objectives, sea state ${scenario.environment.seaState}, EMCON ${scenario.environment.emcon}.`, ms: 1.2 },
+    { step: "Force & capability analysis", detail: `${own.length} own pieces — strike ${cap.strike.length}, air ${cap.fighters.length}, ISR ${cap.isr.length}, amphibious ${cap.amphib.length}, sustainment ${cap.sustain.length}.`, ms: 1.4 },
+    { step: "Terrain & axis analysis", detail: "North, south and enveloping approach axes evaluated against the objective anchor and strait chokepoints.", ms: 1.1 },
+    { step: "Constraints & weighting", detail: `Strategy "${w.label}" — effect ${Math.round(w.effect * 100)}%, risk aversion ${Math.round(w.safety * 100)}%, tempo ${Math.round(w.tempo * 100)}%, feasibility ${Math.round(w.feasibility * 100)}%.`, ms: 0.8 },
+    { step: "Candidate construction", detail: `${generated.length} doctrinal archetype(s) instantiated with four-phase skeletons and axis waypoints.`, ms: 1.6 },
+    { step: "Plan grading", detail: `Composites ${ranked.map((c) => c.scores.composite).join(" / ")} — "${ranked[0].name}" graded RECOMMENDED under ${w.label}.`, ms: 0.9 },
+  ];
+}
+
+export function generateCoas(scenario, mission, count, existingCount, strategyKey = "balanced") {
   const rng = mulberry32(hashString(scenario.id) + existingCount * 101 + 7);
   const side = mission.side || "blue";
   const own = (scenario.units || []).filter((u) => u.side === side && u.status === "active");
@@ -401,8 +427,15 @@ export function generateCoas(scenario, mission, count, existingCount) {
     const resourceCost = clamp(Math.round(44 + 26 * arch.s + 16 * arch.c + jitter()), 20, 95);
     const expectedEffect = clamp(Math.round(54 + 26 * arch.t + 12 * (1 - arch.c) + isrBonus + jitter()), 25, 95);
     const acceptability = clamp(Math.round(92 - 0.5 * risk), 20, 95);
+    const tempo = clamp(Math.round(38 + 55 * arch.t + jitter() / 2), 20, 96);
+    const w = COA_STRATEGIES[strategyKey] || COA_STRATEGIES.balanced;
     const composite = Math.round(
-      0.25 * feasibility + 0.2 * acceptability + 0.2 * expectedEffect + 0.2 * (100 - risk) + 0.15 * (100 - resourceCost)
+      w.feasibility * feasibility +
+        w.acceptability * acceptability +
+        w.effect * expectedEffect +
+        w.safety * (100 - risk) +
+        w.economy * (100 - resourceCost) +
+        w.tempo * tempo
     );
 
     out.push({
@@ -417,10 +450,16 @@ export function generateCoas(scenario, mission, count, existingCount) {
       phases,
       scores: { feasibility, acceptability, risk, resourceCost, expectedEffect, composite },
       status: "candidate",
+      strategy: strategyKey,
       color: COA_COLORS[(existingCount + i) % COA_COLORS.length],
       createdAt: new Date().toISOString(),
     });
   }
+  const byComposite = [...out].sort((a, b) => b.scores.composite - a.scores.composite);
+  for (const coa of out) coa.grade = "alternate";
+  if (byComposite[0]) byComposite[0].grade = "recommended";
+  const rest = byComposite.slice(1);
+  if (rest.length) rest.sort((a, b) => a.scores.risk - b.scores.risk)[0].grade = "steady";
   return out;
 }
 

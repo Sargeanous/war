@@ -12,6 +12,11 @@ import type {
   InterventionRequest,
   Mission,
   Ontology,
+  OpordParse,
+  CoaGenerationResult,
+  ExplainResult,
+  ExplainTopic,
+  CoaStrategy,
   OntologyClass,
   PlatformInfo,
   ReplayData,
@@ -68,6 +73,9 @@ export const createScenario = (payload: { name: string; codename?: string; descr
   post<Scenario>("/api/scenarios", payload);
 export const updateScenario = (id: string, payload: Partial<Scenario>) => put<Scenario>(`/api/scenarios/${id}`, payload);
 export const validateScenario = (id: string) => post<ValidationReport>(`/api/scenarios/${id}/validate`);
+export const parseOpord = (text: string) => post<OpordParse>("/api/opord/parse", { text });
+export const createScenarioFromOpord = (payload: { parse: OpordParse; name?: string; codename?: string; durationHours?: number; createdBy?: string }) =>
+  post<Scenario>("/api/scenarios/from-opord", payload);
 
 // --- Missions + decomposition ------------------------------------------------
 
@@ -82,8 +90,11 @@ export const updateMission = (id: string, payload: Partial<Mission>) => put<Miss
 
 export const fetchCoas = (scenarioId?: string) =>
   get<Coa[]>(`/api/coas${scenarioId ? `?scenarioId=${encodeURIComponent(scenarioId)}` : ""}`);
-export const generateCoas = (payload: { scenarioId: string; missionId: string; count: number }) =>
-  post<Coa[]>("/api/coas/generate", payload);
+export const generateCoas = (payload: { scenarioId: string; missionId: string; count: number; strategy?: CoaStrategy }) =>
+  post<CoaGenerationResult>("/api/coas/generate", payload);
+export const explainBranch = (runId: string, branchId: string, topic: ExplainTopic) =>
+  post<ExplainResult>(`/api/runs/${runId}/branches/${branchId}/explain`, { topic });
+export const silentEvalCoa = (id: string) => post<Coa>(`/api/coas/${id}/silent-eval`);
 export const updateCoa = (id: string, payload: Partial<Coa>) => put<Coa>(`/api/coas/${id}`, payload);
 
 // --- Rule sets -----------------------------------------------------------------

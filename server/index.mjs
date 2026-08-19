@@ -28,7 +28,8 @@ import {
   buildAssessments,
   buildReplay,
 } from "./engine.mjs";
-import { decomposeMission, generateCoas, agentActivityFor } from "./agents.mjs";
+import { decomposeMission, generateCoas, agentActivityFor, buildCoaAnalysis, COA_STRATEGIES } from "./agents.mjs";
+import { parseOpordOffline, parseOpordAnthropic, materializeScenario } from "./opord.mjs";
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(SERVER_DIR, "..");
@@ -1243,6 +1244,13 @@ function requireRun(id) {
   return run;
 }
 
+// Run payloads carry the scenario's live environment so the console header
+// reflects umpire weather changes without a bootstrap refetch.
+function serializeRun(run) {
+  const scenario = findScenario(run.scenarioId);
+  return { ...stripInternal(run), environment: scenario ? scenario.environment : null };
+}
+
 function requireBranch(run, branchId) {
   const branch = run.branches.find((b) => b.id === branchId);
   if (!branch) throw httpError(404, `Unknown branch "${branchId}" on run "${run.id}".`);
@@ -1312,6 +1320,49 @@ function handleUpdateScenario(id, body) {
   return scenario;
 }
 
+// --- Intelligent Documents (OPORD pipeline) --------------------------------------
+
+function forceClassCatalog() {
+  return state.ontology.classes.filter((c) => c.category === "force" && c.id.includes("."));
+}
+
+async function handleParseOpord(body) {
+  const text = typeof body.text === "string" ? body.text.trim() : "";
+  if (text.length < 40) throw httpError(400, "Provide the operational document text (at least a few lines).");
+  if (text.length > 20000) throw httpError(400, "Document too large (20k character cap for the demo).");
+  const classes = forceClassCatalog();
+  let parse = null;
+  if (process.env.ANTHROPIC_API_KEY) {
+    parse = await parseOpordAnthropic(text, classes, process.env.ANTHROPIC_API_KEY, process.env.ANTHROPIC_MODEL || "claude-opus-5");
+  }
+  if (!parse) parse = parseOpordOffline(text, classes);
+  const total = parse.sides.reduce((s, side) => s + side.entities.length, 0);
+  if (!total) throw httpError(422, "No force entities could be extracted — check the document follows an OPORD structure with BLUE/RED force sections.");
+  audit("planner", "opord-parsed", parse.title, `Intelligent Documents extracted ${total} entity group(s) via ${parse.source}.`);
+  return parse;
+}
+
+function handleScenarioFromOpord(body) {
+  const parse = body && typeof body.parse === "object" ? body.parse : null;
+  if (!parse || !Array.isArray(parse.sides)) throw httpError(400, "Field 'parse' (an OpordParse) is required.");
+  const scenario = materializeScenario(
+    parse,
+    { name: body.name, codename: body.codename, durationHours: body.durationHours, createdBy: body.createdBy },
+    state,
+    nowIso
+  );
+  state.scenarios.push(scenario);
+  state.platform.lowCode.scenarios = state.scenarios.length;
+  audit(
+    "planner",
+    "scenario-imported",
+    scenario.id,
+    `Scenario "${scenario.name}" materialized from an operational document (${scenario.units.length} units, ${scenario.objectives.length} objectives).`
+  );
+  schedulePersist();
+  return scenario;
+}
+
 function handleCreateMission(body) {
   const scenario = requireScenario(String(body.scenarioId || ""));
   const title = typeof body.title === "string" ? body.title.trim() : "";
@@ -1367,11 +1418,68 @@ function handleGenerateCoas(body) {
   if (!mission) throw httpError(404, `Unknown mission "${body.missionId}".`);
   const count = clamp(Math.round(Number(body.count) || 3), 2, 4);
   const existingCount = state.coas.filter((c) => c.missionId === mission.id).length;
-  const generated = generateCoas(scenario, mission, count, existingCount);
+  const strategy = Object.prototype.hasOwnProperty.call(COA_STRATEGIES, body.strategy) ? body.strategy : "balanced";
+  const generated = generateCoas(scenario, mission, count, existingCount, strategy);
   for (const coa of generated) state.coas.push(coa);
-  audit("SAGE", "coas-generated", mission.id, `${generated.length} COA candidate(s) generated for "${mission.title}".`);
+  const analysis = buildCoaAnalysis(scenario, mission, strategy, generated);
+  audit("SAGE", "coas-generated", mission.id, `${generated.length} COA candidate(s) generated for "${mission.title}" under the ${COA_STRATEGIES[strategy].label} strategy.`);
   schedulePersist();
-  return generated;
+  return { coas: generated, analysis, strategy };
+}
+
+// Silent deduction: a throwaway headless run of one COA under the active rule set,
+// auto-accepting every AI recommendation. Nothing is persisted except the summary
+// stamped onto the COA itself.
+function handleSilentEval(coaId) {
+  const coa = findCoa(coaId);
+  if (!coa) throw httpError(404, `Unknown COA "${coaId}".`);
+  const scenario = requireScenario(coa.scenarioId);
+  const ruleSet = state.ruleSets.find((r) => r.status === "active") || state.ruleSets[0];
+  if (!ruleSet) throw httpError(400, "No rule set available for silent evaluation.");
+  const run = createRun({
+    scenario,
+    coas: [coa],
+    ruleSet,
+    engine: "realtime",
+    speed: 4,
+    label: `Silent eval — ${coa.name}`,
+    id: `run-silent-${Date.now().toString(36)}`,
+  });
+  const ctx = { scenario, ruleSet };
+  let iterations = 0;
+  while (iterations < HISTORICAL_TICK_CAP) {
+    iterations += 1;
+    if (TERMINAL_RUN_STATUSES.includes(run.status)) break;
+    for (const branch of run.branches) {
+      for (const decision of branch.decisions) {
+        if (decision.status !== "open") continue;
+        applyDecision(run, branch.id, decision.id, decision.aiRecommendationId, "SAGE silent umpire", "Silent evaluation: AI recommendation auto-accepted.", ctx);
+      }
+    }
+    const result = tickRun(run, ctx);
+    if ((result && result.completed) || TERMINAL_RUN_STATUSES.includes(run.status)) break;
+  }
+  const branch = run.branches[0];
+  const m = branch.metrics;
+  coa.silentEval = {
+    evaluatedAt: nowIso(),
+    ruleSetId: ruleSet.id,
+    projected: {
+      objectiveScore: m.objectiveScore,
+      blueStrength: m.blueStrength,
+      redStrength: m.redStrength,
+      blueLosses: m.blueLosses,
+      redLosses: m.redLosses,
+      supplyLevel: m.supplyLevel,
+      decisions: branch.decisions.length,
+      durationH: Math.round(branch._simTimeH || scenario.durationHours),
+      net: branch.score ? branch.score.net : 0,
+    },
+  };
+  if (coa.status === "candidate") coa.status = "simulated";
+  audit("SAGE", "coa-silent-eval", coa.id, `Silent deduction of "${coa.name}": objectives ${m.objectiveScore}%, BLUE ${m.blueStrength}%, RED ${m.redStrength}% at T+${coa.silentEval.projected.durationH}h.`);
+  schedulePersist();
+  return coa;
 }
 
 const COA_UPDATABLE = ["name", "approach", "summary", "status", "phases", "scores", "color"];
@@ -1457,7 +1565,7 @@ function handleStartRun(body) {
   startLoop(run);
   audit("operator", "run-started", run.id, `${label}: ${coas.length} branch(es) on ${scenario.name} via ${ruleSet.name} (${engine}, x${speed}).`);
   schedulePersist();
-  return stripInternal(run);
+  return serializeRun(run);
 }
 
 function handleControlRun(id, body) {
@@ -1507,7 +1615,7 @@ function handleControlRun(id, body) {
   }
   audit("operator", `run-${action}`, run.id, `Control "${action}"${body.value !== undefined ? ` (${body.value})` : ""} applied to ${run.label}.`);
   schedulePersist();
-  return stripInternal(run);
+  return serializeRun(run);
 }
 
 function handleDecide(runId, branchId, body) {
@@ -1531,10 +1639,103 @@ function handleDecide(runId, branchId, body) {
   const followed = optionId === decision.aiRecommendationId;
   audit(decidedBy, "decision-made", `${run.id}/${branch.id}`, `"${decision.title}" resolved with option ${optionId} (${followed ? "followed AI" : "overrode AI"}).`);
   schedulePersist();
-  return stripInternal(run);
+  return serializeRun(run);
 }
 
 const INTERVENTION_TYPES = ["inject-event", "move-unit", "set-weather", "resupply", "withdraw-unit"];
+
+// --- Explainable war-room Q&A ------------------------------------------------------
+// Four fixed topics answered from live branch state. Deterministic offline answers
+// compose from the same grounded context that is handed to the reasoning service.
+
+const EXPLAIN_TOPICS = {
+  adjudication: "Why did the latest engagement adjudicate the way it did?",
+  risk: "What is the current biggest risk to BLUE?",
+  "next-step": "What should the commander do next?",
+  enemy: "Explain RED's current actions and likely intent.",
+};
+
+function branchExplainContext(run, branch, scenario) {
+  const m = branch.metrics;
+  const lines = [
+    `Run "${run.label}" branch "${branch.name}" at T+${round1(run.clock.simTimeH)}h, phase "${branch.currentPhaseName || "free play"}".`,
+    `Metrics: objectives ${m.objectiveScore}%, BLUE strength ${m.blueStrength}%, RED strength ${m.redStrength}%, BLUE supply ${m.supplyLevel}%, losses B${m.blueLosses}/R${m.redLosses}.`,
+    `Environment: ${scenario.environment.weather}, sea state ${scenario.environment.seaState}, EMCON ${scenario.environment.emcon}.`,
+  ];
+  if (branch.score) lines.push(`Score: BLUE ${branch.score.blue.total} vs RED ${branch.score.red.total} (net ${branch.score.net}).`);
+  const lastAdj = branch.recentEvents.find((e) => e.adjudication);
+  if (lastAdj) {
+    const a = lastAdj.adjudication;
+    lines.push(
+      `Latest adjudication: ${a.attacker} fired ${a.weapon} at ${a.target} from ${a.rangeKm} km — base pk ${a.basePk}` +
+        (a.modifiers.length ? `, modified by ${a.modifiers.map((x) => `"${x.rule}" ×${x.factor}`).join(", ")}` : "") +
+        ` to ${a.finalPk}; roll ${a.roll} → ${a.result.toUpperCase()}${a.result === "hit" ? ` for ${a.damage}% damage` : ""}.`
+    );
+  }
+  const recent = branch.recentEvents.slice(0, 5).map((e) => `[${e.type}] ${e.title}`);
+  if (recent.length) lines.push(`Recent events: ${recent.join(" | ")}`);
+  return lines.join("\n");
+}
+
+function offlineExplain(topic, run, branch, scenario) {
+  const m = branch.metrics;
+  const blueAlive = branch.units.filter((u) => u.side === "blue" && u.status !== "destroyed");
+  const redAlive = branch.units.filter((u) => u.side === "red" && u.status !== "destroyed");
+  if (topic === "adjudication") {
+    const e = branch.recentEvents.find((ev) => ev.adjudication);
+    if (!e) return "No engagement has been adjudicated yet in this branch — once a piece fires, the full resolution (weapon, range, rule modifiers, random roll, damage) appears here and in the Adjudication drawer.";
+    const a = e.adjudication;
+    const mods = a.modifiers.length ? ` The rules ${a.modifiers.map((x) => `"${x.rule}" (×${x.factor})`).join(" and ")} adjusted it to ${a.finalPk}.` : ` No rule modified the shot, so the final pk stayed ${a.finalPk}.`;
+    return (
+      `${a.attacker} engaged ${a.target} with ${a.weapon} at ${a.rangeKm} km. The weapon's base kill probability is ${a.basePk}.` +
+      mods +
+      ` The adjudication die rolled ${a.roll}; because ${a.roll} ${a.roll < a.finalPk ? "<" : "≥"} ${a.finalPk}, the salvo ${a.result === "hit" ? `HIT for ${a.damage}% raw damage` : "MISSED"}. Every resolution in this run is auditable the same way.`
+    );
+  }
+  if (topic === "risk") {
+    const risks = [];
+    const weak = [...blueAlive].sort((x, y) => x.supply - y.supply)[0];
+    if (weak && weak.supply < 45) risks.push([60 + (45 - weak.supply), `${weak.name} is at ${Math.round(weak.supply)}% supply — it drops out of the fight if it is not rotated to the auxiliary within the next phase`]);
+    const exposed = blueAlive.filter((u) => u.detectedByEnemy).length;
+    if (exposed > blueAlive.length * 0.6) risks.push([55, `${exposed} of ${blueAlive.length} BLUE pieces are held by RED sensors — the force is fighting inside the enemy's kill chain`]);
+    if (scenario.environment.weather === "storm") risks.push([50, "storm conditions are suppressing detection and movement for both sides, which favors the defender"]);
+    if (m.blueStrength < 70) risks.push([70, `aggregate BLUE strength is down to ${m.blueStrength}% — attrition is outpacing the objective picture (${m.objectiveScore}%)`]);
+    if (m.objectiveScore < 40 && run.clock.simTimeH > scenario.durationHours * 0.5) risks.push([65, `over half the window is spent but objectives sit at ${m.objectiveScore}% — tempo is the risk, not losses`]);
+    if (!risks.length) return `No acute risk: BLUE holds ${m.blueStrength}% strength, ${m.supplyLevel}% supply and ${m.objectiveScore}% of the objective picture. The main watch item is keeping the sustainment line covered as the force advances.`;
+    risks.sort((a, b) => b[0] - a[0]);
+    return `Biggest risk right now: ${risks[0][1]}.${risks[1] ? ` Secondary: ${risks[1][1]}.` : ""}`;
+  }
+  if (topic === "next-step") {
+    const open = branch.decisions.find((d) => d.status === "open");
+    if (open) return `A commander decision is open: "${open.title}". SAGE recommends "${open.options.find((o) => o.id === open.aiRecommendationId)?.label}" — ${open.aiRationale}`;
+    if (m.supplyLevel < 45) return `Sustainment first: force supply is ${m.supplyLevel}%. Pull the escort screen tight around the auxiliary, run a resupply rotation, then resume the advance — the objective picture (${m.objectiveScore}%) will hold.`;
+    if (m.objectiveScore >= 50 && m.blueStrength > m.redStrength) return `Press the advantage: objectives at ${m.objectiveScore}% with a strength edge (${m.blueStrength}% vs ${m.redStrength}%). Keep the current phase ("${branch.currentPhaseName || "free play"}") moving and deny RED time to reconstitute.`;
+    return `Develop the picture before committing: only ${redAlive.filter((u) => u.detectedByEnemy).length} of ${redAlive.length} RED pieces are held on sensors. Push ISR forward, keep EMCON ${scenario.environment.emcon}, and time the strike for the next phase boundary.`;
+  }
+  // enemy
+  const redEvents = branch.recentEvents.filter((e) => e.actorId && redAlive.some((u) => u.id === e.actorId)).slice(0, 3);
+  const acting = redEvents.map((e) => e.title).join("; ");
+  return (
+    `RED retains ${redAlive.length} piece(s) at ${m.redStrength}% aggregate strength (${m.redLosses} lost). ` +
+    (acting ? `Latest RED activity: ${acting}. ` : "RED has initiated no engagements recently. ") +
+    `Doctrine template: hold the coastal battery umbrella, keep corvettes and the submarine on the strait flanks, and force BLUE to trade attrition for tempo. Expect a reaction the moment a BLUE capital unit enters missile range.`
+  );
+}
+
+async function handleExplain(runId, branchId, body) {
+  const run = requireRun(runId);
+  const branch = requireBranch(run, branchId);
+  const topic = String(body.topic || "");
+  if (!EXPLAIN_TOPICS[topic]) throw httpError(400, `Unknown topic "${topic}" — expected one of ${Object.keys(EXPLAIN_TOPICS).join(", ")}.`);
+  const scenario = findScenario(run.scenarioId);
+  const started = Date.now();
+  if (process.env.ANTHROPIC_API_KEY) {
+    const question = `${EXPLAIN_TOPICS[topic]}\n\nGrounded branch context (authoritative — answer from this):\n${branchExplainContext(run, branch, scenario)}\n\nAnswer in at most 110 words, addressed to the commander.`;
+    const result = await askAnthropic(question, `deduction:${topic}`, started, process.env.ANTHROPIC_API_KEY);
+    if (result.source === "anthropic") return { topic, answer: result.answer, source: "anthropic", latencyMs: result.latencyMs };
+  }
+  return { topic, answer: offlineExplain(topic, run, branch, scenario), source: "offline", latencyMs: Date.now() - started };
+}
 
 function handleIntervene(runId, branchId, body) {
   const run = requireRun(runId);
@@ -1552,7 +1753,7 @@ function handleIntervene(runId, branchId, body) {
   reconcileRunStatus(run);
   audit(request.requestedBy, "intervention", `${run.id}/${branch.id}`, `${request.type} applied to branch ${branch.name} of ${run.label}.`);
   schedulePersist();
-  return stripInternal(run);
+  return serializeRun(run);
 }
 
 function handleAssessRun(id) {
@@ -1628,6 +1829,8 @@ const routes = [
 
   { method: "GET", re: /^\/api\/scenarios$/, handler: () => state.scenarios },
   { method: "POST", re: /^\/api\/scenarios$/, handler: ({ body }) => handleCreateScenario(body) },
+  { method: "POST", re: /^\/api\/opord\/parse$/, handler: ({ body }) => handleParseOpord(body) },
+  { method: "POST", re: /^\/api\/scenarios\/from-opord$/, handler: ({ body }) => handleScenarioFromOpord(body) },
   { method: "GET", re: new RegExp(`^/api/scenarios/${ID}$`), handler: ({ params }) => requireScenario(params[0]) },
   { method: "PUT", re: new RegExp(`^/api/scenarios/${ID}$`), handler: ({ params, body }) => handleUpdateScenario(params[0], body) },
   {
@@ -1679,9 +1882,10 @@ const routes = [
     },
   },
 
+  { method: "POST", re: new RegExp(`^/api/coas/${ID}/silent-eval$`), handler: ({ params }) => handleSilentEval(params[0]) },
   { method: "GET", re: /^\/api\/runs$/, handler: () => state.runs.map(toRunSummary) },
   { method: "POST", re: /^\/api\/runs$/, handler: ({ body }) => handleStartRun(body) },
-  { method: "GET", re: new RegExp(`^/api/runs/${ID}$`), handler: ({ params }) => stripInternal(requireRun(params[0])) },
+  { method: "GET", re: new RegExp(`^/api/runs/${ID}$`), handler: ({ params }) => serializeRun(requireRun(params[0])) },
   { method: "POST", re: new RegExp(`^/api/runs/${ID}/control$`), handler: ({ params, body }) => handleControlRun(params[0], body) },
   {
     method: "POST",
@@ -1692,6 +1896,11 @@ const routes = [
     method: "POST",
     re: new RegExp(`^/api/runs/${ID}/branches/${ID}/intervene$`),
     handler: ({ params, body }) => handleIntervene(params[0], params[1], body),
+  },
+  {
+    method: "POST",
+    re: new RegExp(`^/api/runs/${ID}/branches/${ID}/explain$`),
+    handler: ({ params, body }) => handleExplain(params[0], params[1], body),
   },
   { method: "POST", re: new RegExp(`^/api/runs/${ID}/assess$`), handler: ({ params }) => handleAssessRun(params[0]) },
   {

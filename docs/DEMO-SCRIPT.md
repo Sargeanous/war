@@ -23,12 +23,19 @@ fictional (Meridian Archipelago, Exercise AZURE HORIZON) — say so up front.
 
 ### Beat 2 — Scenario Design (60s) · L3 app 1
 
-- Open **Scenario Design**: AZURE HORIZON with a 31-unit joint ORBAT on the live chart.
+- Open **Scenario Design**: AZURE HORIZON with a 31-unit joint ORBAT placed on the
+  **hex wargame board** (terrain-classified hexes over the chart — zoom in for grid
+  coordinates).
 - Click a unit (e.g. the carrier) — every piece is an ontology-typed object with
-  sensors, weapons, strength, supply.
+  sensors, weapons, strength, supply, drawn as a NATO-style counter.
 - Switch tabs: **Objectives** (weighted, per side) and **Environment** (weather, sea
   state, EMCON).
 - Click **Validate** — structural checks pass; "ready for COA generation".
+- **The wow moment — Import OPORD**: click Import OPORD → Load sample → Parse. The
+  Intelligent Documents pipeline (Claude when a key is set, offline rules otherwise)
+  extracts 9 BLUE + 7 RED force groups, task organization and objectives from the
+  order text, then materializes a ready scenario with ontology-typed pieces on the
+  hex board. "From order to playable scenario in under a minute."
 
 ### Beat 3 — Data & COA Generation (75s) · L2 strategic + L3 app 2
 
@@ -36,9 +43,13 @@ fictional (Meridian Archipelago, Exercise AZURE HORIZON) — say so up front.
 - The mission is already **decomposed into 10 sub-tasks** on a timeline, each assigned
   to a *hybrid-driven mission agent* (ISR → cyber → SEAD → strike → maneuver →
   amphibious → sustainment). This is the L2 strategic layer from the architecture.
-- Click **Generate COAs** — the WARGAMER agent synthesizes 3 doctrinally distinct
-  candidates in seconds, each scored on feasibility / acceptability / risk / cost /
-  effect with a radar comparison. Select one.
+- Pick a **commander weighting strategy** (Results / Loss control / Speed / Balanced)
+  and click **Generate COAs** — the SAGE planning analysis panel walks through its six
+  reasoning steps live, then 3 doctrinally distinct candidates land graded
+  **recommended / steady / alternate**. Change the strategy and regenerate — the
+  grades move. Each card carries a phase Gantt and the five-axis radar.
+- Click **Silent deduction** on the recommended COA — a full headless 72-hour
+  engine run projects objectives, strengths and net score onto the card. Select one.
 
 ### Beat 4 — Simulation Rules (45s) · L3 app 3
 
@@ -53,15 +64,24 @@ fictional (Meridian Archipelago, Exercise AZURE HORIZON) — say so up front.
 
 - Switch profile to **Joint Force Commander** → **Full-Process Deduction**.
 - Launch: scenario + two selected COAs (two **parallel branches**) + rule set +
-  real-time engine at 2x.
-- Watch the map: BLUE moves on COA waypoints, detections and engagements stream into
-  the event feed, strength bars move.
+  real-time engine at 2x. The screen becomes a **war-room console**: phase banner
+  ("R1 · Advance to contact" + sim clock), environment pills (weather / sea state /
+  EMCON / day-night), left ORBAT drawer, right drawers (Score · Orders · Adjudication
+  · Decisions).
+- Watch the board: NATO counters move on COA waypoints, engagements pulse, the live
+  **mirrored scoreboard** (objective / force / combat points, BLUE vs RED) ticks.
+- Open the **Adjudication drawer** — every salvo shows its math: weapon, range, base
+  pk, which rules modified it, the random roll and the raw damage. "Nothing is a
+  black box — the engine shows its dice."
+- Click **RED view / BLUE view** — **fog of war**: each side sees only its own picture
+  plus detected contacts (the ORBAT roster filters too). Umpire view sees everything.
 - Within ~30s the first **commander decision point** fires: situation, three options,
   and the **SAGE recommendation with rationale**. Override it once — point out the
   "Commander override" tag. *Intent and decision are retained by the commander;
   the AI executes.*
 - (If Simulation Control) show an umpire **intervention**: set weather to storm — the
-  movement/detection rules react immediately.
+  environment pill flips, the inject is logged in the Orders drawer with its explicit
+  rule effect, and movement/detection adjudication reacts immediately.
 
 ### Beat 6 — Assessment & Replay (60s) · L3 app 5
 
@@ -71,6 +91,10 @@ fictional (Meridian Archipelago, Exercise AZURE HORIZON) — say so up front.
   decisions followed-vs-overridden.
 - Drag the **replay scrubber** — the whole battle replays frame by frame.
 - Read one SAGE recommendation aloud — the feedback loop back into planning.
+- Open the **SAGE drawer** in the war-room console: "Why this adjudication?",
+  "Biggest risk?", "Suggest next step", "Explain RED" — every answer is grounded in
+  the branch's live state (with the exact rule modifiers and rolls), via the
+  reasoning service or offline knowledge.
 
 ### Beat 7 — The layers beneath (30s) · L2 + L1
 

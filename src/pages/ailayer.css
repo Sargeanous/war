@@ -210,3 +210,13 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Title must never be crushed by the status pill */
+.ail-mission-card header {
+  flex-wrap: wrap;
+}
+
+.ail-mission-card header strong {
+  flex: 1 1 150px;
+  min-width: 0;
+}

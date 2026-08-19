@@ -10,6 +10,7 @@ import {
   CloudSun,
   Compass,
   Crosshair,
+  FileText,
   Map as MapIcon,
   Pencil,
   Plus,
@@ -25,6 +26,7 @@ import type {
   Domain,
   LatLng,
   Objective,
+  OpordParse,
   OntologyClass,
   Scenario,
   ScenarioEnvironment,
@@ -35,7 +37,15 @@ import type {
   ValidationReport,
   WeaponSpec,
 } from "../types";
-import { createScenario, fetchBootstrap, fetchOntology, updateScenario, validateScenario } from "../api";
+import {
+  createScenario,
+  createScenarioFromOpord,
+  fetchBootstrap,
+  fetchOntology,
+  parseOpord,
+  updateScenario,
+  validateScenario,
+} from "../api";
 import {
   ActionRow,
   Button,
@@ -271,6 +281,224 @@ function CreateScenarioModal({
   );
 }
 
+// Fictional sample order — written to parse cleanly offline (bullet + "at lat, lng" convention).
+const SAMPLE_OPORD = `OPORD 26-04 — OPERATION AZURE TRIDENT
+References: Exercise AZURE HORIZON series. Classification: EXERCISE / FICTIONAL.
+
+1. SITUATION
+RED occupation forces hold Kestrel Island and the eastern strait approaches with
+coastal missile, naval and air-defense assets. Merchant traffic is suspended.
+
+2. BLUE FORCES
+- 1x Aircraft carrier "CVN 80 Meridian" at 33.75, -42.60 (TF Sword)
+- 2x Guided-missile destroyer at 33.90, -42.30 (TF Sword)
+- 1x Frigate at 33.60, -42.40 (TF Shield)
+- 1x Submarine at 34.30, -41.90 (TF Undertow)
+- 1x Amphibious assault ship at 33.45, -42.75 (TF Landing)
+- 1x Marine battalion at 33.45, -42.85 (TF Landing)
+- 2x Fighter squadron at 33.80, -42.70 (TF Sword)
+- 1x Airborne early warning at 33.70, -42.90 (TF Sword)
+- 1x Fleet auxiliary at 33.30, -43.10 (TF Shield)
+
+3. RED FORCES
+- 1x Coastal defense battery at 34.12, -39.85
+- 2x Corvette at 34.00, -40.10
+- 1x Fast missile boat at 33.85, -39.95
+- 1x Submarine at 33.70, -40.60
+- 1x Fighter squadron at 34.25, -39.70
+- 1x SAM battalion at 34.18, -39.78
+- 1x Cyber operations cell at 34.20, -39.60
+
+4. MISSION / OBJECTIVES
+- (BLUE) Seize control of the Meridian Strait transit lane
+- (BLUE) Protect the amphibious landing group
+- (RED) Deny BLUE passage east of Kestrel Island
+
+5. CONSTRAINTS
+- EMCON restricted until H+12
+- No strikes on protected cultural sites (Meridian old town)
+- Landing requires sea state 4 or below`;
+
+function OpordWizardModal({
+  notify,
+  onClose,
+  onCreated,
+}: {
+  notify: (message: string) => void;
+  onClose: () => void;
+  onCreated: (scenario: Scenario) => void;
+}) {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [text, setText] = useState("");
+  const [parsing, setParsing] = useState(false);
+  const [parse, setParse] = useState<OpordParse | null>(null);
+  const [name, setName] = useState("");
+  const [codename, setCodename] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const doParse = async () => {
+    if (parsing) return;
+    setParsing(true);
+    try {
+      const result = await parseOpord(text);
+      setParse(result);
+      const cleanTitle = result.title.replace(/^OPORD\s*[\d-]*\s*[—–-]?\s*/i, "").trim();
+      setName(cleanTitle || result.title);
+      setCodename((result.title.match(/operation\s+([a-z ]+)/i)?.[1] ?? cleanTitle).trim().toUpperCase().slice(0, 30));
+      setStep(2);
+      notify(
+        result.source === "anthropic"
+          ? "Document parsed by the reasoning service (anthropic)"
+          : "Document parsed by the offline extraction rules"
+      );
+    } catch (err) {
+      notify(errMsg(err));
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const doCreate = async () => {
+    if (!parse || creating) return;
+    setCreating(true);
+    try {
+      const created = await createScenarioFromOpord({ parse, name: name.trim() || parse.title, codename: codename.trim() || undefined });
+      onCreated(created);
+    } catch (err) {
+      notify(errMsg(err));
+      setCreating(false);
+    }
+  };
+
+  const sideBlock = (sideId: "blue" | "red") => {
+    const entities = parse?.sides.find((s) => s.side === sideId)?.entities ?? [];
+    return (
+      <div key={sideId} className="sd-opord-sidecard">
+        <p className={`sd-opord-sidehead ${sideId}`}>
+          {sideId === "blue" ? "BLUE FORCES" : "RED FORCES"} · {entities.length} group(s)
+        </p>
+        {entities.length ? (
+          <CompactTable
+            columns={["Entity", "Class", "Qty", "Position", "Task force"]}
+            rows={entities.map((e) => [
+              e.name ?? e.classLabel,
+              e.classLabel,
+              String(e.count),
+              `${e.position.lat.toFixed(2)}, ${e.position.lng.toFixed(2)}`,
+              e.taskForce ?? "—",
+            ])}
+          />
+        ) : (
+          <p className="sd-opord-hint">No entities extracted for this side.</p>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <Modal title="Intelligent Documents — operational order to scenario" onClose={onClose}>
+      {step === 1 ? (
+        <>
+          <p className="sd-opord-hint">
+            Paste an operational order. The pipeline extracts force groups, positions, task organization and objectives —
+            through the reasoning service when an API key is configured, or the built-in extraction rules offline.
+          </p>
+          <Field label="Operational document">
+            <textarea
+              className="sd-opord-text"
+              rows={13}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="OPORD …&#10;2. BLUE FORCES&#10;- 1x Guided-missile destroyer at 33.90, -42.30 (TF Sword)&#10;…"
+            />
+          </Field>
+          <ActionRow>
+            <Button icon={FileText} onClick={doParse} disabled={parsing || text.trim().length < 40}>
+              {parsing ? "Parsing document…" : "Parse document"}
+            </Button>
+            <Button variant="secondary" onClick={() => setText(SAMPLE_OPORD)}>
+              Load sample OPORD
+            </Button>
+          </ActionRow>
+        </>
+      ) : null}
+      {step === 2 && parse ? (
+        <>
+          <div className="sd-opord-src">
+            <Tag
+              label={parse.source === "anthropic" ? "reasoning service" : "offline rules"}
+              color={parse.source === "anthropic" ? "var(--blue)" : undefined}
+            />
+            <small>{parse.summary}</small>
+          </div>
+          <div className="sd-opord-review">
+            {sideBlock("blue")}
+            {sideBlock("red")}
+            {parse.objectives.length ? (
+              <div className="sd-opord-sidecard">
+                <p className="sd-opord-sidehead">OBJECTIVES</p>
+                {parse.objectives.map((o, i) => (
+                  <p key={i} className="sd-opord-obj">
+                    <Tag label={o.side.toUpperCase()} color={sideColors[o.side]} /> <Tag label={o.kind} /> {o.title}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+            {parse.constraints.length ? (
+              <div className="sd-opord-sidecard">
+                <p className="sd-opord-sidehead">CONSTRAINTS</p>
+                {parse.constraints.map((c, i) => (
+                  <p key={i} className="sd-opord-hint">
+                    · {c}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+            {parse.unparsed.length ? (
+              <p className="sd-opord-warn">
+                <AlertTriangle size={13} style={{ verticalAlign: "-2px" }} /> {parse.unparsed.length} line(s) could not be
+                matched to the ontology and were skipped.
+              </p>
+            ) : null}
+          </div>
+          <ActionRow>
+            <Button icon={ShieldCheck} onClick={() => setStep(3)}>
+              Looks right — continue
+            </Button>
+            <Button variant="secondary" onClick={() => setStep(1)}>
+              Back to document
+            </Button>
+          </ActionRow>
+        </>
+      ) : null}
+      {step === 3 && parse ? (
+        <>
+          <FormGrid columns={2}>
+            <Field label="Scenario name">
+              <input value={name} onChange={(e) => setName(e.target.value)} />
+            </Field>
+            <Field label="Codename">
+              <input value={codename} onChange={(e) => setCodename(e.target.value.toUpperCase())} />
+            </Field>
+          </FormGrid>
+          <p className="sd-opord-hint">
+            Units are materialized with ontology-typed stats (cloned from doctrine templates), objectives are weighted per
+            side, and the scenario lands in the library ready for COA generation.
+          </p>
+          <ActionRow>
+            <Button icon={Plus} onClick={doCreate} disabled={creating}>
+              {creating ? "Materializing scenario…" : "Create scenario"}
+            </Button>
+            <Button variant="secondary" onClick={() => setStep(2)}>
+              Back to review
+            </Button>
+          </ActionRow>
+        </>
+      ) : null}
+    </Modal>
+  );
+}
+
 function ObjectiveEditorModal({
   side,
   initial,
@@ -410,6 +638,7 @@ export default function ScenarioDesign(props: PageProps) {
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
 
   const [showCreate, setShowCreate] = useState(false);
+  const [showOpord, setShowOpord] = useState(false);
   const [creating, setCreating] = useState(false);
   const [objModal, setObjModal] = useState<{ side: PlacementSide; objective: Objective | null } | null>(null);
 
@@ -758,6 +987,7 @@ export default function ScenarioDesign(props: PageProps) {
           selectedUnitId={selectedUnitId}
           onSelectUnit={(id) => setSelectedUnitId(id)}
           onMapClick={handleMapClick}
+          showHexGrid
           height={460}
         />
         {selectedUnit ? (
@@ -1151,9 +1381,14 @@ export default function ScenarioDesign(props: PageProps) {
           icon={MapIcon}
           title="Scenario library"
           action={
-            <Button icon={Plus} onClick={() => setShowCreate(true)}>
-              New scenario
-            </Button>
+            <span className="sd-lib-actions">
+              <Button icon={FileText} variant="secondary" onClick={() => setShowOpord(true)}>
+                Import OPORD
+              </Button>
+              <Button icon={Plus} onClick={() => setShowCreate(true)}>
+                New scenario
+              </Button>
+            </span>
           }
         >
           {scenarios.length === 0 ? (
@@ -1199,6 +1434,24 @@ export default function ScenarioDesign(props: PageProps) {
           )}
         </div>
       </div>
+      {showOpord ? (
+        <OpordWizardModal
+          notify={props.notify}
+          onClose={() => setShowOpord(false)}
+          onCreated={(created) => {
+            setScenarios((prev) => [created, ...prev]);
+            setSelectedId(created.id);
+            setWorking(cloneScenario(created));
+            setDirty(false);
+            setValidation(null);
+            setSelectedUnitId(null);
+            setPlacementClassId(null);
+            setShowOpord(false);
+            setTab("orbat");
+            props.notify(`Scenario "${created.name}" materialized from the document — ${created.units.length} pieces deployed`);
+          }}
+        />
+      ) : null}
       {showCreate ? (
         <CreateScenarioModal
           templates={templates}

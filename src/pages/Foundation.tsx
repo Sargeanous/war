@@ -119,7 +119,7 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
         <Metric label="Ontology classes" value={String(ontology?.classes.length ?? 0)} helper={`${ontology?.relations.length ?? 0} relations · v${ontology?.version ?? "-"}`} tone="info" />
       </MetricGrid>
 
-      <Panel icon={Cpu} title="Multiple simulation engines" action={<span className="layer-badge l1">L1</span>}>
+      <Panel icon={Cpu} title="Multiple simulation engines">
         <div className="fnd-engine-grid">
           {platform.engines.map((engine) => (
             <article key={engine.id} className="fnd-card">
@@ -143,7 +143,7 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
         <p className="fnd-caption">Unified real-time and turn-based engines · multi-resolution space-time · multi-branch COA in parallel · CGF and AI-agent runtime.</p>
       </Panel>
 
-      <Panel icon={Database} title="Unified data foundation" action={<span className="layer-badge l1">L1</span>}>
+      <Panel icon={Database} title="Unified data foundation">
         <div className="fnd-domain-grid">
           {domains.map((domain) => (
             <article key={domain.id} className="fnd-card">

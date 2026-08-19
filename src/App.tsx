@@ -98,9 +98,9 @@ const navItems: Record<PageId, NavItem> = {
 
 const navGroups: NavGroup[] = [
   { label: "Command", pages: ["dashboard"] },
-  { label: "Applications · L3", pages: ["scenario", "coa", "rules", "deduction", "assessment"] },
-  { label: "AI Layer · L2", pages: ["ailayer"] },
-  { label: "Foundation · L1", pages: ["foundation", "admin"] },
+  { label: "Planning & Simulation", pages: ["scenario", "coa", "rules", "deduction", "assessment"] },
+  { label: "Intelligence", pages: ["ailayer"] },
+  { label: "Platform", pages: ["foundation", "admin"] },
 ];
 
 const pageComponents: Record<PageId, (props: PageProps) => JSX.Element> = {
@@ -130,7 +130,7 @@ export default function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [page, setPage] = useState<PageId>("dashboard");
   const [toast, setToast] = useState("");
-  const [theme, setTheme] = useState<Theme>(() => (window.localStorage.getItem("sandtable-theme") === "dark" ? "dark" : "light"));
+  const [theme, setTheme] = useState<Theme>(() => (window.localStorage.getItem("sandtable-theme") === "light" ? "light" : "dark"));
   const toastTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {

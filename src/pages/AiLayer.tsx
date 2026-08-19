@@ -118,7 +118,7 @@ export default function AiLayer({ notify }: PageProps) {
       <div className="ail-columns">
         {/* Column 1 — strategic */}
         <div className="ail-col">
-          <Panel icon={Target} title="Strategic · Task decomposition" action={<span className="layer-badge l2">L2</span>}>
+          <Panel icon={Target} title="Strategic · Task decomposition">
             <div className="detail-stack">
               <div className="ail-flow">
                 <span className="ail-flow-chip" style={{ borderColor: "var(--primary)", background: "var(--primary-soft)" }}>
@@ -167,7 +167,7 @@ export default function AiLayer({ notify }: PageProps) {
 
         {/* Column 2 — tactical agent library */}
         <div className="ail-col">
-          <Panel icon={Bot} title="Tactical · Agent library by drive mode" action={<span className="layer-badge l2">L2</span>}>
+          <Panel icon={Bot} title="Tactical · Agent library by drive mode">
             <div className="detail-stack">
               {DRIVE_ORDER.map((mode) => {
                 const group = agents.filter((a) => a.driveMode === mode);
@@ -203,7 +203,7 @@ export default function AiLayer({ notify }: PageProps) {
 
         {/* Column 3 — human + AI decision */}
         <div className="ail-col">
-          <Panel icon={Workflow} title="Human + AI collaborative decision" action={<span className="layer-badge l2">L2</span>}>
+          <Panel icon={Workflow} title="Human + AI collaborative decision">
             <div className="detail-stack">
               <div className="ail-flow">
                 <span className="ail-flow-chip">Situation analysis (O)</span>
