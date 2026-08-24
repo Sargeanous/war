@@ -17,14 +17,16 @@ import {
   Trophy,
   Wand2,
   X,
+  Users,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./deduction.css";
 import {
   ApiError,
   controlRun,
-  explainBranch,
   decideBranch,
+  explainBranch,
+  fetchAgents,
   fetchBootstrap,
   fetchCoas,
   fetchRun,
@@ -32,6 +34,7 @@ import {
   fetchRuleSets,
   intervene,
   startRun,
+  updateSeat,
 } from "../api";
 import {
   ActionRow,
@@ -68,12 +71,13 @@ import type {
   Scenario,
   SimRun,
   Unit,
+  AgentDef,
 } from "../types";
 
 const errMsg = (error: unknown) => (error instanceof ApiError ? error.message : "Backend unreachable");
 
 type ViewSide = "all" | "blue" | "red";
-type DrawerId = "score" | "events" | "adjudication" | "decisions" | "sage";
+type DrawerId = "score" | "events" | "adjudication" | "decisions" | "sage" | "seats";
 
 export default function Deduction({ notify, goTo, profile }: PageProps) {
   const [boot, setBoot] = useState<Bootstrap | null>(null);
@@ -92,6 +96,8 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
   const [orbatOpen, setOrbatOpen] = useState(true);
   const [sageLog, setSageLog] = useState<Array<{ topic: ExplainTopic; label: string; answer: string; source: string }>>([]);
   const [sageBusy, setSageBusy] = useState<ExplainTopic | null>(null);
+  const [agents, setAgents] = useState<AgentDef[]>([]);
+  const [seatBusy, setSeatBusy] = useState<string | null>(null);
   const trailsRef = useRef<Record<string, LatLng[]>>({});
   const canIntervene = profile.id === "operator" || profile.id === "admin";
 
@@ -130,6 +136,17 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Agent library, for crewing seats.
+  useEffect(() => {
+    let alive = true;
+    fetchAgents()
+      .then((list) => alive && setAgents(list))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
   }, []);
 
   // COAs for launcher
@@ -257,6 +274,17 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
       notify("Decision issued, branch resuming");
     } catch (error) {
       notify(errMsg(error));
+    }
+  }
+  async function doSeat(seatId: string, payload: { mode?: "human" | "ai"; agentId?: string }) {
+    if (!run || seatBusy) return;
+    setSeatBusy(seatId);
+    try {
+      applyRun(await updateSeat(run.id, seatId, payload));
+    } catch (error) {
+      notify(errMsg(error));
+    } finally {
+      setSeatBusy(null);
     }
   }
 
@@ -651,6 +679,59 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
                     )}
                   </div>
                 ) : null}
+                {drawer === "seats" ? (
+                  <div className="ded-drawer-body">
+                    {(run.seats ?? []).length ? (
+                      (["blue", "red"] as const).map((side) => (
+                        <div key={side} className="ded-seat-group">
+                          <p className={`ded-seat-side ${side}`}>{side === "blue" ? "BLUE CREW" : "RED CREW"}</p>
+                          {(run.seats ?? [])
+                            .filter((seat) => seat.side === side)
+                            .map((seat) => (
+                              <div key={seat.id} className="ded-seat">
+                                <div className="ded-seat-head">
+                                  <strong>{seat.name}</strong>
+                                  <Tag label={seat.rank} />
+                                </div>
+                                <div className="ded-seat-crew">
+                                  <Segmented
+                                    value={seat.mode}
+                                    onChange={(v) => doSeat(seat.id, { mode: v as "human" | "ai" })}
+                                    items={[
+                                      { id: "human", label: "Human" },
+                                      { id: "ai", label: "Agent" },
+                                    ]}
+                                  />
+                                  {seat.mode === "ai" ? (
+                                    <select
+                                      className="ded-seat-agent"
+                                      value={seat.agentId ?? ""}
+                                      disabled={seatBusy === seat.id}
+                                      onChange={(e) => doSeat(seat.id, { mode: "ai", agentId: e.target.value })}
+                                    >
+                                      {agents.map((a) => (
+                                        <option key={a.id} value={a.id}>
+                                          {a.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <span className="ded-seat-person">{seat.participant ?? "Unassigned"}</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      ))
+                    ) : (
+                      <EmptyState
+                        icon={Users}
+                        title="No seat roster"
+                        hint="Runs launched before crewing shipped have no roster. Start a new deduction to crew its command seats."
+                      />
+                    )}
+                  </div>
+                ) : null}
                 {drawer === "sage" ? (
                   <div className="ded-drawer-body">
                     <div className="ded-sage-chips">
@@ -728,6 +809,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
                   { id: "adjudication" as const, label: "Adjudication", icon: Swords },
                   { id: "decisions" as const, label: "Decisions", icon: ListChecks },
                   { id: "sage" as const, label: "SAGE", icon: BrainCircuit },
+                  { id: "seats" as const, label: "Seats", icon: Users },
                 ] as Array<{ id: DrawerId; label: string; icon: typeof Trophy }>
               ).map((tab) => (
                 <button

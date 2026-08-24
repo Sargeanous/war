@@ -16,6 +16,7 @@ import type {
   CoaGenerationResult,
   ExplainResult,
   RunReport,
+  CommandSeat,
   ExplainTopic,
   CoaStrategy,
   OntologyClass,
@@ -93,6 +94,8 @@ export const fetchCoas = (scenarioId?: string) =>
   get<Coa[]>(`/api/coas${scenarioId ? `?scenarioId=${encodeURIComponent(scenarioId)}` : ""}`);
 export const generateCoas = (payload: { scenarioId: string; missionId: string; count: number; strategy?: CoaStrategy }) =>
   post<CoaGenerationResult>("/api/coas/generate", payload);
+export const updateSeat = (runId: string, seatId: string, payload: { mode?: "human" | "ai"; agentId?: string; participant?: string }) =>
+  put<SimRun>(`/api/runs/${runId}/seats/${seatId}`, payload);
 export const generateReport = (runId: string) => post<RunReport>(`/api/runs/${runId}/report`);
 export const resumeFromBreakpoint = (runId: string, branchId: string, tick: number, speed?: number) =>
   post<SimRun>(`/api/runs/${runId}/branches/${branchId}/resume`, { tick, speed });

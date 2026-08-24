@@ -551,6 +551,18 @@ export interface Branch {
   metricsHistory: Array<{ tick: number; simTimeH: number } & BranchMetrics>;
 }
 
+
+// A run is crewed: each command seat is held by a person or locked to an agent.
+export interface CommandSeat {
+  id: string;
+  side: "blue" | "red";
+  name: string;
+  rank: string;
+  mode: "human" | "ai";
+  participant: string | null;
+  agentId: string | null;
+  agentName: string | null;
+}
 export interface SimRun {
   id: string;
   scenarioId: string;
@@ -568,6 +580,7 @@ export interface SimRun {
   startedAt: string;
   completedAt?: string;
   label: string;
+  seats?: CommandSeat[];
   resumedFrom?: {
     runId: string;
     runLabel: string;

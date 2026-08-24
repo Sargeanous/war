@@ -1568,6 +1568,8 @@ function handleResumeFromBreakpoint(runId, branchId, body) {
     id: nextId('run'),
   });
   rewindBranchToSnapshot(run.branches[0], snap, source.label);
+  // A fork keeps the crew that flew the original.
+  run.seats = Array.isArray(source.seats) && source.seats.length ? JSON.parse(JSON.stringify(source.seats)) : buildSeats();
   run.clock.tick = snap.tick;
   run.clock.simTimeH = snap.simTimeH;
   run.resumedFrom = {
@@ -1729,6 +1731,70 @@ function nlLiteral() {
   return String.fromCharCode(10);
 }
 
+// --- Command seats -----------------------------------------------------------------
+// A run is crewed. Every seat is either held by a person or locked to an agent from
+// the tactical library, which is how human-machine teaming is actually configured
+// rather than merely described. RED is machine-crewed by default.
+const SEAT_TEMPLATE = [
+  { side: 'blue', name: 'Joint Force Commander', rank: 'Level 1 commander', specialty: 'situation-understanding' },
+  { side: 'blue', name: 'Air Component', rank: 'Level 2 commander', specialty: 'fire-strike' },
+  { side: 'blue', name: 'Maritime Component', rank: 'Level 2 commander', specialty: 'route-planning' },
+  { side: 'blue', name: 'Landing Force', rank: 'Level 3 commander', specialty: 'logistics' },
+  { side: 'red', name: 'OPFOR Commander', rank: 'Level 1 commander', specialty: 'situation-understanding' },
+  { side: 'red', name: 'Coastal Defense', rank: 'Level 2 commander', specialty: 'fire-strike' },
+  { side: 'red', name: 'Naval Strike Group', rank: 'Level 2 commander', specialty: 'route-planning' },
+];
+
+function agentForSpecialty(specialty) {
+  const ready = state.agents.filter((a) => a.status === 'ready');
+  return ready.find((a) => a.specialty === specialty) || ready[0] || state.agents[0] || null;
+}
+
+function buildSeats(participantName) {
+  return SEAT_TEMPLATE.map((t, i) => {
+    const agent = agentForSpecialty(t.specialty);
+    const humanHeld = t.side === 'blue' && i === 0;
+    return {
+      id: 'seat-' + (i + 1),
+      side: t.side,
+      name: t.name,
+      rank: t.rank,
+      mode: humanHeld ? 'human' : 'ai',
+      participant: humanHeld ? participantName || 'Exercise participant' : null,
+      agentId: humanHeld ? null : agent ? agent.id : null,
+      agentName: humanHeld ? null : agent ? agent.name : null,
+    };
+  });
+}
+
+function handleUpdateSeat(runId, seatId, body) {
+  const run = requireRun(runId);
+  if (!Array.isArray(run.seats)) throw httpError(400, 'This run has no seat roster.');
+  const seat = run.seats.find((x) => x.id === seatId);
+  if (!seat) throw httpError(404, 'Unknown seat "' + seatId + '".');
+  if (body.mode === 'human' || body.mode === 'ai') seat.mode = body.mode;
+  if (seat.mode === 'ai') {
+    const requested = typeof body.agentId === 'string' ? state.agents.find((a) => a.id === body.agentId) : null;
+    const agent = requested || (seat.agentId ? state.agents.find((a) => a.id === seat.agentId) : null) || agentForSpecialty('situation-understanding');
+    seat.agentId = agent ? agent.id : null;
+    seat.agentName = agent ? agent.name : null;
+    seat.participant = null;
+  } else {
+    seat.agentId = null;
+    seat.agentName = null;
+    if (typeof body.participant === 'string' && body.participant.trim()) seat.participant = body.participant.trim().slice(0, 60);
+    if (!seat.participant) seat.participant = 'Exercise participant';
+  }
+  audit(
+    'operator',
+    'seat-assigned',
+    run.id,
+    seat.side.toUpperCase() + ' ' + seat.name + ' is now crewed by ' + (seat.mode === 'ai' ? 'agent ' + seat.agentName : seat.participant) + '.'
+  );
+  schedulePersist();
+  return serializeRun(run);
+}
+
 function handleStartRun(body) {
   const scenario = requireScenario(String(body.scenarioId || ""));
   const ruleSet = findRuleSet(String(body.ruleSetId || ""));
@@ -1751,6 +1817,7 @@ function handleStartRun(body) {
       : `${scenario.codename} deduction ${state.runs.length + 1}`;
 
   const run = createRun({ scenario, coas, ruleSet, engine, speed, label, id: nextId("run") });
+  run.seats = Array.isArray(body.seats) && body.seats.length ? body.seats : buildSeats(body.crewedBy);
   state.runs.push(run);
   scenario.status = "running";
   scenario.updatedAt = nowIso();
@@ -2101,6 +2168,11 @@ const routes = [
   },
   { method: "POST", re: new RegExp(`^/api/runs/${ID}/assess$`), handler: ({ params }) => handleAssessRun(params[0]) },
   { method: "POST", re: new RegExp("^/api/runs/" + ID + "/report$"), handler: ({ params }) => handleGenerateReport(params[0]) },
+  {
+    method: "PUT",
+    re: new RegExp("^/api/runs/" + ID + "/seats/" + ID + "$"),
+    handler: ({ params, body }) => handleUpdateSeat(params[0], params[1], body),
+  },
   {
     method: "GET",
     re: new RegExp(`^/api/runs/${ID}/replay/${ID}$`),

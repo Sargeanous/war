@@ -738,3 +738,66 @@
   font-size: 12.5px;
   line-height: 1.55;
 }
+
+/* --- Command seats: who crews this run --------------------------------------- */
+
+.ded-seat-group {
+  display: grid;
+  gap: var(--s2);
+}
+
+.ded-seat-side {
+  margin: 0;
+  font-size: var(--t-kicker);
+  font-weight: 700;
+  letter-spacing: 0.09em;
+}
+
+.ded-seat-side.blue {
+  color: #6fa8dc;
+}
+
+.ded-seat-side.red {
+  color: #e08b83;
+}
+
+.ded-seat {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s4) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.ded-seat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.ded-seat-head strong {
+  font-size: var(--t-sm);
+  font-weight: 650;
+}
+
+.ded-seat-crew {
+  display: grid;
+  gap: var(--s2);
+}
+
+.ded-seat-agent {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--t-xs);
+}
+
+.ded-seat-person {
+  color: var(--muted);
+  font-size: var(--t-xs);
+}
