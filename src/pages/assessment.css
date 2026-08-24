@@ -53,8 +53,12 @@
 }
 
 .asm-events {
-  max-height: 300px;
-  overflow: auto;
+  /* Fills the row beside the fixed-height chart and scrolls internally, so the
+     pair never leaves a void. */
+  height: 100%;
+  max-height: 430px;
+  overflow-y: auto;
+  padding-inline-end: var(--s1);
 }
 
 .asm-compare-radar {
