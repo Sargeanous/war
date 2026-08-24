@@ -158,3 +158,23 @@ never `Math.random()` for engine outcomes.
 - `POST /api/runs/:id/branches/:bid/explain` {topic: adjudication|risk|next-step|
   enemy} → {answer, source, latencyMs}; grounded context built by
   branchExplainContext(); deterministic offlineExplain() fallback.
+
+## Addendum, Phase 4 and seats (2026-08-19)
+
+- `POST /api/runs/:id/branches/:bid/resume` {tick, speed?} -> SimRun. Picks the
+  nearest recorded snapshot at or before `tick`, creates a new single-branch run on
+  the same scenario/COA/rule set, and calls `rewindBranchToSnapshot()` to restore
+  unit positions, strengths, statuses, detection flags and the clock. The RNG state
+  is advanced by `tick * 2654435761` so the fork does not replay the parent's rolls.
+  The new run carries `resumedFrom {runId, runLabel, branchId, branchName, tick,
+  simTimeH}` and inherits the parent's seat roster.
+- `POST /api/runs/:id/report` -> RunReport. Requires the run to be assessed. Builds
+  per-branch figures from assessments plus the decision record, then four narrative
+  sections (Summary, Branch comparison, Command decisions, Observations and
+  optimisation) written by Claude when a key is present, deterministically otherwise.
+  Stored on `run.report`.
+- `PUT /api/runs/:id/seats/:seatId` {mode?, agentId?, participant?} -> SimRun.
+  `run.seats` is built at launch by `buildSeats()`: four BLUE and three RED command
+  seats, each `mode: "human" | "ai"`. AI seats resolve an agent by specialty from the
+  ready pool. BLUE's Joint Force Commander is human by default; everything else is
+  machine-crewed.
