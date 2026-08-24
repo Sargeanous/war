@@ -1,4 +1,4 @@
-// CommandDashboard — the commander's landing view for Exercise AZURE HORIZON.
+// CommandDashboard, the commander's landing view for Exercise AZURE HORIZON.
 // Metrics row, live theater picture of the focus deduction run, per-branch
 // telemetry, the L3/L2/L1 layer cards and the recent-activity stream.
 
@@ -206,7 +206,7 @@ export default function CommandDashboard(props: PageProps) {
 
   const handleSelectUnit = (id: string) => {
     const unit = mapUnits.find((u) => u.id === id);
-    if (unit) props.notify(`${unit.name} — ${unit.status.toUpperCase()}, strength ${Math.round(unit.strength)}%`);
+    if (unit) props.notify(`${unit.name}, ${unit.status.toUpperCase()}, strength ${Math.round(unit.strength)}%`);
   };
 
   if (error && !boot) {
@@ -299,16 +299,16 @@ export default function CommandDashboard(props: PageProps) {
             <div className="legend">
               <span>
                 <i style={{ background: sideColors.blue }} />
-                BLUE — Coalition Task Force
+                BLUE · Coalition Task Force
               </span>
               <span>
                 <i style={{ background: sideColors.red }} />
-                RED — OPFOR
+                RED · OPFOR
               </span>
               {focusBranch ? (
                 <span>
                   <i style={{ background: focusBranch.color }} />
-                  Branch — {focusBranch.name}
+                  Branch, {focusBranch.name}
                 </span>
               ) : null}
             </div>
@@ -317,7 +317,7 @@ export default function CommandDashboard(props: PageProps) {
                 ? `Live pieces · ${run.scenarioName}`
                 : mapScenario
                   ? `Order of battle · ${mapScenario.name}`
-                  : "Meridian Archipelago — no scenario loaded"}
+                  : "Meridian Archipelago, no scenario loaded"}
             </span>
           </div>
         </Panel>
@@ -416,7 +416,7 @@ export default function CommandDashboard(props: PageProps) {
           <header className="cmd-layer-head">
             <h3>Planning &amp; Simulation</h3>
           </header>
-          <p className="cmd-layer-sub">From scenario to assessment — design, generate COAs, configure rules, deduce, assess.</p>
+          <p className="cmd-layer-sub">From scenario to assessment, design, generate COAs, configure rules, deduce, assess.</p>
           <DetailGrid>
             <Detail label="Scenarios" value={String(boot.scenarios.length)} />
             <Detail label="COA candidates" value={String(boot.coas.length)} />

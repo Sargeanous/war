@@ -10,8 +10,8 @@ export const sideColors: Record<SideId, string> = {
 };
 
 export const sideLabels: Record<SideId, string> = {
-  blue: "BLUE — Coalition Task Force",
-  red: "RED — Opposing Force",
+  blue: "BLUE · Coalition Task Force",
+  red: "RED · Opposing Force",
   neutral: "Neutral",
 };
 

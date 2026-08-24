@@ -40,7 +40,7 @@ const ACTIVE_RUN_STATUSES = ["initializing", "running", "awaiting-decision", "pa
 const TERMINAL_RUN_STATUSES = ["completed", "aborted"];
 
 // ---------------------------------------------------------------------------
-// Env loader — parse KEY=VALUE lines from .env at the project root; existing
+// Env loader, parse KEY=VALUE lines from .env at the project root; existing
 // process.env values win.
 // ---------------------------------------------------------------------------
 
@@ -161,7 +161,7 @@ function audit(user, action, target, detail, at) {
 }
 
 // ---------------------------------------------------------------------------
-// Realtime loop management — the HTTP layer owns one setInterval per running
+// Realtime loop management, the HTTP layer owns one setInterval per running
 // realtime run (1000 / clock.speed ms per tick). Turn-based runs advance only
 // via the "step" control action.
 // ---------------------------------------------------------------------------
@@ -245,7 +245,7 @@ function finishRun(run) {
 }
 
 // ---------------------------------------------------------------------------
-// Boot — load persisted state or build seeds plus the historical rehearsal run.
+// Boot, load persisted state or build seeds plus the historical rehearsal run.
 // ---------------------------------------------------------------------------
 
 function loadPersistedState() {
@@ -391,7 +391,7 @@ function boot() {
 }
 
 // ---------------------------------------------------------------------------
-// Derived views — run summaries and live platform numbers.
+// Derived views, run summaries and live platform numbers.
 // ---------------------------------------------------------------------------
 
 function toRunSummary(run) {
@@ -477,14 +477,14 @@ function validateScenario(scenario) {
   const activeUnits = scenario.units.filter((u) => u.status !== "destroyed" && u.status !== "withdrawn");
 
   if (scenario.units.length === 0) {
-    issues.push({ level: "error", code: "no-units", message: "Scenario has no units — place an order of battle before running." });
+    issues.push({ level: "error", code: "no-units", message: "Scenario has no units, place an order of battle before running." });
   } else {
     for (const side of ["blue", "red"]) {
       if (!activeUnits.some((u) => u.side === side)) {
         issues.push({
           level: "error",
           code: `side-empty-${side}`,
-          message: `No active ${side.toUpperCase()} units — a deduction needs both sides on the board.`,
+          message: `No active ${side.toUpperCase()} units, a deduction needs both sides on the board.`,
         });
       }
     }
@@ -496,7 +496,7 @@ function validateScenario(scenario) {
       issues.push({
         level: "warning",
         code: `objectives-missing-${side}`,
-        message: `${side.toUpperCase()} has no objectives — scoring and victory checks will be inert for that side.`,
+        message: `${side.toUpperCase()} has no objectives, scoring and victory checks will be inert for that side.`,
       });
       continue;
     }
@@ -505,7 +505,7 @@ function validateScenario(scenario) {
       issues.push({
         level: "warning",
         code: `objective-weights-${side}`,
-        message: `${side.toUpperCase()} objective weights sum to ${round2(weightSum)} — expected ~1.0 for normalized scoring.`,
+        message: `${side.toUpperCase()} objective weights sum to ${round2(weightSum)}, expected ~1.0 for normalized scoring.`,
       });
     }
   }
@@ -534,7 +534,7 @@ function validateScenario(scenario) {
     issues.push({
       level: "warning",
       code: "duration-unusual",
-      message: `Duration ${scenario.durationHours}h is outside the usual 12–240h exercise window.`,
+      message: `Duration ${scenario.durationHours}h is outside the usual 12-240h exercise window.`,
     });
   }
 
@@ -542,14 +542,14 @@ function validateScenario(scenario) {
     issues.push({
       level: "info",
       code: "emcon-silent",
-      message: "EMCON silent is set — detection ranges will be sharply reduced for both sides.",
+      message: "EMCON silent is set, detection ranges will be sharply reduced for both sides.",
     });
   }
   if (scenario.environment.weather === "storm") {
     issues.push({
       level: "info",
       code: "weather-storm",
-      message: `Storm with sea state ${scenario.environment.seaState} — expect degraded sensors and slower surface movement.`,
+      message: `Storm with sea state ${scenario.environment.seaState}, expect degraded sensors and slower surface movement.`,
     });
   }
 
@@ -565,7 +565,7 @@ function validateScenario(scenario) {
 }
 
 // ---------------------------------------------------------------------------
-// Rule set testing — canned situations evaluated against the documented fact
+// Rule set testing, canned situations evaluated against the documented fact
 // vocabulary (range, actor.*, target.*, weather, seaState, emcon, simTimeH,
 // phase.name).
 // ---------------------------------------------------------------------------
@@ -573,7 +573,7 @@ function validateScenario(scenario) {
 const TEST_SITUATIONS = [
   {
     id: "surface-engagement",
-    label: "Surface action — BLUE destroyer vs RED missile boat at 32 km, clear weather",
+    label: "Surface action · BLUE destroyer vs RED missile boat at 32 km, clear weather",
     keywords: ["surface", "ship", "missile boat", "destroyer", "naval", "ssm"],
     facts: {
       range: 32,
@@ -595,7 +595,7 @@ const TEST_SITUATIONS = [
   },
   {
     id: "air-strike",
-    label: "Air raid — BLUE strike package vs RED SAM battalion at 110 km, overcast",
+    label: "Air raid · BLUE strike package vs RED SAM battalion at 110 km, overcast",
     keywords: ["air", "strike", "raid", "sam", "sead", "aircraft", "sortie"],
     facts: {
       range: 110,
@@ -617,7 +617,7 @@ const TEST_SITUATIONS = [
   },
   {
     id: "submarine-ambush",
-    label: "Subsurface ambush — RED submarine vs BLUE supply ship at 12 km, EMCON silent",
+    label: "Subsurface ambush · RED submarine vs BLUE supply ship at 12 km, EMCON silent",
     keywords: ["sub", "torpedo", "ambush", "underwater", "asw", "silent"],
     facts: {
       range: 12,
@@ -639,7 +639,7 @@ const TEST_SITUATIONS = [
   },
   {
     id: "storm-transit",
-    label: "Storm transit — BLUE task group at 18% supply moving through sea state 6",
+    label: "Storm transit · BLUE task group at 18% supply moving through sea state 6",
     keywords: ["storm", "supply", "logistic", "transit", "movement", "weather", "resupply"],
     facts: {
       range: 180,
@@ -763,7 +763,7 @@ function testRuleSet(ruleSet, situationText) {
 
   for (const rule of ordered) {
     if (!rule.enabled) {
-      trace.push({ ruleId: rule.id, ruleName: rule.name, fired: false, detail: "Rule disabled — skipped." });
+      trace.push({ ruleId: rule.id, ruleName: rule.name, fired: false, detail: "Rule disabled, skipped." });
       continue;
     }
     let failed = null;
@@ -779,7 +779,7 @@ function testRuleSet(ruleSet, situationText) {
         ruleId: rule.id,
         ruleName: rule.name,
         fired: false,
-        detail: `Not fired — condition "${conditionText(failed.condition)}" failed (${failed.why}).`,
+        detail: `Not fired, condition "${conditionText(failed.condition)}" failed (${failed.why}).`,
       });
       continue;
     }
@@ -818,13 +818,13 @@ function testRuleSet(ruleSet, situationText) {
 
   const outcome =
     `${firedCount}/${ordered.length} rules fired for "${situation.label}". ` +
-    (parts.length ? `Net adjudication: ${parts.join("; ")}.` : "No effects applied — baseline adjudication stands.");
+    (parts.length ? `Net adjudication: ${parts.join("; ")}.` : "No effects applied, baseline adjudication stands.");
 
   return { ruleSetId: ruleSet.id, situation: situation.label, outcome, trace, testedAt: nowIso() };
 }
 
 // ---------------------------------------------------------------------------
-// Copilot — SAGE. OpenAI chat completions when a key is configured, otherwise
+// Copilot · SAGE. OpenAI chat completions when a key is configured, otherwise
 // rule-based answers composed from live state.
 // ---------------------------------------------------------------------------
 
@@ -840,7 +840,7 @@ const activeRuns = () => state.runs.filter((r) => ACTIVE_RUN_STATUSES.includes(r
 
 function situationSummary() {
   const lines = [];
-  lines.push("Exercise AZURE HORIZON — fictional Meridian Archipelago theater; BLUE Coalition Task Force vs RED OPFOR.");
+  lines.push("Exercise AZURE HORIZON, fictional Meridian Archipelago theater; BLUE Coalition Task Force vs RED OPFOR.");
   lines.push(
     `Scenarios: ${state.scenarios.map((s) => `${s.name} [${s.status}, ${s.units.length} units, ${s.objectives.length} objectives]`).join("; ")}.`
   );
@@ -863,7 +863,7 @@ function situationSummary() {
       for (const decision of branch.decisions) {
         if (decision.status !== "open") continue;
         const rec = decision.options.find((o) => o.id === decision.aiRecommendationId);
-        lines.push(`    Open decision: "${decision.title}" — AI recommends "${rec ? rec.label : decision.aiRecommendationId}".`);
+        lines.push(`    Open decision: "${decision.title}" · AI recommends "${rec ? rec.label : decision.aiRecommendationId}".`);
       }
     }
   }
@@ -876,7 +876,7 @@ function situationSummary() {
   lines.push(`Agent library: ${state.agents.filter((a) => a.status === "ready").length}/${state.agents.length} agents ready.`);
   if (state.assessments.length) {
     lines.push(
-      `Latest assessments: ${state.assessments.slice(-4).map((a) => `${a.branchName} — ${a.verdict} (${a.overallScore}/100, LER ${a.lossExchangeRatio})`).join("; ")}.`
+      `Latest assessments: ${state.assessments.slice(-4).map((a) => `${a.branchName}, ${a.verdict} (${a.overallScore}/100, LER ${a.lossExchangeRatio})`).join("; ")}.`
     );
   }
   return lines.join("\n").slice(0, 6000);
@@ -924,7 +924,7 @@ function answerDecisions() {
         if (decision.status !== "open") continue;
         const rec = decision.options.find((o) => o.id === decision.aiRecommendationId);
         open.push(
-          `"${decision.title}" on branch ${branch.name} of ${run.label} — ${decision.options.length} options, AI recommends "${rec ? rec.label : decision.aiRecommendationId}"`
+          `"${decision.title}" on branch ${branch.name} of ${run.label}, ${decision.options.length} options, AI recommends "${rec ? rec.label : decision.aiRecommendationId}"`
         );
       }
     }
@@ -932,7 +932,7 @@ function answerDecisions() {
   if (!open.length) {
     return "No decision points are open right now. They surface at COA phase boundaries and on emergent triggers such as first contact or a branch dropping below 70% strength; the branch pauses until the commander decides.";
   }
-  return `${open.length} decision point(s) are open: ${open.join("; ")}. The commander can follow the AI recommendation or override it with a rationale — both are retained for the assessment.`;
+  return `${open.length} decision point(s) are open: ${open.join("; ")}. The commander can follow the AI recommendation or override it with a rationale, both are retained for the assessment.`;
 }
 
 function answerCoaComparison() {
@@ -940,7 +940,7 @@ function answerCoaComparison() {
   if (!coas.length) return "No COAs exist yet. Decompose a mission on the COA Generation page, then generate two to four candidates to compare.";
   const top = coas.slice(0, 3).map(
     (c) =>
-      `${c.name} (${c.approach}) — composite ${c.scores.composite}, feasibility ${c.scores.feasibility}, expected effect ${c.scores.expectedEffect}, risk ${c.scores.risk} [${c.status}]`
+      `${c.name} (${c.approach}), composite ${c.scores.composite}, feasibility ${c.scores.feasibility}, expected effect ${c.scores.expectedEffect}, risk ${c.scores.risk} [${c.status}]`
   );
   const best = coas[0];
   const safest = [...coas].sort((a, b) => a.scores.risk - b.scores.risk)[0];
@@ -994,7 +994,7 @@ function answerAssessments() {
   const best = [...batch].sort((a, b) => b.overallScore - a.overallScore)[0];
   return (
     `Latest assessed run is "${run ? run.label : latestRunId}". ${lines.join("; ")}. ` +
-    (best ? `${best.branchName} scored highest — its replay is available branch-by-branch with full snapshots and the event log.` : "")
+    (best ? `${best.branchName} scored highest, its replay is available branch-by-branch with full snapshots and the event log.` : "")
   );
 }
 
@@ -1337,7 +1337,7 @@ async function handleParseOpord(body) {
   }
   if (!parse) parse = parseOpordOffline(text, classes);
   const total = parse.sides.reduce((s, side) => s + side.entities.length, 0);
-  if (!total) throw httpError(422, "No force entities could be extracted — check the document follows an OPORD structure with BLUE/RED force sections.");
+  if (!total) throw httpError(422, "No force entities could be extracted, check the document follows an OPORD structure with BLUE/RED force sections.");
   audit("planner", "opord-parsed", parse.title, `Intelligent Documents extracted ${total} entity group(s) via ${parse.source}.`);
   return parse;
 }
@@ -1442,7 +1442,7 @@ function handleSilentEval(coaId) {
     ruleSet,
     engine: "realtime",
     speed: 4,
-    label: `Silent eval — ${coa.name}`,
+    label: `Silent eval, ${coa.name}`,
     id: `run-silent-${Date.now().toString(36)}`,
   });
   const ctx = { scenario, ruleSet };
@@ -1667,7 +1667,7 @@ function branchExplainContext(run, branch, scenario) {
   if (lastAdj) {
     const a = lastAdj.adjudication;
     lines.push(
-      `Latest adjudication: ${a.attacker} fired ${a.weapon} at ${a.target} from ${a.rangeKm} km — base pk ${a.basePk}` +
+      `Latest adjudication: ${a.attacker} fired ${a.weapon} at ${a.target} from ${a.rangeKm} km, base pk ${a.basePk}` +
         (a.modifiers.length ? `, modified by ${a.modifiers.map((x) => `"${x.rule}" ×${x.factor}`).join(", ")}` : "") +
         ` to ${a.finalPk}; roll ${a.roll} → ${a.result.toUpperCase()}${a.result === "hit" ? ` for ${a.damage}% damage` : ""}.`
     );
@@ -1683,7 +1683,7 @@ function offlineExplain(topic, run, branch, scenario) {
   const redAlive = branch.units.filter((u) => u.side === "red" && u.status !== "destroyed");
   if (topic === "adjudication") {
     const e = branch.recentEvents.find((ev) => ev.adjudication);
-    if (!e) return "No engagement has been adjudicated yet in this branch — once a piece fires, the full resolution (weapon, range, rule modifiers, random roll, damage) appears here and in the Adjudication drawer.";
+    if (!e) return "No engagement has been adjudicated yet in this branch, once a piece fires, the full resolution (weapon, range, rule modifiers, random roll, damage) appears here and in the Adjudication drawer.";
     const a = e.adjudication;
     const mods = a.modifiers.length ? ` The rules ${a.modifiers.map((x) => `"${x.rule}" (×${x.factor})`).join(" and ")} adjusted it to ${a.finalPk}.` : ` No rule modified the shot, so the final pk stayed ${a.finalPk}.`;
     return (
@@ -1695,20 +1695,20 @@ function offlineExplain(topic, run, branch, scenario) {
   if (topic === "risk") {
     const risks = [];
     const weak = [...blueAlive].sort((x, y) => x.supply - y.supply)[0];
-    if (weak && weak.supply < 45) risks.push([60 + (45 - weak.supply), `${weak.name} is at ${Math.round(weak.supply)}% supply — it drops out of the fight if it is not rotated to the auxiliary within the next phase`]);
+    if (weak && weak.supply < 45) risks.push([60 + (45 - weak.supply), `${weak.name} is at ${Math.round(weak.supply)}% supply, it drops out of the fight if it is not rotated to the auxiliary within the next phase`]);
     const exposed = blueAlive.filter((u) => u.detectedByEnemy).length;
-    if (exposed > blueAlive.length * 0.6) risks.push([55, `${exposed} of ${blueAlive.length} BLUE pieces are held by RED sensors — the force is fighting inside the enemy's kill chain`]);
+    if (exposed > blueAlive.length * 0.6) risks.push([55, `${exposed} of ${blueAlive.length} BLUE pieces are held by RED sensors, so the force is fighting inside the enemy's kill chain`]);
     if (scenario.environment.weather === "storm") risks.push([50, "storm conditions are suppressing detection and movement for both sides, which favors the defender"]);
-    if (m.blueStrength < 70) risks.push([70, `aggregate BLUE strength is down to ${m.blueStrength}% — attrition is outpacing the objective picture (${m.objectiveScore}%)`]);
-    if (m.objectiveScore < 40 && run.clock.simTimeH > scenario.durationHours * 0.5) risks.push([65, `over half the window is spent but objectives sit at ${m.objectiveScore}% — tempo is the risk, not losses`]);
+    if (m.blueStrength < 70) risks.push([70, `aggregate BLUE strength is down to ${m.blueStrength}%, attrition is outpacing the objective picture (${m.objectiveScore}%)`]);
+    if (m.objectiveScore < 40 && run.clock.simTimeH > scenario.durationHours * 0.5) risks.push([65, `over half the window is spent but objectives sit at ${m.objectiveScore}%, tempo is the risk, not losses`]);
     if (!risks.length) return `No acute risk: BLUE holds ${m.blueStrength}% strength, ${m.supplyLevel}% supply and ${m.objectiveScore}% of the objective picture. The main watch item is keeping the sustainment line covered as the force advances.`;
     risks.sort((a, b) => b[0] - a[0]);
     return `Biggest risk right now: ${risks[0][1]}.${risks[1] ? ` Secondary: ${risks[1][1]}.` : ""}`;
   }
   if (topic === "next-step") {
     const open = branch.decisions.find((d) => d.status === "open");
-    if (open) return `A commander decision is open: "${open.title}". SAGE recommends "${open.options.find((o) => o.id === open.aiRecommendationId)?.label}" — ${open.aiRationale}`;
-    if (m.supplyLevel < 45) return `Sustainment first: force supply is ${m.supplyLevel}%. Pull the escort screen tight around the auxiliary, run a resupply rotation, then resume the advance — the objective picture (${m.objectiveScore}%) will hold.`;
+    if (open) return `A commander decision is open: "${open.title}". SAGE recommends "${open.options.find((o) => o.id === open.aiRecommendationId)?.label}", ${open.aiRationale}`;
+    if (m.supplyLevel < 45) return `Sustainment first: force supply is ${m.supplyLevel}%. Pull the escort screen tight around the auxiliary, run a resupply rotation, then resume the advance, the objective picture (${m.objectiveScore}%) will hold.`;
     if (m.objectiveScore >= 50 && m.blueStrength > m.redStrength) return `Press the advantage: objectives at ${m.objectiveScore}% with a strength edge (${m.blueStrength}% vs ${m.redStrength}%). Keep the current phase ("${branch.currentPhaseName || "free play"}") moving and deny RED time to reconstitute.`;
     return `Develop the picture before committing: only ${redAlive.filter((u) => u.detectedByEnemy).length} of ${redAlive.length} RED pieces are held on sensors. Push ISR forward, keep EMCON ${scenario.environment.emcon}, and time the strike for the next phase boundary.`;
   }
@@ -1726,11 +1726,11 @@ async function handleExplain(runId, branchId, body) {
   const run = requireRun(runId);
   const branch = requireBranch(run, branchId);
   const topic = String(body.topic || "");
-  if (!EXPLAIN_TOPICS[topic]) throw httpError(400, `Unknown topic "${topic}" — expected one of ${Object.keys(EXPLAIN_TOPICS).join(", ")}.`);
+  if (!EXPLAIN_TOPICS[topic]) throw httpError(400, `Unknown topic "${topic}", expected one of ${Object.keys(EXPLAIN_TOPICS).join(", ")}.`);
   const scenario = findScenario(run.scenarioId);
   const started = Date.now();
   if (process.env.ANTHROPIC_API_KEY) {
-    const question = `${EXPLAIN_TOPICS[topic]}\n\nGrounded branch context (authoritative — answer from this):\n${branchExplainContext(run, branch, scenario)}\n\nAnswer in at most 110 words, addressed to the commander.`;
+    const question = `${EXPLAIN_TOPICS[topic]}\n\nGrounded branch context (authoritative, answer from this):\n${branchExplainContext(run, branch, scenario)}\n\nAnswer in at most 110 words, addressed to the commander.`;
     const result = await askAnthropic(question, `deduction:${topic}`, started, process.env.ANTHROPIC_API_KEY);
     if (result.source === "anthropic") return { topic, answer: result.answer, source: "anthropic", latencyMs: result.latencyMs };
   }
@@ -1877,7 +1877,7 @@ const routes = [
       const ruleSet = findRuleSet(params[0]);
       if (!ruleSet) throw httpError(404, `Unknown rule set "${params[0]}".`);
       const result = testRuleSet(ruleSet, String(body.situation || ""));
-      audit("operator", "ruleset-tested", ruleSet.id, `Test "${result.situation}" — ${result.trace.filter((t) => t.fired).length} rule(s) fired.`);
+      audit("operator", "ruleset-tested", ruleSet.id, `Test "${result.situation}", ${result.trace.filter((t) => t.fired).length} rule(s) fired.`);
       return result;
     },
   },

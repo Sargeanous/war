@@ -1,4 +1,4 @@
-// TheaterMap — the shared operational map for SANDTABLE.
+// TheaterMap, the shared operational map for SANDTABLE.
 // Uses Leaflet from the CDN (window.L) with dark tiles; degrades to a pure SVG
 // plot when Leaflet is unavailable (offline). The theater is fictional: island
 // polygons are drawn over open ocean, so no real-world geography is implied.
@@ -282,7 +282,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     if (map) map.setView([center.lat, center.lng], zoom, { animate: false });
   }, [center.lat, center.lng, zoom]);
 
-  // Hex board layer — static per theater, lives outside the per-tick overlay.
+  // Hex board layer, static per theater, lives outside the per-tick overlay.
   useEffect(() => {
     const L = window.L;
     const map = mapRef.current;
@@ -586,7 +586,7 @@ function SvgTheaterMap({
         );
       })}
       <text x={12} y={H - 12} fill="#5f7185" fontSize={11}>
-        Offline chart — fictional Meridian Archipelago theater
+        Offline chart, fictional Meridian Archipelago theater
       </text>
     </svg>
   );

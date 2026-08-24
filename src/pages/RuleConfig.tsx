@@ -90,10 +90,10 @@ const CATEGORIES: Array<{ id: RuleCategory; label: string; icon: typeof Eye; hin
 ];
 
 const SITUATIONS = [
-  { id: "surface-engagement", label: "Surface action — BLUE destroyer vs RED missile boat at 32 km, clear weather" },
-  { id: "air-strike", label: "Air raid — BLUE strike package vs RED SAM battalion at 110 km, overcast" },
-  { id: "submarine-ambush", label: "Subsurface ambush — RED submarine vs BLUE supply ship at 12 km, EMCON silent" },
-  { id: "storm-transit", label: "Storm transit — BLUE task group at 18% supply moving through sea state 6" },
+  { id: "surface-engagement", label: "Surface action · BLUE destroyer vs RED missile boat at 32 km, clear weather" },
+  { id: "air-strike", label: "Air raid · BLUE strike package vs RED SAM battalion at 110 km, overcast" },
+  { id: "submarine-ambush", label: "Subsurface ambush · RED submarine vs BLUE supply ship at 12 km, EMCON silent" },
+  { id: "storm-transit", label: "Storm transit · BLUE task group at 18% supply moving through sea state 6" },
 ];
 
 function conditionSentence(c: RuleCondition): string {
@@ -238,7 +238,7 @@ export default function RuleConfig({ notify }: PageProps) {
                 }
               >
                 <p className="rc-set-desc">
-                  {selected.description} <em>— {selected.author}, updated {timeAgo(selected.updatedAt)}</em>
+                  {selected.description} <em>- {selected.author}, updated {timeAgo(selected.updatedAt)}</em>
                 </p>
                 <DetailGrid>
                   <Detail label="Rules" value={`${selected.rules.filter((r) => r.enabled).length}/${selected.rules.length} enabled`} />
@@ -377,7 +377,7 @@ export default function RuleConfig({ notify }: PageProps) {
                             </div>
                           ))
                         ) : (
-                          <p className="rc-empty-group">No {category.label.toLowerCase()} rules — add one to shape the adjudication.</p>
+                          <p className="rc-empty-group">No {category.label.toLowerCase()} rules, add one to shape the adjudication.</p>
                         )}
                       </section>
                     );
@@ -474,7 +474,7 @@ export default function RuleConfig({ notify }: PageProps) {
               setRuleSets((list) => [...list, created]);
               setSelectedId(created.id);
               setShowNewSet(false);
-              notify(`Rule set "${created.name}" created — add rules to it`);
+              notify(`Rule set "${created.name}" created, add rules to it`);
             } catch (error) {
               notify(errMsg(error));
             }
@@ -569,7 +569,7 @@ function RuleBuilder({
   }
 
   return (
-    <Modal title={initial ? `Edit rule — ${initial.name}` : "New adjudication rule"} onClose={onClose} wide>
+    <Modal title={initial ? `Edit rule, ${initial.name}` : "New adjudication rule"} onClose={onClose} wide>
       <FormGrid columns={3}>
         <Field label="Rule name">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Night attack bonus" />

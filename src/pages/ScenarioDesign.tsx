@@ -1,4 +1,4 @@
-// ScenarioDesign — L3 application 1: build and validate exercise scenarios.
+// ScenarioDesign · L3 application 1: build and validate exercise scenarios.
 // Left: scenario library (select / create from template). Main: tabbed workspace
 // (order of battle on the theater chart, weighted objectives, environment) with
 // an explicit local dirty state; Save pushes the whole scenario via updateScenario.
@@ -93,22 +93,22 @@ const OBJECTIVE_KINDS: Array<{ id: Objective["kind"]; label: string }> = [
 ];
 
 const SEA_STATE_LABELS = [
-  "0 — Calm (glassy)",
-  "1 — Calm (rippled)",
-  "2 — Smooth",
-  "3 — Slight",
-  "4 — Moderate",
-  "5 — Rough",
-  "6 — Very rough",
-  "7 — High",
-  "8 — Very high",
-  "9 — Phenomenal",
+  "0 · Calm (glassy)",
+  "1 · Calm (rippled)",
+  "2 · Smooth",
+  "3 · Slight",
+  "4 · Moderate",
+  "5 · Rough",
+  "6 · Very rough",
+  "7 · High",
+  "8 · Very high",
+  "9 · Phenomenal",
 ];
 
 // --- Pure helpers ---------------------------------------------------------------
 
 function errMsg(err: unknown): string {
-  return err instanceof Error ? err.message : "Unexpected error — check the backend on :5189";
+  return err instanceof Error ? err.message : "Unexpected error, check the backend on :5189";
 }
 
 function cloneScenario(scenario: Scenario): Scenario {
@@ -281,8 +281,8 @@ function CreateScenarioModal({
   );
 }
 
-// Fictional sample order — written to parse cleanly offline (bullet + "at lat, lng" convention).
-const SAMPLE_OPORD = `OPORD 26-04 — OPERATION AZURE TRIDENT
+// Fictional sample order, written to parse cleanly offline (bullet + "at lat, lng" convention).
+const SAMPLE_OPORD = `OPORD 26-04 · OPERATION AZURE TRIDENT
 References: Exercise AZURE HORIZON series. Classification: EXERCISE / FICTIONAL.
 
 1. SITUATION
@@ -385,7 +385,7 @@ function OpordWizardModal({
               e.classLabel,
               String(e.count),
               `${e.position.lat.toFixed(2)}, ${e.position.lng.toFixed(2)}`,
-              e.taskForce ?? "—",
+              e.taskForce ?? "-",
             ])}
           />
         ) : (
@@ -396,11 +396,11 @@ function OpordWizardModal({
   };
 
   return (
-    <Modal title="Intelligent Documents — operational order to scenario" onClose={onClose}>
+    <Modal title="Intelligent Documents, operational order to scenario" onClose={onClose}>
       {step === 1 ? (
         <>
           <p className="sd-opord-hint">
-            Paste an operational order. The pipeline extracts force groups, positions, task organization and objectives —
+            Paste an operational order. The pipeline extracts force groups, positions, task organization and objectives -
             through the reasoning service when an API key is configured, or the built-in extraction rules offline.
           </p>
           <Field label="Operational document">
@@ -463,7 +463,7 @@ function OpordWizardModal({
           </div>
           <ActionRow>
             <Button icon={ShieldCheck} onClick={() => setStep(3)}>
-              Looks right — continue
+              Looks right, continue
             </Button>
             <Button variant="secondary" onClick={() => setStep(1)}>
               Back to document
@@ -563,7 +563,7 @@ function ObjectiveEditorModal({
   };
 
   return (
-    <Modal title={initial ? `Edit objective — ${initial.title}` : `New objective — ${sideLabels[side]}`} onClose={onClose}>
+    <Modal title={initial ? `Edit objective, ${initial.title}` : `New objective, ${sideLabels[side]}`} onClose={onClose}>
       <FormGrid columns={2}>
         <div className="sd-span-full">
           <Field label="Objective title">
@@ -579,7 +579,7 @@ function ObjectiveEditorModal({
             ))}
           </select>
         </Field>
-        <Field label="Weight (0–1)">
+        <Field label="Weight (0-1)">
           <input type="number" min={0.05} max={1} step={0.05} value={weight} onChange={(e) => setWeight(e.target.value)} />
         </Field>
         <div className="sd-span-full">
@@ -700,10 +700,10 @@ export default function ScenarioDesign(props: PageProps) {
 
   const templates = useMemo(() => {
     const list: Array<{ id: string; label: string }> = [
-      { id: "scn-blank-template", label: "Blank scenario — empty ORBAT and objectives" },
+      { id: "scn-blank-template", label: "Blank scenario, empty ORBAT and objectives" },
     ];
     const azure = scenarios.find((s) => s.id === "scn-azure-horizon");
-    if (azure) list.push({ id: azure.id, label: `Copy of ${azure.name} — full ${azure.units.length}-unit ORBAT` });
+    if (azure) list.push({ id: azure.id, label: `Copy of ${azure.name}, full ${azure.units.length}-unit ORBAT` });
     return list;
   }, [scenarios]);
 
@@ -748,7 +748,7 @@ export default function ScenarioDesign(props: PageProps) {
     setTab("orbat");
     props.notify(
       hadDirty
-        ? `Opened "${scenario.name}" — unsaved changes on the previous scenario were discarded`
+        ? `Opened "${scenario.name}", unsaved changes on the previous scenario were discarded`
         : `Opened scenario "${scenario.name}"`
     );
   };
@@ -764,7 +764,7 @@ export default function ScenarioDesign(props: PageProps) {
       props.notify("Placement mode disarmed");
     } else {
       setPlacementClassId(cls.id);
-      props.notify(`Placement armed — click the chart to add ${cls.label} for ${sideLabels[side]}`);
+      props.notify(`Placement armed, click the chart to add ${cls.label} for ${sideLabels[side]}`);
     }
   };
 
@@ -778,7 +778,7 @@ export default function ScenarioDesign(props: PageProps) {
       draft.units.push(unit);
     });
     setSelectedUnitId(id);
-    props.notify(`${unit.name} placed at ${pos.lat.toFixed(2)}, ${pos.lng.toFixed(2)} — save to commit`);
+    props.notify(`${unit.name} placed at ${pos.lat.toFixed(2)}, ${pos.lng.toFixed(2)}, save to commit`);
   };
 
   const removeUnit = (id: string) => {
@@ -792,7 +792,7 @@ export default function ScenarioDesign(props: PageProps) {
       }
     });
     setSelectedUnitId(null);
-    props.notify(unit ? `${unit.name} removed from the ORBAT — save to commit` : "Unit removed — save to commit");
+    props.notify(unit ? `${unit.name} removed from the ORBAT, save to commit` : "Unit removed, save to commit");
   };
 
   const commitObjective = (payload: ObjectivePayload) => {
@@ -810,7 +810,7 @@ export default function ScenarioDesign(props: PageProps) {
           else delete objective.area;
         }
       });
-      props.notify(`Objective "${payload.title}" updated — save to commit`);
+      props.notify(`Objective "${payload.title}" updated, save to commit`);
     } else {
       const id = nextLocalId(working.objectives.map((o) => o.id), `${working.id}-obj`);
       const objective: Objective = {
@@ -825,7 +825,7 @@ export default function ScenarioDesign(props: PageProps) {
       mutateWorking((draft) => {
         draft.objectives.push(objective);
       });
-      props.notify(`Objective "${payload.title}" added for ${sideLabels[objModal.side]} — save to commit`);
+      props.notify(`Objective "${payload.title}" added for ${sideLabels[objModal.side]}, save to commit`);
     }
     setObjModal(null);
   };
@@ -835,7 +835,7 @@ export default function ScenarioDesign(props: PageProps) {
     mutateWorking((draft) => {
       draft.objectives = draft.objectives.filter((o) => o.id !== id);
     });
-    props.notify(objective ? `Objective "${objective.title}" removed — save to commit` : "Objective removed — save to commit");
+    props.notify(objective ? `Objective "${objective.title}" removed, save to commit` : "Objective removed, save to commit");
   };
 
   const handleCreate = async (payload: { name: string; codename: string; description: string; template: string }) => {
@@ -877,7 +877,7 @@ export default function ScenarioDesign(props: PageProps) {
       setWorking(cloneScenario(saved));
       setDirty(false);
       setValidation(null);
-      props.notify(`Scenario "${saved.name}" saved — ${saved.units.length} units and ${saved.objectives.length} objectives committed`);
+      props.notify(`Scenario "${saved.name}" saved, ${saved.units.length} units and ${saved.objectives.length} objectives committed`);
     } catch (err) {
       if (aliveRef.current) props.notify(errMsg(err));
     } finally {
@@ -896,7 +896,7 @@ export default function ScenarioDesign(props: PageProps) {
       const warnings = report.issues.filter((i) => i.level === "warning").length;
       props.notify(
         report.ok
-          ? "Validation passed — scenario is ready for COA generation"
+          ? "Validation passed, scenario is ready for COA generation"
           : `Validation flagged ${errors} error${errors === 1 ? "" : "s"} and ${warnings} warning${warnings === 1 ? "" : "s"}`
       );
     } catch (err) {
@@ -931,8 +931,8 @@ export default function ScenarioDesign(props: PageProps) {
             value={side}
             onChange={(next) => setSide(next)}
             items={[
-              { id: "blue", label: "BLUE — Coalition" },
-              { id: "red", label: "RED — OPFOR" },
+              { id: "blue", label: "BLUE · Coalition" },
+              { id: "red", label: "RED · OPFOR" },
             ]}
           />
           <p className="sd-controls-hint">
@@ -964,7 +964,7 @@ export default function ScenarioDesign(props: PageProps) {
           <div className="sd-placement-note">
             <Crosshair size={15} />
             <span>
-              Placement armed — click the chart to position <strong>{armedClass.label}</strong> for {sideLabels[side]}.
+              Placement armed, click the chart to position <strong>{armedClass.label}</strong> for {sideLabels[side]}.
             </span>
             <button
               type="button"
@@ -993,7 +993,7 @@ export default function ScenarioDesign(props: PageProps) {
         {selectedUnit ? (
           <Panel
             icon={Crosshair}
-            title={`Unit editor — ${selectedUnit.name}`}
+            title={`Unit editor, ${selectedUnit.name}`}
             action={<Tag label={sideLabels[selectedUnit.side]} color={sideColors[selectedUnit.side]} />}
           >
             <div className="sd-stack">
@@ -1092,7 +1092,7 @@ export default function ScenarioDesign(props: PageProps) {
               <EmptyState
                 icon={Shield}
                 title="No RED units placed"
-                hint="Switch the side picker to RED — OPFOR and lay down the opposing force on the archipelago."
+                hint="Switch the side picker to RED · OPFOR and lay down the opposing force on the archipelago."
               />
             )}
           </section>
@@ -1159,7 +1159,7 @@ export default function ScenarioDesign(props: PageProps) {
         )}
         {objectives.length > 0 && Math.abs(totalWeight - 1) > 0.05 ? (
           <p className="sd-weight-warn">
-            Objective weights for this side should sum to roughly 1.00 — currently {totalWeight.toFixed(2)}. Validation
+            Objective weights for this side should sum to roughly 1.00, currently {totalWeight.toFixed(2)}. Validation
             will flag unbalanced weighting.
           </p>
         ) : null}
@@ -1203,9 +1203,9 @@ export default function ScenarioDesign(props: PageProps) {
             value={scn.environment.emcon}
             onChange={(e) => updateEnvironment({ emcon: e.target.value as ScenarioEnvironment["emcon"] })}
           >
-            <option value="free">Free — unrestricted emissions</option>
-            <option value="restricted">Restricted — mission-essential only</option>
-            <option value="silent">Silent — passive sensors only</option>
+            <option value="free">Free, unrestricted emissions</option>
+            <option value="restricted">Restricted, mission-essential only</option>
+            <option value="silent">Silent, passive sensors only</option>
           </select>
         </Field>
         <Field label="Cyber threat condition">
@@ -1253,7 +1253,7 @@ export default function ScenarioDesign(props: PageProps) {
     >
       {dirty ? (
         <p className="sd-validate-note">
-          This report reflects the last saved revision — save your local changes and re-run validation to check them.
+          This report reflects the last saved revision, save your local changes and re-run validation to check them.
         </p>
       ) : null}
       {report.issues.length === 0 ? (
@@ -1448,7 +1448,7 @@ export default function ScenarioDesign(props: PageProps) {
             setPlacementClassId(null);
             setShowOpord(false);
             setTab("orbat");
-            props.notify(`Scenario "${created.name}" materialized from the document — ${created.units.length} pieces deployed`);
+            props.notify(`Scenario "${created.name}" materialized from the document, ${created.units.length} pieces deployed`);
           }}
         />
       ) : null}

@@ -95,7 +95,7 @@ const rule = (id, name, category, description, conditions, effects, priority, en
 });
 
 // --------------------------------------------------------------------------
-// Theater — the Meridian Archipelago
+// Theater, the Meridian Archipelago
 // --------------------------------------------------------------------------
 
 export function buildTheater() {
@@ -662,13 +662,13 @@ function straitGuardianObjectives() {
 export function buildScenarios() {
   const blueSide = (commander) => ({
     id: "blue",
-    name: "BLUE — Coalition Task Force",
+    name: "BLUE · Coalition Task Force",
     commander,
     color: "#1f5f99",
   });
   const redSide = (commander) => ({
     id: "red",
-    name: "RED — Opposing Force (OPFOR)",
+    name: "RED · Opposing Force (OPFOR)",
     commander,
     color: "#b42318",
   });
@@ -676,7 +676,7 @@ export function buildScenarios() {
   return [
     {
       id: "scn-azure-horizon",
-      name: "AZURE HORIZON — Meridian Strait Seizure",
+      name: "AZURE HORIZON · Meridian Strait Seizure",
       codename: "AZURE HORIZON",
       description:
         "Coalition carrier strike group and amphibious ready group approach the Meridian Archipelago from the west to open the strait, dismantle the RED integrated air defense and land a marine battalion, against a layered OPFOR coastal and air defense.",
@@ -700,7 +700,7 @@ export function buildScenarios() {
     },
     {
       id: "scn-strait-guardian",
-      name: "STRAIT GUARDIAN — Convoy Escort",
+      name: "STRAIT GUARDIAN · Convoy Escort",
       codename: "STRAIT GUARDIAN",
       description:
         "A three-ship sealift convoy with destroyer and frigate escort runs the southwestern approach lane to the Meridian Strait against submarine, missile-boat and air threats.",
@@ -1327,7 +1327,7 @@ export function buildMissions() {
 }
 
 // --------------------------------------------------------------------------
-// COAs — three pre-generated candidates for msn-az-01
+// COAs, three pre-generated candidates for msn-az-01
 // --------------------------------------------------------------------------
 
 export function buildCoas() {
@@ -1340,7 +1340,7 @@ export function buildCoas() {
       scenarioId: "scn-azure-horizon",
       missionId: "msn-az-01",
       name: "Direct Thrust",
-      approach: "Tempo over attrition — force the strait early behind minimum-necessary suppression",
+      approach: "Tempo over attrition, force the strait early behind minimum-necessary suppression",
       summary:
         "The task force closes the strait at best speed behind an aggressive ASW and ISR screen, suppresses only the IADS nodes covering the transit corridor, runs the strait by H+36 and lands the battalion on the western beach by H+62. Fastest route to the end state; accepts exposure to the coastal missile arc during the transit.",
       generatedBy: "agent",
@@ -1389,7 +1389,7 @@ export function buildCoas() {
       scenarioId: "scn-azure-horizon",
       missionId: "msn-az-01",
       name: "Air-First Suppression",
-      approach: "Standoff rollback — no hull enters the weapon engagement zone until the IADS is down",
+      approach: "Standoff rollback, no hull enters the weapon engagement zone until the IADS is down",
       summary:
         "The main body holds west of the coastal missile arc while a 26-hour air and cyber campaign methodically rolls back the IADS and both coastal batteries. Only then does the force advance through the strait for a deliberate landing in the final phase. Lowest risk to capital ships; costs sorties, munitions and 20+ hours of tempo.",
       generatedBy: "agent",
@@ -1426,7 +1426,7 @@ export function buildCoas() {
       scenarioId: "scn-azure-horizon",
       missionId: "msn-az-01",
       name: "Envelop & Blockade",
-      approach: "Indirect approach — swing north of Ilha Norte, blockade the east and strangle sustainment",
+      approach: "Indirect approach, swing north of Ilha Norte, blockade the east and strangle sustainment",
       summary:
         "The force feints west then swings north around Ilha Norte, rolls up the northern SAM coverage, and establishes a blockade east of Monte Meridian to cut the garrison off from resupply. Strikes reduce the depot and command post before a late landing on the northern beach. Avoids the strait gauntlet entirely; longest route, heaviest fuel bill, and the strait itself is only secured indirectly.",
       generatedBy: "agent",

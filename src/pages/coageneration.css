@@ -1,4 +1,4 @@
-/* CoaGeneration — page-scoped styles. Every class carries the coa- prefix. */
+/* CoaGeneration, page-scoped styles. Every class carries the coa- prefix. */
 
 .coa-toolbar {
   display: flex;
@@ -78,7 +78,7 @@
   padding: 14px;
   background: var(--surface-3);
   border: 1px solid var(--line);
-  border-top: 4px solid var(--line-strong);
+  border-top: 1px solid var(--line);
   border-radius: var(--radius);
 }
 
@@ -316,4 +316,11 @@
   .coa-analysis-ms {
     grid-column: 2;
   }
+}
+
+.coa-card-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
 }

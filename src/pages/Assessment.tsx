@@ -213,7 +213,7 @@ export default function Assessment({ notify, goTo }: PageProps) {
           <select value={runId} onChange={(e) => setRunId(e.target.value)}>
             {completedRuns.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.label} — {r.scenarioName} ({r.completedAt ? timeAgo(r.completedAt) : "…"})
+                {r.label}, {r.scenarioName} ({r.completedAt ? timeAgo(r.completedAt) : "…"})
               </option>
             ))}
           </select>
@@ -367,7 +367,7 @@ export default function Assessment({ notify, goTo }: PageProps) {
                       {runAssessments.map((a, i) => (
                         <span key={a.id}>
                           <i style={{ background: ["#1f5f99", "#7c3aed", "#0d8a8a", "#b45309"][i % 4] }} />
-                          {a.branchName} — {a.overallScore}/100 ({a.verdict.replace("-", " ")})
+                          {a.branchName}, {a.overallScore}/100 ({a.verdict.replace("-", " ")})
                         </span>
                       ))}
                     </div>

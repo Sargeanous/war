@@ -103,20 +103,20 @@ export default function AiLayer({ notify }: PageProps) {
         <Metric label="Missions decomposed" value={String(missions.filter((m) => m.subTasks.length).length)} helper="Strategic tasking" tone="info" />
         <Metric
           label="Decisions with AI"
-          value={decisionRows.length ? `${followed}/${decisionRows.length}` : "—"}
+          value={decisionRows.length ? `${followed}/${decisionRows.length}` : "-"}
           helper="Across recent runs"
           tone={decisionRows.length && followed / Math.max(decisionRows.length, 1) >= 0.5 ? "good" : "neutral"}
         />
         <Metric
           label="API calls"
-          value={platform ? formatCount(platform.apiStats.observationCalls + platform.apiStats.pieceDriveCalls) : "—"}
+          value={platform ? formatCount(platform.apiStats.observationCalls + platform.apiStats.pieceDriveCalls) : "-"}
           helper="Observation + piece-drive"
           tone="info"
         />
       </MetricGrid>
 
       <div className="ail-columns">
-        {/* Column 1 — strategic */}
+        {/* Column 1, strategic */}
         <div className="ail-col">
           <Panel icon={Target} title="Strategic · Task decomposition">
             <div className="detail-stack">
@@ -157,7 +157,7 @@ export default function AiLayer({ notify }: PageProps) {
                       ) : null}
                     </div>
                   ) : (
-                    <p className="ail-note">Not decomposed yet — run decomposition from Data &amp; COA Generation.</p>
+                    <p className="ail-note">Not decomposed yet, run decomposition from Data &amp; COA Generation.</p>
                   )}
                 </article>
               ))}
@@ -165,7 +165,7 @@ export default function AiLayer({ notify }: PageProps) {
           </Panel>
         </div>
 
-        {/* Column 2 — tactical agent library */}
+        {/* Column 2, tactical agent library */}
         <div className="ail-col">
           <Panel icon={Bot} title="Tactical · Agent library by drive mode">
             <div className="detail-stack">
@@ -201,7 +201,7 @@ export default function AiLayer({ notify }: PageProps) {
           </Panel>
         </div>
 
-        {/* Column 3 — human + AI decision */}
+        {/* Column 3, human + AI decision */}
         <div className="ail-col">
           <Panel icon={Workflow} title="Human + AI collaborative decision">
             <div className="detail-stack">
@@ -214,7 +214,7 @@ export default function AiLayer({ notify }: PageProps) {
                 <span className="ail-flow-arrow">→</span>
                 <span className="ail-flow-chip">Action (A)</span>
               </div>
-              <p className="ail-note">↻ Effectiveness assessment feeds back — intent &amp; decision retained by the commander.</p>
+              <p className="ail-note">↻ Effectiveness assessment feeds back, intent &amp; decision retained by the commander.</p>
               {decisionRows.length ? (
                 decisionRows.slice(0, 8).map(({ runLabel, branchName, decision }) => (
                   <article key={decision.id} className="ail-decision-row">
@@ -227,9 +227,9 @@ export default function AiLayer({ notify }: PageProps) {
                       />
                     </header>
                     <small>
-                      {runLabel} · {branchName} · {simClock(decision.simTimeH)} — chose “
+                      {runLabel} · {branchName} · {simClock(decision.simTimeH)}, chose “
                       {decision.options.find((o) => o.id === decision.decidedOptionId)?.label ?? decision.decidedOptionId}”
-                      {decision.decisionRationale ? ` — “${decision.decisionRationale}”` : ""}
+                      {decision.decisionRationale ? ` · “${decision.decisionRationale}”` : ""}
                     </small>
                   </article>
                 ))
@@ -242,9 +242,9 @@ export default function AiLayer({ notify }: PageProps) {
           <Panel icon={Network} title="Wargame system APIs">
             <div className="detail-stack">
               <DetailGrid>
-                <Detail label="Observation API" value={platform ? `${formatCount(platform.apiStats.observationCalls)} calls` : "—"} />
-                <Detail label="Piece-drive API" value={platform ? `${formatCount(platform.apiStats.pieceDriveCalls)} calls` : "—"} />
-                <Detail label="Avg latency" value={platform ? `${platform.apiStats.avgLatencyMs} ms` : "—"} />
+                <Detail label="Observation API" value={platform ? `${formatCount(platform.apiStats.observationCalls)} calls` : "-"} />
+                <Detail label="Piece-drive API" value={platform ? `${formatCount(platform.apiStats.pieceDriveCalls)} calls` : "-"} />
+                <Detail label="Avg latency" value={platform ? `${platform.apiStats.avgLatencyMs} ms` : "-"} />
               </DetailGrid>
               <p className="ail-note">
                 <Eye size={13} style={{ verticalAlign: "-2px" }} /> Observation API ↑ sense · <Joystick size={13} style={{ verticalAlign: "-2px" }} /> Piece-drive API ↓ execute
@@ -278,7 +278,7 @@ export default function AiLayer({ notify }: PageProps) {
                   <div className="ail-activity-main">
                     <strong>{entry.action}</strong>
                     <small>
-                      {simClock(entry.simTimeH)} — {entry.rationale}
+                      {simClock(entry.simTimeH)}, {entry.rationale}
                     </small>
                   </div>
                 </div>

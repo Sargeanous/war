@@ -1,4 +1,4 @@
-/* ScenarioDesign page styles — every class carries the sd- prefix. */
+/* ScenarioDesign page styles, every class carries the sd- prefix. */
 
 button.sd-scn-selected.sd-scn-selected {
   border-color: var(--primary);

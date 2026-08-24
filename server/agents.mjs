@@ -30,7 +30,7 @@ const round1 = (n) => Math.round(n * 10) / 10;
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
 // ---------------------------------------------------------------------------
-// Capability discovery — key off domain and classId substrings, never exact lists.
+// Capability discovery, key off domain and classId substrings, never exact lists.
 // ---------------------------------------------------------------------------
 
 const has = (unit, ...needles) => needles.some((n) => unit.classId.includes(n));
@@ -231,9 +231,9 @@ export function decomposeMission(mission, scenario) {
 
 /**
  * Archetype utility model (documented so the scores are explainable):
- *   tempo t   — how hard the COA races the clock (raises effect and risk)
- *   standoff s— how much it trades time for survivability (lowers risk, raises cost)
- *   complexity c — moving parts / synchronization burden (lowers feasibility)
+ *   tempo t  , how hard the COA races the clock (raises effect and risk)
+ *   standoff s- how much it trades time for survivability (lowers risk, raises cost)
+ *   complexity c, moving parts / synchronization burden (lowers feasibility)
  * feasibility  = 86 - 22c + readiness bonus (force size vs 18 units)
  * risk         = 32 + 42t - 26s
  * resourceCost = 44 + 26s + 16c
@@ -245,7 +245,7 @@ const ARCHETYPES = [
   {
     key: "direct-pressure",
     name: "Direct Pressure",
-    approach: "Tempo over attrition — force the objective early behind minimum-necessary suppression",
+    approach: "Tempo over attrition, force the objective early behind minimum-necessary suppression",
     t: 0.85,
     s: 0.2,
     c: 0.4,
@@ -254,7 +254,7 @@ const ARCHETYPES = [
   {
     key: "standoff-rollback",
     name: "Standoff Rollback",
-    approach: "Systematic reduction from standoff — nothing enters the threat arc until it is suppressed",
+    approach: "Systematic reduction from standoff, nothing enters the threat arc until it is suppressed",
     t: 0.3,
     s: 0.9,
     c: 0.35,
@@ -263,7 +263,7 @@ const ARCHETYPES = [
   {
     key: "northern-envelopment",
     name: "Northern Envelopment",
-    approach: "Indirect approach — swing wide north, unhinge the defense from its flank",
+    approach: "Indirect approach, swing wide north, unhinge the defense from its flank",
     t: 0.55,
     s: 0.45,
     c: 0.75,
@@ -272,7 +272,7 @@ const ARCHETYPES = [
   {
     key: "southern-hook",
     name: "Southern Hook",
-    approach: "Indirect approach — southern axis against the rear sustainment area",
+    approach: "Indirect approach, southern axis against the rear sustainment area",
     t: 0.6,
     s: 0.4,
     c: 0.7,
@@ -281,7 +281,7 @@ const ARCHETYPES = [
   {
     key: "attrition-blockade",
     name: "Blockade & Strangle",
-    approach: "Deny and outlast — isolate the objective and let sustainment pressure decide",
+    approach: "Deny and outlast, isolate the objective and let sustainment pressure decide",
     t: 0.2,
     s: 0.7,
     c: 0.5,
@@ -365,11 +365,11 @@ export function buildCoaAnalysis(scenario, mission, strategyKey, generated) {
   const ranked = [...generated].sort((a, b) => b.scores.composite - a.scores.composite);
   return [
     { step: "Scenario parsing", detail: `${scenario.codename}: ${scenario.units.length} pieces, ${scenario.objectives.length} objectives, sea state ${scenario.environment.seaState}, EMCON ${scenario.environment.emcon}.`, ms: 1.2 },
-    { step: "Force & capability analysis", detail: `${own.length} own pieces — strike ${cap.strike.length}, air ${cap.fighters.length}, ISR ${cap.isr.length}, amphibious ${cap.amphib.length}, sustainment ${cap.sustain.length}.`, ms: 1.4 },
+    { step: "Force & capability analysis", detail: `${own.length} own pieces, strike ${cap.strike.length}, air ${cap.fighters.length}, ISR ${cap.isr.length}, amphibious ${cap.amphib.length}, sustainment ${cap.sustain.length}.`, ms: 1.4 },
     { step: "Terrain & axis analysis", detail: "North, south and enveloping approach axes evaluated against the objective anchor and strait chokepoints.", ms: 1.1 },
-    { step: "Constraints & weighting", detail: `Strategy "${w.label}" — effect ${Math.round(w.effect * 100)}%, risk aversion ${Math.round(w.safety * 100)}%, tempo ${Math.round(w.tempo * 100)}%, feasibility ${Math.round(w.feasibility * 100)}%.`, ms: 0.8 },
+    { step: "Constraints & weighting", detail: `Strategy "${w.label}", effect ${Math.round(w.effect * 100)}%, risk aversion ${Math.round(w.safety * 100)}%, tempo ${Math.round(w.tempo * 100)}%, feasibility ${Math.round(w.feasibility * 100)}%.`, ms: 0.8 },
     { step: "Candidate construction", detail: `${generated.length} doctrinal archetype(s) instantiated with four-phase skeletons and axis waypoints.`, ms: 1.6 },
-    { step: "Plan grading", detail: `Composites ${ranked.map((c) => c.scores.composite).join(" / ")} — "${ranked[0].name}" graded RECOMMENDED under ${w.label}.`, ms: 0.9 },
+    { step: "Plan grading", detail: `Composites ${ranked.map((c) => c.scores.composite).join(" / ")} · "${ranked[0].name}" graded RECOMMENDED under ${w.label}.`, ms: 0.9 },
   ];
 }
 
@@ -476,7 +476,7 @@ function buildCoaSummary(arch, scenario, cap, duration) {
     case "southern-hook":
       return `The force runs a southern axis against the defense's sustainment rear, forcing it to fight facing the wrong direction, then swings up onto ${objName}. Avoids the prepared kill zone; stresses navigation through the southern shoals and stretches the screen thin.`;
     default:
-      return `The force isolates ${objName} with a standoff ring, interdicting every resupply run while strikes reduce depots and command nodes. Wins by exhaustion rather than assault — cheapest in blood, longest in hours, and dependent on the blockade staying tight for most of the ${duration}h.`;
+      return `The force isolates ${objName} with a standoff ring, interdicting every resupply run while strikes reduce depots and command nodes. Wins by exhaustion rather than assault, cheapest in blood, longest in hours, and dependent on the blockade staying tight for most of the ${duration}h.`;
   }
 }
 
@@ -563,7 +563,7 @@ export function commentaryFor(assessment, branch) {
   const decisionsLine = d.total
     ? `Of ${d.total} commander decision${d.total === 1 ? "" : "s"}, ${d.followedAi} followed the AI recommendation and ${d.overridden} overrode it${
         d.overridden > 0 && assessment.overallScore >= 65
-          ? " — the overrides did not degrade the outcome, which argues for keeping the human veto exactly where it is"
+          ? ", the overrides did not degrade the outcome, which argues for keeping the human veto exactly where it is"
           : ""
       }.`
     : "No commander decision points were triggered on this branch.";
@@ -595,7 +595,7 @@ export function recommendationsFor(assessment, branch) {
     recs.push("Hold capital units outside the coastal missile arc until the battery threat is confirmed down; the attrition profile was driven by early exposure.");
   }
   if (tempo && tempo.score < 55) {
-    recs.push("Compress the shaping phase — ISR confidence plateaued well before the force actually moved.");
+    recs.push("Compress the shaping phase · ISR confidence plateaued well before the force actually moved.");
   }
   if (efficiency && efficiency.score < 55) {
     recs.push("Ration standoff munitions against mobile targets and push the replenishment cycle 6-8 hours earlier.");
@@ -604,7 +604,7 @@ export function recommendationsFor(assessment, branch) {
     recs.push("Review the decision points where the commander consistently overrode SAGE: either retrain the recommendation policy on this scenario family or codify the commander's heuristic as doctrine.");
   }
   if (assessment.lossExchangeRatio < 2) {
-    recs.push("An exchange ratio under 2:1 will not sustain a longer campaign — revisit the engagement rules of thumb for surface combatants inside 45 km.");
+    recs.push("An exchange ratio under 2:1 will not sustain a longer campaign, revisit the engagement rules of thumb for surface combatants inside 45 km.");
   }
   if (!recs.length) {
     recs.push("Bank this branch as the pattern solution for the scenario family and vary opposing-force posture in the next rehearsal to test its robustness.");

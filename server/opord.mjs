@@ -1,4 +1,4 @@
-// OPORD parsing — the "Intelligent Documents" pipeline.
+// OPORD parsing, the "Intelligent Documents" pipeline.
 // Turns an operational-order text into structured sides/entities/objectives, then
 // materializes a ready-to-run Scenario. Uses the Anthropic Messages API when a key
 // is present; a deterministic offline parser covers the bundled sample and any
@@ -157,7 +157,7 @@ export function parseOpordOffline(text, classes) {
 // ---------------------------------------------------------------------------
 
 export async function parseOpordAnthropic(text, classes, apiKey, model) {
-  const catalog = classes.map((c) => `${c.id} — ${c.label} (${c.domain || "any"})`).join("\n");
+  const catalog = classes.map((c) => `${c.id}, ${c.label} (${c.domain || "any"})`).join("\n");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 45000);
   try {
@@ -169,7 +169,7 @@ export async function parseOpordAnthropic(text, classes, apiKey, model) {
         max_tokens: 6000,
         system:
           "You extract structured wargame scenario data from fictional exercise operational orders. " +
-          "Reply with STRICT JSON only — no markdown fences, no prose. Schema: " +
+          "Reply with STRICT JSON only, no markdown fences, no prose. Schema: " +
           '{"title":string,"summary":string(<=200 chars),"sides":[{"side":"blue"|"red","entities":[{"name":string|null,' +
           '"classId":string,"count":number,"position":{"lat":number,"lng":number},"taskForce":string|null}]}],' +
           '"objectives":[{"side":"blue"|"red","title":string,"kind":"control-area"|"destroy"|"protect"|"deliver"|"deny"}],' +
@@ -352,8 +352,8 @@ export function materializeScenario(parse, opts, state, nowIso) {
     createdBy: String(opts.createdBy || "Plans Cell (J5)"),
     updatedAt: nowIso(),
     sides: [
-      { id: "blue", name: "BLUE — Coalition Task Force", commander: "CDRE Ada Reyes", color: "#1f5f99" },
-      { id: "red", name: "RED — Opposing Force (OPFOR)", commander: "COL Stefan Marek", color: "#b42318" },
+      { id: "blue", name: "BLUE · Coalition Task Force", commander: "CDRE Ada Reyes", color: "#1f5f99" },
+      { id: "red", name: "RED · Opposing Force (OPFOR)", commander: "COL Stefan Marek", color: "#b42318" },
     ],
     units,
     objectives,

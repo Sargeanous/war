@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Bot,
+  Compass,
   BrainCircuit,
   ChevronRight,
   Database,
@@ -14,6 +15,8 @@ import {
   Radar,
   Scale,
   Send,
+  Swords,
+  SlidersHorizontal,
   ShieldCheck,
   Split,
   Sun,
@@ -83,6 +86,16 @@ const profiles: Profile[] = [
     pages: ["dashboard", "scenario", "coa", "rules", "deduction", "assessment", "ailayer", "foundation", "admin"],
   },
 ];
+
+// Role identity on the access screen: its own icon, plus the scope of access it
+// grants. Privileged scopes get the accent treatment.
+const PROFILE_META: Record<string, { icon: LucideIcon; scope: string; privileged: boolean }> = {
+  commander: { icon: Swords, scope: "Command authority", privileged: true },
+  planner: { icon: Compass, scope: "Planning", privileged: false },
+  operator: { icon: SlidersHorizontal, scope: "Exercise control", privileged: true },
+  analyst: { icon: BarChart3, scope: "Analysis", privileged: false },
+  admin: { icon: ShieldCheck, scope: "Full platform", privileged: true },
+};
 
 const navItems: Record<PageId, NavItem> = {
   dashboard: { id: "dashboard", label: "Command Overview", icon: LayoutDashboard },
@@ -197,31 +210,41 @@ function LoginScreen({
       <section className="login-panel">
         <div className="login-brand">
           <div className="brand-mark">O</div>
-          <div>
-            <p>SANDTABLE · Scenario Simulation &amp; Strategic Planning</p>
+          <div className="login-brand-text">
             <h1>Access profile</h1>
+            <p>SANDTABLE · Scenario simulation and strategic planning</p>
           </div>
           <ThemeToggle theme={theme} onToggle={onToggleTheme} />
         </div>
         <p className="login-intro">
-          Choose who is using the platform. Workspaces, permissions and the decision workflow are provisioned from
-          this point — scenario simulation runs from mission decomposition to assessment, executed by AI agents and
-          decided by commanders.
+          Select how you are accessing the platform. Each duty position carries its own workspaces, permissions and
+          decision authority.
         </p>
         <div className="profile-grid">
-          {profiles.map((item) => (
-            <button key={item.id} className="profile-card" type="button" onClick={() => onChoose(item)}>
-              <span className="profile-icon">
-                <UserRound size={20} />
-              </span>
-              <span>
-                <strong>{item.name}</strong>
-                <small>{item.role}</small>
-                <em>{item.organization}</em>
-              </span>
-              <ChevronRight size={18} />
-            </button>
-          ))}
+          {profiles.map((item) => {
+            const meta = PROFILE_META[item.id] ?? { icon: UserRound, scope: "", privileged: false };
+            const Icon = meta.icon;
+            return (
+              <button key={item.id} className="profile-card" type="button" onClick={() => onChoose(item)}>
+                <span className="profile-icon">
+                  <Icon size={20} />
+                </span>
+                <span className="profile-card-body">
+                  <strong>{item.name}</strong>
+                  <small>{item.role}</small>
+                  <em>{item.organization}</em>
+                </span>
+                <span className="profile-card-aside">
+                  {meta.scope ? (
+                    <span className={`profile-scope${meta.privileged ? " is-privileged" : ""}`}>{meta.scope}</span>
+                  ) : null}
+                  <span className="profile-card-cue">
+                    Enter <ChevronRight size={15} />
+                  </span>
+                </span>
+              </button>
+            );
+          })}
         </div>
       </section>
     </main>
@@ -349,7 +372,7 @@ function Copilot() {
       {
         id: nextId.current++,
         from: "sage",
-        text: result.answer ?? "I could not reach the reasoning service — try again shortly.",
+        text: result.answer ?? "I could not reach the reasoning service, try again shortly.",
         source: result.source,
       },
     ]);

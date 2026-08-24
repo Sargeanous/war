@@ -1,4 +1,4 @@
-// CoaGeneration — L3 application 2: mission decomposition, COA candidate
+// CoaGeneration · L3 application 2: mission decomposition, COA candidate
 // generation and comparison for Exercise AZURE HORIZON. Data flows only
 // through src/api.ts; layout uses the shared DOOH primitives.
 
@@ -229,7 +229,7 @@ export default function CoaGeneration(props: PageProps) {
       setMissionTitle("");
       setMissionIntent("");
       setMissionEndState("");
-      notify(`Mission "${created.title}" filed for BLUE — ready for strategic decomposition`);
+      notify(`Mission "${created.title}" filed for BLUE, ready for strategic decomposition`);
     } catch (e2) {
       notify(errorMessage(e2));
     } finally {
@@ -279,7 +279,7 @@ export default function CoaGeneration(props: PageProps) {
       );
       const rec = result.coas.find((c) => c.grade === "recommended");
       notify(
-        `${result.coas.length} candidate COA${result.coas.length === 1 ? "" : "s"} generated under "${strategy}" — ${rec ? `"${rec.name}" recommended` : "review the grades below"}`
+        `${result.coas.length} candidate COA${result.coas.length === 1 ? "" : "s"} generated under "${strategy}", ${rec ? `"${rec.name}" recommended` : "review the grades below"}`
       );
     } catch (e) {
       notify(errorMessage(e));
@@ -313,7 +313,7 @@ export default function CoaGeneration(props: PageProps) {
       setCoas((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
       notify(
         status === "selected"
-          ? `COA "${updated.name}" selected — available to Full-Process Deduction`
+          ? `COA "${updated.name}" selected, available to Full-Process Deduction`
           : `COA "${updated.name}" rejected and removed from the comparison set`
       );
     } catch (e) {
@@ -382,7 +382,7 @@ export default function CoaGeneration(props: PageProps) {
             <select value={scenarioId} onChange={(e) => handleScenarioChange(e.target.value)}>
               {scenarios.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} — {s.codename}
+                  {s.name}, {s.codename}
                   {s.status === "ready" ? "" : ` (${s.status})`}
                 </option>
               ))}
@@ -475,11 +475,11 @@ export default function CoaGeneration(props: PageProps) {
                   rows={subTasks.map((t, i) => [
                     `T${i + 1} · ${t.title}`,
                     <Tag key="domain" label={domainLabels[t.domain]} color={domainColors[t.domain]} />,
-                    `H+${t.startH}–${t.endH}`,
+                    `H+${t.startH}-${t.endH}`,
                     renderAgentCell(t),
                     t.dependsOn.length > 0
                       ? t.dependsOn.map((id) => taskShortLabel.get(id) ?? id).join(", ")
-                      : "—",
+                      : "-",
                     <StatusPill key="status" label={t.status} tone={statusTone(t.status)} />,
                   ])}
                 />
@@ -585,7 +585,7 @@ export default function CoaGeneration(props: PageProps) {
             title="No COA candidates yet"
             hint={
               mission
-                ? "Pick a candidate count and run generation — planner and agent branches are scored on feasibility, acceptability, risk, cost and effect."
+                ? "Pick a candidate count and run generation, planner and agent branches are scored on feasibility, acceptability, risk, cost and effect."
                 : "File and decompose the BLUE mission first, then generate candidate courses of action."
             }
           />
@@ -601,8 +601,9 @@ export default function CoaGeneration(props: PageProps) {
                 ? agentById.get(coa.generatorAgentId)
                 : undefined;
               return (
-                <article key={coa.id} className="coa-card" style={{ borderTopColor: coa.color }}>
+                <article key={coa.id} className="coa-card">
                   <div className="coa-card-head">
+                    <span className="coa-card-dot" style={{ background: coa.color }} />
                     <strong>{coa.name}</strong>
                     {coa.grade ? (
                       <Tag
@@ -693,7 +694,7 @@ export default function CoaGeneration(props: PageProps) {
             <EmptyState
               icon={GitCompare}
               title="Nothing to compare"
-              hint="Generate candidates — every non-rejected COA is overlaid here across the five evaluation axes."
+              hint="Generate candidates, every non-rejected COA is overlaid here across the five evaluation axes."
             />
           ) : (
             <div className="coa-compare">

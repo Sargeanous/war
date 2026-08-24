@@ -21,7 +21,7 @@ const round4 = (n) => Math.round(n * 10000) / 10000;
 const nowIso = () => new Date().toISOString();
 const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 
-// Mulberry32 step over a persisted numeric state — deterministic across save/load.
+// Mulberry32 step over a persisted numeric state, deterministic across save/load.
 function roll(branch) {
   branch._rngState = (branch._rngState + 0x6d2b79f5) | 0;
   let t = branch._rngState;
@@ -557,7 +557,7 @@ function tickBranch(run, branch, ctx) {
       actorId: actor.id,
       targetId: target.id,
       title: `${actor.name} engaged ${target.name}`,
-      detail: `${weapon.type.toUpperCase()} salvo at ${Math.round(rangeKm)} km (pk ${pk.toFixed(2)}) — ${hit ? "HIT" : "miss"}.`,
+      detail: `${weapon.type.toUpperCase()} salvo at ${Math.round(rangeKm)} km (pk ${pk.toFixed(2)}), ${hit ? "HIT" : "miss"}.`,
       position: { ...target.position },
       adjudication: {
         attacker: actor.name,
@@ -743,7 +743,7 @@ function completeBranch(branch, scenario, duration) {
   pushEvent(branch, {
     type: "victory",
     severity: m.blueStrength < 25 ? "danger" : "good",
-    title: `Branch complete — ${outcome}`,
+    title: `Branch complete, ${outcome}`,
     detail: `T+${round1(branch._simTimeH)}h of ${duration}h. Objectives ${m.objectiveScore}%, BLUE ${m.blueStrength}%, RED ${m.redStrength}%.`,
   });
   branch.metricsHistory.push({ tick: branch._tick, simTimeH: round1(branch._simTimeH), ...branch.metrics });
@@ -849,7 +849,7 @@ function phaseDecisionSpec(branch, phase) {
 
 function contactDecisionSpec(branch) {
   return {
-    title: "First contact — fires posture?",
+    title: "First contact, fires posture?",
     situation: "BLUE sensors hold the first confirmed track on the opposing force. The force must set its emissions and fires posture for the meeting engagement.",
     options: [
       opt(
@@ -886,7 +886,7 @@ function contactDecisionSpec(branch) {
 function attritionDecisionSpec(branch) {
   const damaged = branch.units.filter((u) => u.side === "blue" && u.status === "damaged").length;
   return {
-    title: "Force falling below 70% — continue?",
+    title: "Force falling below 70%, continue?",
     situation: `Aggregate BLUE strength has dropped to ${branch.metrics.blueStrength}% with ${damaged} unit(s) damaged. The commander must decide whether the mission still justifies the attrition curve.`,
     options: [
       opt(

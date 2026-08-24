@@ -236,7 +236,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
       trailsRef.current = {};
       applyRun(next);
       setActiveRunId(next.id);
-      notify(`Deduction started — ${next.branches.length} branch(es) in parallel`);
+      notify(`Deduction started, ${next.branches.length} branch(es) in parallel`);
     } catch (error) {
       notify(errMsg(error));
     }
@@ -254,7 +254,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
         })
       );
       setRationale("");
-      notify("Decision issued — branch resuming");
+      notify("Decision issued, branch resuming");
     } catch (error) {
       notify(errMsg(error));
     }
@@ -329,7 +329,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
   const env = run.environment ?? scenario?.environment;
   const fogSide = viewSide === "all" ? null : viewSide;
 
-  // Fog of war applies to the ORBAT roster too — a side only lists what it sees.
+  // Fog of war applies to the ORBAT roster too, a side only lists what it sees.
   const rosterVisible = (u: Unit) =>
     !fogSide || u.side === fogSide || u.detectedByEnemy || u.status === "destroyed";
   const roster = (branch?.units ?? []).filter((u) => u.side === orbatSide && rosterVisible(u));
@@ -426,7 +426,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
       {run.status === "completed" && branch ? (
         <div className="ded-complete">
           <strong>
-            <CheckCircle2 size={17} style={{ verticalAlign: "-3px" }} /> Deduction complete — {run.label}
+            <CheckCircle2 size={17} style={{ verticalAlign: "-3px" }} /> Deduction complete, {run.label}
           </strong>
           <div className="ded-complete-grid">
             {run.branches.map((b) => (
@@ -447,7 +447,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
         <div className="ded-decision">
           <div className="ded-decision-head">
             <AlertTriangle size={19} color="var(--amber)" />
-            <strong>Commander decision required — {openDecision.title}</strong>
+            <strong>Commander decision required, {openDecision.title}</strong>
             <span className="ded-decision-time">{simClock(openDecision.simTimeH)}</span>
           </div>
           <p className="ded-situation">{openDecision.situation}</p>
@@ -473,7 +473,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
             ))}
           </div>
           <Field label="Commander rationale (retained with the decision record)">
-            <textarea value={rationale} onChange={(e) => setRationale(e.target.value)} placeholder="Optional — why this option…" />
+            <textarea value={rationale} onChange={(e) => setRationale(e.target.value)} placeholder="Optional, why this option…" />
           </Field>
         </div>
       ) : null}
@@ -886,7 +886,7 @@ function Launcher({
                 <select value={scenarioId} onChange={(e) => setScenarioId(e.target.value)}>
                   {scenarios.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.codename} — {s.name}
+                      {s.codename}, {s.name}
                     </option>
                   ))}
                 </select>
@@ -928,7 +928,7 @@ function Launcher({
                   <EmptyState
                     icon={Radar}
                     title="No selected COAs for this scenario"
-                    hint="Select or generate COAs in Data & COA Generation first — only selected or previously simulated COAs can be committed to deduction."
+                    hint="Select or generate COAs in Data & COA Generation first, only selected or previously simulated COAs can be committed to deduction."
                   />
                 )}
               </div>
@@ -973,7 +973,7 @@ function Launcher({
                 onSelect={onOpen}
               />
             ) : (
-              <EmptyState icon={Radar} title="No live runs" hint="Start a deduction on the left — branches run in parallel, one per COA." />
+              <EmptyState icon={Radar} title="No live runs" hint="Start a deduction on the left, branches run in parallel, one per COA." />
             )}
             {doneRuns.length ? (
               <>

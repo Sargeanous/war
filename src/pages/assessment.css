@@ -1,4 +1,4 @@
-/* Assessment page styles — every class carries the asm- prefix. */
+/* Assessment page styles, every class carries the asm- prefix. */
 
 .asm-verdict-row {
   display: flex;
@@ -23,7 +23,7 @@
 .asm-commentary {
   margin: 0;
   padding: 12px 14px;
-  border-inline-start: 4px solid var(--blue);
+  border-inline-start: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--blue-soft);
   color: var(--ink-2);
@@ -88,4 +88,8 @@
   .asm-compare-radar {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.asm-commentary {
+  background: color-mix(in srgb, var(--blue) 7%, var(--surface-3));
 }

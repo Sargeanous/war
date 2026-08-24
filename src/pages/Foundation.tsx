@@ -159,7 +159,7 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
             </article>
           ))}
         </div>
-        <p className="fnd-caption">One data engine across base, runtime, scenario, deduction-process and assessment data — polymorphic hybrid storage, distributed, secure and governed.</p>
+        <p className="fnd-caption">One data engine across base, runtime, scenario, deduction-process and assessment data, polymorphic hybrid storage, distributed, secure and governed.</p>
       </Panel>
 
       <div className="split-grid equal">
@@ -172,7 +172,7 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
               <Detail label="Scenarios" value={String(platform.lowCode.scenarios)} />
             </DetailGrid>
             <p className="fnd-desc" style={{ fontSize: 12.5 }}>
-              Low-code / no-code design of maps, pieces, rules and scenarios — design, run and review closed in a single
+              Low-code / no-code design of maps, pieces, rules and scenarios, design, run and review closed in a single
               environment with unified user, permission and log management.
             </p>
             <Button icon={Puzzle} variant="secondary" onClick={() => setShowDesigner(true)}>
@@ -228,7 +228,7 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
                 <Detail label="Class" value={selected.label} />
                 <Detail label="Identifier" value={selected.id} />
                 <Detail label="Category" value={selected.category} />
-                <Detail label="Domain" value={selected.domain ? domainLabels[selected.domain] : "—"} />
+                <Detail label="Domain" value={selected.domain ? domainLabels[selected.domain] : "-"} />
               </DetailGrid>
               <p>{selected.description}</p>
               <CompactTable
@@ -236,21 +236,21 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
                 rows={selected.attributes.map((attr) => [
                   attr.name,
                   attr.type + (attr.enumValues ? ` (${attr.enumValues.join(" | ")})` : ""),
-                  attr.unit ?? "—",
-                  attr.description ?? "—",
+                  attr.unit ?? "-",
+                  attr.description ?? "-",
                 ])}
               />
               <div className="fnd-rel-list">
                 {relations.out.map((rel) => (
                   <span key={rel.id} className="fnd-rel">
                     <strong>{selected.label}</strong> <em>{rel.label}</em> <strong>{label(rel.to)}</strong>
-                    <small style={{ color: "var(--muted)" }}> — {rel.description}</small>
+                    <small style={{ color: "var(--muted)" }}>, {rel.description}</small>
                   </span>
                 ))}
                 {relations.into.map((rel) => (
                   <span key={rel.id} className="fnd-rel">
                     <strong>{label(rel.from)}</strong> <em>{rel.label}</em> <strong>{selected.label}</strong>
-                    <small style={{ color: "var(--muted)" }}> — {rel.description}</small>
+                    <small style={{ color: "var(--muted)" }}>, {rel.description}</small>
                   </span>
                 ))}
                 {!relations.out.length && !relations.into.length ? (
@@ -274,7 +274,7 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
               setPlatform((p) => (p ? { ...p, lowCode: { ...p.lowCode, pieces: p.lowCode.pieces + 1 } } : p));
               setClassId(created.id);
               setShowDesigner(false);
-              notify(`Piece type "${created.label}" added — it is now in the Scenario Design palette`);
+              notify(`Piece type "${created.label}" added, it is now in the Scenario Design palette`);
             } catch (error) {
               notify(errMsg(error));
             }
@@ -345,7 +345,7 @@ function PieceDesignerModal({
   }
 
   return (
-    <Modal title="Piece designer — new unit type" onClose={onClose} wide>
+    <Modal title="Piece designer, new unit type" onClose={onClose} wide>
       <FormGrid columns={2}>
         <Field label="Piece name">
           <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Fast attack craft" />

@@ -958,7 +958,7 @@ button:disabled {
   color: var(--primary-dark);
 }
 
-/* Grid items default to min-width:auto — wide tables must shrink and scroll
+/* Grid items default to min-width:auto, wide tables must shrink and scroll
    inside .table-card instead of stretching their grid track past the viewport. */
 .split-grid > *,
 .cms-grid > *,
@@ -1870,7 +1870,7 @@ select:focus {
 .ai-verdict-foot { font-size: 10.5px; color: var(--muted, #94a3b8); letter-spacing: 0.02em; }
 
 /* =========================================================================
-   SANDTABLE additions — war platform specific primitives.
+   SANDTABLE additions, war platform specific primitives.
    Everything above this line is the shared DOOH design system.
    ========================================================================= */
 
@@ -2314,14 +2314,14 @@ select:focus {
 }
 
 /* =========================================================================
-   Dark theme — the DOOH design system remapped to dark surfaces.
+   Dark theme, the DOOH design system remapped to dark surfaces.
    Toggled by data-theme="dark" on <html>; same layout, spacing, components
    and green-primary language as the light theme.
    ========================================================================= */
 
 [data-theme="dark"] {
   color-scheme: dark;
-  /* Origen theme dark tokens — ported verbatim from project-start
+  /* Origen theme dark tokens, ported verbatim from project-start
      (Figma "DOOH" + "Origen UI Kit"; dark is the designed default there). */
   --bg: #181b1a;
   --surface: #1f2221;
@@ -2383,4 +2383,705 @@ select:focus {
 [data-theme="dark"] .sparkline,
 [data-theme="dark"] .svg-radar {
   filter: brightness(1.35);
+}
+
+/* =============================================================================
+   COMPACT SHELL - density & typography elevation pass.
+   The stock scale read as an oversized admin template: 42px titles, 42px icon
+   boxes, 18px paddings, no content rail. This layer retunes the whole shell to
+   a dense, premium ops-console rhythm. One block so the scale stays coherent.
+   ============================================================================= */
+
+:root {
+  --sidebar: 246px;
+}
+
+/* --- Content rail: no sprawl on wide monitors ------------------------------- */
+.workspace {
+  padding: 18px 26px 72px;
+}
+
+.workspace > * {
+  max-width: 1560px;
+  margin-inline: auto;
+}
+
+/* --- Typography scale -------------------------------------------------------- */
+.topbar {
+  margin-bottom: 14px;
+  gap: 14px;
+}
+
+.topbar h1 {
+  font-size: 21px;
+  letter-spacing: -0.01em;
+}
+
+.topbar p,
+.nav-group p,
+.login-brand p {
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+}
+
+.panel-header {
+  margin-bottom: 12px;
+}
+
+.panel-header h2 {
+  font-size: 14.5px;
+}
+
+.metric strong {
+  font-size: 21px;
+}
+
+.metric small {
+  font-size: 12px;
+}
+
+.metric span {
+  font-size: 10.5px;
+}
+
+/* --- Chrome density ----------------------------------------------------------- */
+.panel {
+  padding: 14px;
+  box-shadow: none;
+}
+
+.metric {
+  padding: 12px 14px;
+  gap: 5px;
+  box-shadow: none;
+}
+
+.page-body {
+  gap: 12px;
+}
+
+.split-grid {
+  gap: 12px;
+}
+
+.metric-grid {
+  gap: 12px;
+}
+
+.panel-icon,
+.profile-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+
+.panel-icon svg,
+.profile-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.panel-header > div:first-child {
+  gap: 9px;
+}
+
+.button {
+  min-height: 30px;
+  padding: 6px 12px;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.icon-button {
+  min-height: 30px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+}
+
+.session-pill,
+.status-pill {
+  min-height: 24px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+th,
+td {
+  padding: 8px 11px;
+  font-size: 12.5px;
+}
+
+th {
+  font-size: 10.5px;
+}
+
+/* --- Sidebar ------------------------------------------------------------------- */
+.sidebar {
+  padding: 16px 14px;
+  gap: 14px;
+}
+
+.sidebar-brand {
+  gap: 11px;
+  padding-bottom: 12px;
+}
+
+.sidebar-brand strong {
+  font-size: 16.5px;
+}
+
+.sidebar-brand span {
+  font-size: 11.5px;
+}
+
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  font-size: 13px;
+}
+
+.current-profile {
+  padding: 10px 12px;
+  gap: 2px;
+}
+
+.current-profile strong {
+  font-size: 13px;
+}
+
+.current-profile span {
+  font-size: 11.5px;
+}
+
+.nav-groups {
+  gap: 14px;
+}
+
+.nav-group {
+  gap: 3px;
+}
+
+.nav-group button {
+  gap: 9px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+}
+
+.nav-group button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.switch-profile {
+  padding: 9px 11px;
+  font-size: 12.5px;
+}
+
+/* --- Visual noise: fewer outlined boxes --------------------------------------- */
+.tag {
+  border-color: transparent;
+  background: var(--surface-2);
+  font-size: 11px;
+}
+
+.session-pill {
+  border-color: transparent;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+/* --- Login --------------------------------------------------------------------- */
+.login-panel {
+  width: min(880px, 100%);
+  padding: 24px;
+}
+
+.login-brand h1 {
+  font-size: 24px;
+}
+
+.login-intro {
+  margin: 14px 0 18px;
+  font-size: 14.5px;
+}
+
+.profile-grid {
+  gap: 10px;
+}
+
+.profile-card {
+  min-height: 84px;
+  padding: 13px 14px;
+  gap: 12px;
+}
+
+.profile-card strong {
+  font-size: 15px;
+}
+
+/* =============================================================================
+   REFINEMENT PASS 2 - calibrated against project-start / skychain-pulse.
+   Fixes: (a) dead space from short-vs-tall panels in a split row, (b) sidebar
+   nav items with no breathing room and a heavy filled active state, (c) missing
+   scrollbar craft. Long feeds now scroll inside their panel instead of
+   stretching the grid row and leaving a void beside them.
+   ============================================================================= */
+
+/* --- Sidebar navigation: spacing + restrained active treatment --------------- */
+.nav-groups {
+  gap: 20px;
+  align-content: start;
+  overflow-y: auto;
+}
+
+.nav-group {
+  gap: 5px;
+}
+
+.nav-group p {
+  margin-bottom: 3px;
+  padding-inline-start: 10px;
+}
+
+.nav-group button {
+  min-height: 34px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-group button svg {
+  opacity: 0.75;
+}
+
+.nav-group button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink);
+}
+
+/* Inset accent bar reads far cleaner than a filled green block. */
+.nav-group button.active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: transparent;
+  color: var(--ink);
+  font-weight: 700;
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+
+.nav-group button.active svg {
+  opacity: 1;
+  color: var(--primary);
+}
+
+[data-theme="light"] .nav-group button:hover {
+  background: rgba(15, 107, 79, 0.07);
+}
+
+[data-theme="light"] .nav-group button.active {
+  background: rgba(15, 107, 79, 0.1);
+  color: var(--primary-dark);
+}
+
+.switch-profile:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* --- Kill the dead space: tall side feeds scroll inside their panel ---------- */
+.cmd-live-stack {
+  max-height: 592px;
+  overflow-y: auto;
+  padding-inline-end: 5px;
+}
+
+.cmd-side-feed,
+.ded-event-list {
+  max-height: 360px;
+  overflow-y: auto;
+  padding-inline-end: 5px;
+}
+
+/* Panels sharing a split row stretch together; their body scrolls, not the row. */
+.split-grid.wide-left,
+.split-grid.equal {
+  align-items: stretch;
+}
+
+.split-grid.wide-left > .panel,
+.split-grid.equal > .panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.split-grid.wide-left > .panel > .panel-header,
+.split-grid.equal > .panel > .panel-header {
+  flex: 0 0 auto;
+}
+
+/* --- Scrollbar craft ---------------------------------------------------------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  background-clip: padding-box;
+}
+
+/* --- Surface refinement ------------------------------------------------------- */
+.panel,
+.metric {
+  border-radius: 10px;
+}
+
+/* Equal-height cards across every split row (a short card beside a tall one
+   reads as an unfinished layout). */
+.split-grid {
+  align-items: stretch;
+}
+
+.split-grid > .panel {
+  display: flex;
+  flex-direction: column;
+}
+
+/* =============================================================================
+   DESTRIPE PASS - accent stripes out, three quieter signals in.
+   4px bars on tile tops and card edges (and the inset bar on nav items) are the
+   giveaway of a generated dashboard. Replacements, by role:
+     1. status tiles  -> a 6px tone dot beside the label, card stays neutral
+     2. accent cards  -> a soft tinted wash, no edge bar
+     3. nav active    -> surface fill + accent icon only, no bar
+   ============================================================================= */
+
+/* --- 1. Status tiles: dot instead of a top bar ------------------------------- */
+.metric.tone-good,
+.metric.tone-warn,
+.metric.tone-danger,
+.metric.tone-info,
+.metric.tone-neutral {
+  border-top: 1px solid var(--line);
+}
+
+.metric > span:first-of-type {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.metric > span:first-of-type::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.metric.tone-good > span:first-of-type::before {
+  background: var(--primary);
+}
+
+.metric.tone-warn > span:first-of-type::before {
+  background: var(--amber);
+}
+
+.metric.tone-danger > span:first-of-type::before {
+  background: var(--red);
+}
+
+.metric.tone-info > span:first-of-type::before {
+  background: var(--blue);
+}
+
+/* --- 2. Accent cards: tinted wash instead of an edge bar -------------------- */
+.ded-sage-quote,
+.ded-sage-answer,
+.coa-projection,
+.ded-adj-card,
+.asm-note,
+.rc-preview,
+.sd-hint-card {
+  border-inline-start-width: 1px;
+}
+
+.ded-sage-quote,
+.ded-sage-answer {
+  border-inline-start-color: var(--line);
+  background: color-mix(in srgb, var(--blue) 7%, var(--surface-3));
+}
+
+.coa-projection {
+  border-inline-start-color: var(--line);
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface-3));
+}
+
+.ded-adj-card {
+  border-inline-start-color: var(--line);
+}
+
+.ded-adj-card.hit {
+  border-inline-start-color: var(--line);
+  background: color-mix(in srgb, var(--red) 7%, var(--surface-3));
+}
+
+/* --- 3. Nav active: no bar, accent carried by the icon ---------------------- */
+.nav-group button.active {
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.075);
+}
+
+[data-theme="light"] .nav-group button.active {
+  background: rgba(15, 107, 79, 0.09);
+}
+
+/* =============================================================================
+   ACCESS SCREEN - replicated from project-start's role-selection aesthetics.
+   The differences that mattered: the icon is a large bare outline glyph in the
+   accent colour (not a filled tile), each card carries an access-scope badge and
+   a hover "Enter" cue in a right-hand column, hover is a green-tinted glow with
+   NO transform, and the screen sits on a masked dotted field for depth.
+   ============================================================================= */
+
+.login-screen {
+  position: relative;
+}
+
+/* Masked dotted field: gives the screen a place instead of a flat wash. */
+.login-screen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(color-mix(in srgb, var(--primary) 14%, transparent) 1px, transparent 1px);
+  background-size: 34px 34px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 42%, #000 0%, transparent 78%);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 42%, #000 0%, transparent 78%);
+  opacity: 0.5;
+}
+
+.login-panel {
+  position: relative;
+  z-index: 1;
+  width: min(920px, 100%);
+  padding: 36px 40px;
+  border-radius: 14px;
+  box-shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.55);
+}
+
+.login-brand {
+  gap: 16px;
+  align-items: center;
+}
+
+.login-brand .brand-mark {
+  width: 46px;
+  height: 46px;
+  font-size: 17px;
+}
+
+.login-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.login-brand-text h1 {
+  margin: 0;
+  font-size: 25px;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+
+.login-brand-text p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 17px;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+  text-transform: none;
+}
+
+.login-intro {
+  max-width: 620px;
+  margin: 18px 0 20px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.profile-grid {
+  gap: 11px;
+}
+
+/* --- The card: icon | body | scope + cue ------------------------------------- */
+.profile-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 88px;
+  padding: 16px 20px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* No transform on hover: movement between mousedown and mouseup eats the click. */
+.profile-card:hover {
+  border-color: var(--primary);
+  background: var(--surface-3);
+  box-shadow: 0 12px 28px -14px rgba(0, 155, 93, 0.3);
+  transform: none;
+}
+
+.profile-card:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 28%, transparent);
+}
+
+/* Bare outline glyph, not a filled tile. */
+.profile-card .profile-icon {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--primary);
+  display: grid;
+  place-items: center;
+}
+
+.profile-card .profile-icon svg {
+  width: 29px;
+  height: 29px;
+  stroke-width: 1.7;
+}
+
+.profile-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin-inline-start: 2px;
+}
+
+.profile-card-body strong {
+  font-size: 16.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.profile-card-body small {
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
+
+.profile-card-body em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+}
+
+.profile-card-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 9px;
+}
+
+.profile-scope {
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.profile-scope.is-privileged {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+  color: var(--primary);
+}
+
+/* Hover cue: appears and settles, so the card feels answerable. */
+.profile-card-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.profile-card-cue svg {
+  flex: none;
+}
+
+.profile-card:hover .profile-card-cue,
+.profile-card:focus-visible .profile-card-cue {
+  color: var(--primary);
+  opacity: 1;
+  transform: translateX(0);
+}
+
+@media (max-width: 720px) {
+  .login-panel {
+    padding: 22px 18px;
+  }
+
+  .profile-card {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .profile-card-aside {
+    grid-column: 2;
+    flex-direction: row;
+    align-items: center;
+  }
 }

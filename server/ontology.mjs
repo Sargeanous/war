@@ -1,4 +1,4 @@
-// SANDTABLE unified data foundation — simulation ontology.
+// SANDTABLE unified data foundation, simulation ontology.
 // Single-rooted class hierarchy: entity -> force-unit -> maritime/air/land/cyber/space
 // branches, plus facility / system / event / concept subtrees. Shapes mirror
 // `Ontology`, `OntologyClass`, `OntologyAttribute`, `OntologyRelation` in src/types.ts.

@@ -99,7 +99,7 @@ export default function Admin({ notify, profile }: PageProps) {
 
   return (
     <div className="page-body">
-      <div className="adm-banner">EXERCISE USE ONLY — ALL DATA FICTIONAL · Unified user, permission and log management</div>
+      <div className="adm-banner">EXERCISE USE ONLY · ALL DATA FICTIONAL · Unified user, permission and log management</div>
 
       <MetricGrid>
         <Metric label="Users" value={String(users.length)} helper={`${users.filter((u) => u.status === "active").length} active`} tone="info" />
@@ -138,7 +138,7 @@ export default function Admin({ notify, profile }: PageProps) {
               user.name,
               ...PAGE_IDS.map((page) => (
                 <span key={page} className={`adm-perm-cell${user.permissions.includes(page) ? "" : " off"}`}>
-                  {user.permissions.includes(page) ? "✓" : "—"}
+                  {user.permissions.includes(page) ? "✓" : "-"}
                 </span>
               )),
             ])}
@@ -171,7 +171,7 @@ export default function Admin({ notify, profile }: PageProps) {
                   setResetting(true);
                   try {
                     const result = await resetDemoData();
-                    notify(`Demo data reset — ${result.scenarios} scenarios and ${result.runs} rehearsal run rebuilt`);
+                    notify(`Demo data reset, ${result.scenarios} scenarios and ${result.runs} rehearsal run rebuilt`);
                     const [u, a] = await Promise.all([fetchUsers(), fetchAudit()]);
                     setUsers(u);
                     setAudit(a);
@@ -184,7 +184,7 @@ export default function Admin({ notify, profile }: PageProps) {
                 {resetting ? "Reseeding & re-running rehearsal…" : "Reset demo data"}
               </Button>
               <p className="adm-reset-note">
-                Wipes <code>state.json</code> and reseeds the platform for a clean client demo. Takes a few seconds — the
+                Wipes <code>state.json</code> and reseeds the platform for a clean client demo. Takes a few seconds, the
                 historical rehearsal deduction is recomputed live.
               </p>
             </div>
