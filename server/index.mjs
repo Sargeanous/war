@@ -22,6 +22,7 @@ import {
 } from "./data.mjs";
 import {
   createRun,
+  rewindBranchToSnapshot,
   tickRun,
   applyDecision,
   applyIntervention,
@@ -1537,6 +1538,197 @@ function handleUpdateRuleSet(id, body) {
   return ruleSet;
 }
 
+// Resume from breakpoint: fork a live run out of any recorded replay frame, so a
+// commander can rewind to a moment and take a different decision path.
+function handleResumeFromBreakpoint(runId, branchId, body) {
+  const source = requireRun(runId);
+  const branch = requireBranch(source, branchId);
+  const tick = Number(body.tick);
+  if (!Number.isFinite(tick)) throw httpError(400, "Field 'tick' is required.");
+  const snapshots = branch._full ? branch._full.snapshots : [];
+  if (!snapshots.length) throw httpError(400, 'This branch has no recorded snapshots to resume from.');
+  let snap = snapshots[0];
+  for (const candidate of snapshots) if (candidate.tick <= tick) snap = candidate;
+
+  const scenario = requireScenario(source.scenarioId);
+  const ruleSet = findRuleSet(source.ruleSetId) || state.ruleSets.find((r) => r.status === 'active');
+  if (!ruleSet) throw httpError(400, 'No rule set available.');
+  const coa = findCoa(branch.coaId);
+  if (!coa) throw httpError(404, 'The COA behind this branch no longer exists.');
+
+  const engine = source.engine === 'turn-based' ? 'turn-based' : 'realtime';
+  const speed = clamp(Number(body.speed) || source.clock.speed || 2, 0.25, 16);
+  const run = createRun({
+    scenario,
+    coas: [coa],
+    ruleSet,
+    engine,
+    speed,
+    label: 'Resumed: ' + branch.name + ' from T+' + round1(snap.simTimeH) + 'h',
+    id: nextId('run'),
+  });
+  rewindBranchToSnapshot(run.branches[0], snap, source.label);
+  run.clock.tick = snap.tick;
+  run.clock.simTimeH = snap.simTimeH;
+  run.resumedFrom = {
+    runId: source.id,
+    runLabel: source.label,
+    branchId: branch.id,
+    branchName: branch.name,
+    tick: snap.tick,
+    simTimeH: snap.simTimeH,
+  };
+  state.runs.push(run);
+  startLoop(run);
+  audit(
+    'operator',
+    'run-resumed',
+    run.id,
+    'Forked "' + branch.name + '" from "' + source.label + '" at T+' + round1(snap.simTimeH) + 'h to explore a different decision path.'
+  );
+  schedulePersist();
+  return serializeRun(run);
+}
+
+// After-action report: one structured document per run, composed from the
+// assessments, the branch outcomes and the decision record. Narrative sections
+// come from the reasoning service when a key is present, otherwise they are
+// composed deterministically from the same figures.
+function reportFigures(run) {
+  const scenario = findScenario(run.scenarioId);
+  const assessments = state.assessments.filter((a) => a.runId === run.id);
+  const branches = run.branches.map((b) => {
+    const asm = assessments.find((a) => a.branchId === b.id);
+    const decided = b.decisions.filter((d) => d.status === 'decided');
+    return {
+      name: b.name,
+      verdict: asm ? asm.verdict : 'not assessed',
+      overall: asm ? asm.overallScore : null,
+      dimensions: asm ? asm.dimensions.map((d) => ({ name: d.name, score: d.score, weight: d.weight })) : [],
+      objectiveScore: b.metrics.objectiveScore,
+      blueStrength: b.metrics.blueStrength,
+      redStrength: b.metrics.redStrength,
+      blueLosses: b.metrics.blueLosses,
+      redLosses: b.metrics.redLosses,
+      supplyLevel: b.metrics.supplyLevel,
+      lossExchange: b.metrics.blueLosses ? round1(b.metrics.redLosses / b.metrics.blueLosses) : b.metrics.redLosses,
+      events: b.eventCount,
+      decisionsTotal: decided.length,
+      decisionsFollowed: decided.filter((d) => d.followedAi).length,
+      decisions: decided.map((d) => ({
+        title: d.title,
+        chose: (d.options.find((o) => o.id === d.decidedOptionId) || {}).label || 'unknown',
+        followedAi: Boolean(d.followedAi),
+        simTimeH: d.simTimeH,
+        rationale: d.decisionRationale || '',
+      })),
+    };
+  });
+  return { scenario, branches, assessments };
+}
+
+function offlineReportSections(run, figures) {
+  const { branches } = figures;
+  const ranked = [...branches].sort((a, b) => (b.overall || 0) - (a.overall || 0));
+  const best = ranked[0];
+  const worst = ranked[ranked.length - 1];
+  const sections = [];
+  sections.push({
+    heading: 'Summary',
+    body:
+      'Exercise ' + (figures.scenario ? figures.scenario.codename : run.scenarioName) + ' ran ' + branches.length +
+      ' branch(es) to T+' + round1(run.clock.simTimeH) + 'h under ' + run.engine + ' adjudication. ' +
+      (best ? '"' + best.name + '" produced the strongest outcome (' + best.verdict + ', ' + best.overall + '/100), closing ' + best.objectiveScore + '% of the objective picture with BLUE at ' + Math.round(best.blueStrength) + '% aggregate strength.' : ''),
+  });
+  if (branches.length > 1 && best && worst && best.name !== worst.name) {
+    sections.push({
+      heading: 'Branch comparison',
+      body:
+        '"' + best.name + '" outperformed "' + worst.name + '" by ' + Math.abs((best.overall || 0) - (worst.overall || 0)) +
+        ' points. The decisive difference was force preservation: ' + Math.round(best.blueStrength) + '% against ' +
+        Math.round(worst.blueStrength) + '%, at a loss-exchange ratio of ' + best.lossExchange + ':1 versus ' +
+        worst.lossExchange + ':1. Objective completion tracked ' + best.objectiveScore + '% against ' + worst.objectiveScore + '%.',
+    });
+  }
+  const totalDec = branches.reduce((n, b) => n + b.decisionsTotal, 0);
+  const followed = branches.reduce((n, b) => n + b.decisionsFollowed, 0);
+  sections.push({
+    heading: 'Command decisions',
+    body:
+      totalDec === 0
+        ? 'No commander decision points were resolved during this run.'
+        : followed + ' of ' + totalDec + ' decision points followed the SAGE recommendation. ' +
+          (followed === totalDec
+            ? 'The commander accepted AI advice throughout; the outcome reflects the recommended path rather than an independent one.'
+            : totalDec - followed + ' override(s) were recorded, and the divergence between branches is partly attributable to them.'),
+  });
+  sections.push({
+    heading: 'Observations and optimisation',
+    body:
+      (best && best.objectiveScore < 60
+        ? 'Objective completion never passed 60%, which points at the shaping phase rather than the assault: intelligence confidence plateaued well before the force committed. '
+        : 'Objective completion was satisfactory; the limiting factor was tempo rather than effect. ') +
+      (best && best.lossExchange < 2
+        ? 'A loss-exchange ratio under 2:1 will not sustain a longer campaign, so the engagement rules for surface combatants inside 45 km deserve revision. '
+        : 'The exchange ratio is sustainable for a longer campaign. ') +
+      (best && best.supplyLevel < 55
+        ? 'Sustainment closed at ' + Math.round(best.supplyLevel) + '%, thin enough that a follow-on phase would have stalled.'
+        : 'Sustainment held with margin throughout.'),
+  });
+  return sections;
+}
+
+async function handleGenerateReport(runId) {
+  const run = requireRun(runId);
+  const figures = reportFigures(run);
+  if (!figures.assessments.length) {
+    throw httpError(400, 'Assess the run before generating a report.');
+  }
+  let sections = offlineReportSections(run, figures);
+  let source = 'offline';
+  if (process.env.ANTHROPIC_API_KEY) {
+    const brief = JSON.stringify({ label: run.label, engine: run.engine, simTimeH: run.clock.simTimeH, branches: figures.branches }, null, 1);
+    const question =
+      'Write an after-action report for this fictional exercise run. Return STRICT JSON only: ' +
+      '{"sections":[{"heading":string,"body":string}]}. Four sections, in order: Summary, Branch comparison, ' +
+      'Command decisions, Observations and optimisation. Each body 60 to 110 words, addressed to the exercise ' +
+      'director, citing the actual figures. No markdown.' + nlLiteral() + nlLiteral() + 'RUN DATA:' + nlLiteral() + brief;
+    const result = await askAnthropic(question, 'aar-report', Date.now(), process.env.ANTHROPIC_API_KEY);
+    if (result.source === 'anthropic' && result.answer) {
+      try {
+        const cleaned = result.answer.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+        const parsed = JSON.parse(cleaned);
+        if (Array.isArray(parsed.sections) && parsed.sections.length) {
+          sections = parsed.sections
+            .filter((x) => x && x.heading && x.body)
+            .map((x) => ({ heading: String(x.heading).slice(0, 60), body: String(x.body).slice(0, 900) }));
+          source = 'anthropic';
+        }
+      } catch {
+        // keep the deterministic sections
+      }
+    }
+  }
+  const report = {
+    runId: run.id,
+    runLabel: run.label,
+    scenarioName: run.scenarioName,
+    generatedAt: nowIso(),
+    source,
+    simTimeH: run.clock.simTimeH,
+    branches: figures.branches,
+    sections,
+  };
+  run.report = report;
+  audit('analyst', 'report-generated', run.id, 'After-action report generated for "' + run.label + '" via ' + source + '.');
+  schedulePersist();
+  return report;
+}
+
+function nlLiteral() {
+  return String.fromCharCode(10);
+}
+
 function handleStartRun(body) {
   const scenario = requireScenario(String(body.scenarioId || ""));
   const ruleSet = findRuleSet(String(body.ruleSetId || ""));
@@ -1899,10 +2091,16 @@ const routes = [
   },
   {
     method: "POST",
+    re: new RegExp("^/api/runs/" + ID + "/branches/" + ID + "/resume$"),
+    handler: ({ params, body }) => handleResumeFromBreakpoint(params[0], params[1], body),
+  },
+  {
+    method: "POST",
     re: new RegExp(`^/api/runs/${ID}/branches/${ID}/explain$`),
     handler: ({ params, body }) => handleExplain(params[0], params[1], body),
   },
   { method: "POST", re: new RegExp(`^/api/runs/${ID}/assess$`), handler: ({ params }) => handleAssessRun(params[0]) },
+  { method: "POST", re: new RegExp("^/api/runs/" + ID + "/report$"), handler: ({ params }) => handleGenerateReport(params[0]) },
   {
     method: "GET",
     re: new RegExp(`^/api/runs/${ID}/replay/${ID}$`),

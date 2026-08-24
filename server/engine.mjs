@@ -332,6 +332,8 @@ function computeScore(branch, scenario) {
   };
 }
 
+const snapshotPublic = (branch) => snapshot(branch);
+
 function snapshot(branch) {
   branch._full.snapshots.push({
     tick: branch._tick,
@@ -1174,6 +1176,44 @@ export function buildAssessments(run, ctx) {
 // ---------------------------------------------------------------------------
 // Replay
 // ---------------------------------------------------------------------------
+
+// Rewind a newly created branch to a recorded snapshot, so a run can be
+// re-launched from any replay frame with a different decision path. Unit states,
+// clock and RNG stream are all restored; the event log starts fresh from here.
+export function rewindBranchToSnapshot(branch, snapshot, sourceLabel) {
+  const byId = new Map(snapshot.units.map((u) => [u.id, u]));
+  for (const unit of branch.units) {
+    const s = byId.get(unit.id);
+    if (!s) continue;
+    unit.position = { ...s.position };
+    unit.headingDeg = s.headingDeg;
+    unit.strength = s.strength;
+    unit.status = s.status;
+    unit.detectedByEnemy = Boolean(s.detectedByEnemy);
+    unit._detBy = { blue: s.detectedByEnemy || unit.side === "blue", red: s.detectedByEnemy || unit.side === "red" };
+    unit._wpPhase = null;
+    unit._wpIdx = 0;
+    unit._cdUntil = 0;
+  }
+  branch._tick = snapshot.tick;
+  branch._simTimeH = snapshot.simTimeH;
+  // Advance the stream so the fork does not replay the parent's exact rolls.
+  branch._rngState = (branch._rngState + snapshot.tick * 2654435761) >>> 0;
+  branch.metrics = { ...snapshot.metrics };
+  branch._full = { events: [], snapshots: [] };
+  branch.recentEvents = [];
+  branch.eventCount = 0;
+  branch.decisions = [];
+  branch._flags = { firstContact: snapshot.tick > 0, attritionCheck: false, phasePending: null, ruleDecisionTitle: null };
+  snapshotPublic(branch);
+  pushEvent(branch, {
+    type: "info",
+    severity: "info",
+    title: "Resumed from breakpoint",
+    detail: `Forked from "${sourceLabel}" at T+${round1(snapshot.simTimeH)}h (tick ${snapshot.tick}). World state restored; the decision path from here is open.`,
+  });
+  return branch;
+}
 
 export function buildReplay(run, branchId) {
   const branch = run.branches.find((b) => b.id === branchId);

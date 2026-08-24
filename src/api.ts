@@ -15,6 +15,7 @@ import type {
   OpordParse,
   CoaGenerationResult,
   ExplainResult,
+  RunReport,
   ExplainTopic,
   CoaStrategy,
   OntologyClass,
@@ -92,6 +93,9 @@ export const fetchCoas = (scenarioId?: string) =>
   get<Coa[]>(`/api/coas${scenarioId ? `?scenarioId=${encodeURIComponent(scenarioId)}` : ""}`);
 export const generateCoas = (payload: { scenarioId: string; missionId: string; count: number; strategy?: CoaStrategy }) =>
   post<CoaGenerationResult>("/api/coas/generate", payload);
+export const generateReport = (runId: string) => post<RunReport>(`/api/runs/${runId}/report`);
+export const resumeFromBreakpoint = (runId: string, branchId: string, tick: number, speed?: number) =>
+  post<SimRun>(`/api/runs/${runId}/branches/${branchId}/resume`, { tick, speed });
 export const explainBranch = (runId: string, branchId: string, topic: ExplainTopic) =>
   post<ExplainResult>(`/api/runs/${runId}/branches/${branchId}/explain`, { topic });
 export const silentEvalCoa = (id: string) => post<Coa>(`/api/coas/${id}/silent-eval`);

@@ -568,6 +568,14 @@ export interface SimRun {
   startedAt: string;
   completedAt?: string;
   label: string;
+  resumedFrom?: {
+    runId: string;
+    runLabel: string;
+    branchId: string;
+    branchName: string;
+    tick: number;
+    simTimeH: number;
+  } | null;
   environment?: ScenarioEnvironment | null; // live scenario environment (reflects umpire changes)
 }
 
@@ -585,6 +593,37 @@ export interface RunSummary {
   completedAt?: string;
 }
 
+
+// After-action report: one document per run, narrative sections composed by the
+// reasoning service when available, deterministically otherwise.
+export interface RunReportBranch {
+  name: string;
+  verdict: string;
+  overall: number | null;
+  dimensions: Array<{ name: string; score: number; weight: number }>;
+  objectiveScore: number;
+  blueStrength: number;
+  redStrength: number;
+  blueLosses: number;
+  redLosses: number;
+  supplyLevel: number;
+  lossExchange: number;
+  events: number;
+  decisionsTotal: number;
+  decisionsFollowed: number;
+  decisions: Array<{ title: string; chose: string; followedAi: boolean; simTimeH: number; rationale: string }>;
+}
+
+export interface RunReport {
+  runId: string;
+  runLabel: string;
+  scenarioName: string;
+  generatedAt: string;
+  source: "anthropic" | "offline";
+  simTimeH: number;
+  branches: RunReportBranch[];
+  sections: Array<{ heading: string; body: string }>;
+}
 export interface ReplayData {
   runId: string;
   branchId: string;
