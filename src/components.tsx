@@ -79,8 +79,11 @@ export function StatusPill({ label, tone }: { label: string; tone: Tone }) {
 }
 
 export function Tag({ label, color }: { label: string; color?: string }) {
+  // A category reads best as a dot plus plain text. Painting the border AND the
+  // label in the hue double-encodes it and turns dense columns into noise.
   return (
-    <span className="tag" style={color ? { borderColor: color, color } : undefined}>
+    <span className={`tag${color ? " has-dot" : ""}`}>
+      {color ? <i className="tag-dot" style={{ background: color }} /> : null}
       {label}
     </span>
   );

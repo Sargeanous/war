@@ -614,7 +614,7 @@ export default function CoaGeneration(props: PageProps) {
                     <StatusPill label={coa.status} tone={statusTone(coa.status)} />
                   </div>
                   <div className="coa-card-sub">
-                    <Tag label={coa.approach} color={coa.color} />
+                    <p className="coa-approach">{coa.approach}</p>
                     <span>
                       {coa.generatedBy === "agent"
                         ? `Agent · ${generatorAgent?.name ?? "mission agent"}`
