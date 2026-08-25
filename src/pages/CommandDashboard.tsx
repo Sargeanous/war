@@ -35,6 +35,7 @@ import {
   timeAgo,
 } from "../components";
 import { eventTones, sideColors, statusTone } from "../data";
+import { affiliationOf, frameColor } from "../milsym";
 import TheaterMap from "../map";
 import "./commanddashboard.css";
 
@@ -298,11 +299,11 @@ export default function CommandDashboard(props: PageProps) {
           <div className="cmd-map-foot">
             <div className="legend">
               <span>
-                <i style={{ background: sideColors.blue }} />
+                <i style={{ background: frameColor(affiliationOf("blue")) }} />
                 BLUE · Coalition Task Force
               </span>
               <span>
-                <i style={{ background: sideColors.red }} />
+                <i style={{ background: frameColor(affiliationOf("red")) }} />
                 RED · OPFOR
               </span>
               {focusBranch ? (

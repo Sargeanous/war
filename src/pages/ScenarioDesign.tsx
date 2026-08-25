@@ -290,24 +290,24 @@ RED occupation forces hold Kestrel Island and the eastern strait approaches with
 coastal missile, naval and air-defense assets. Merchant traffic is suspended.
 
 2. BLUE FORCES
-- 1x Aircraft carrier "CVN 80 Meridian" at 33.75, -42.60 (TF Sword)
-- 2x Guided-missile destroyer at 33.90, -42.30 (TF Sword)
-- 1x Frigate at 33.60, -42.40 (TF Shield)
-- 1x Submarine at 34.30, -41.90 (TF Undertow)
-- 1x Amphibious assault ship at 33.45, -42.75 (TF Landing)
-- 1x Marine battalion at 33.45, -42.85 (TF Landing)
-- 2x Fighter squadron at 33.80, -42.70 (TF Sword)
-- 1x Airborne early warning at 33.70, -42.90 (TF Sword)
-- 1x Fleet auxiliary at 33.30, -43.10 (TF Shield)
+- 1x Aircraft carrier "CVN 80 Meridian" at 24.55, 59.35 (TF Sword)
+- 2x Guided-missile destroyer at 24.65, 59.70 (TF Sword)
+- 1x Frigate at 24.40, 59.55 (TF Shield)
+- 1x Submarine at 24.80, 60.10 (TF Undertow)
+- 1x Amphibious assault ship at 24.30, 59.15 (TF Landing)
+- 1x Marine battalion at 24.30, 59.05 (TF Landing)
+- 2x Fighter squadron at 24.60, 59.25 (TF Sword)
+- 1x Airborne early warning at 24.50, 59.05 (TF Sword)
+- 1x Fleet auxiliary at 24.20, 58.85 (TF Shield)
 
 3. RED FORCES
-- 1x Coastal defense battery at 34.12, -39.85
-- 2x Corvette at 34.00, -40.10
-- 1x Fast missile boat at 33.85, -39.95
-- 1x Submarine at 33.70, -40.60
-- 1x Fighter squadron at 34.25, -39.70
-- 1x SAM battalion at 34.18, -39.78
-- 1x Cyber operations cell at 34.20, -39.60
+- 1x Coastal defense battery at 23.97, 62.15
+- 2x Corvette at 23.85, 61.90
+- 1x Fast missile boat at 23.70, 62.05
+- 1x Submarine at 23.55, 61.40
+- 1x Fighter squadron at 24.10, 62.30
+- 1x SAM battalion at 24.03, 62.22
+- 1x Cyber operations cell at 24.05, 62.40
 
 4. MISSION / OBJECTIVES
 - (BLUE) Seize control of the Meridian Strait transit lane
@@ -409,7 +409,7 @@ function OpordWizardModal({
               rows={13}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="OPORD …&#10;2. BLUE FORCES&#10;- 1x Guided-missile destroyer at 33.90, -42.30 (TF Sword)&#10;…"
+              placeholder="OPORD …&#10;2. BLUE FORCES&#10;- 1x Guided-missile destroyer at 24.65, 59.70 (TF Sword)&#10;…"
             />
           </Field>
           <ActionRow>
@@ -988,6 +988,7 @@ export default function ScenarioDesign(props: PageProps) {
           onSelectUnit={(id) => setSelectedUnitId(id)}
           onMapClick={handleMapClick}
           showHexGrid
+          showLabels
           height={460}
         />
         {selectedUnit ? (

@@ -1,15 +1,19 @@
 // TheaterMap, the shared operational map for SANDTABLE.
 // Uses Leaflet from the CDN (window.L) with dark tiles; degrades to a pure SVG
 // plot when Leaflet is unavailable (offline). The theater is fictional: island
-// polygons are drawn over open ocean, so no real-world geography is implied.
+// polygons sit in international waters of the Gulf of Oman / NW Arabian Sea; every
+// named place and force remains fictional.
 //
 // Wargame board grammar: an optional hex-grid layer (terrain classified from the
 // island/shoal polygons) and NATO-style unit counters. Fog of war renders only
 // what one side can see (own units + detected enemies).
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { LatLng, Objective, SimEvent, TheaterFeature, Unit } from "./types";
 import { sideColors } from "./data";
+import { affiliationOf, frameColor, milSymbolHtml } from "./milsym";
+import { addGraticule, drawEngagements, drawHeadingVector, drawObjective, tintClass } from "./tactical";
+import "./map-extras.css";
 
 declare global {
   interface Window {
@@ -17,9 +21,18 @@ declare global {
   }
 }
 
+// Tactical palette (MIL-STD-2525 style), sourced from the symbol generator so
+// trails, rings and vectors always match the unit counters.
+const TAC_COLORS: Record<string, string> = {
+  blue: frameColor(affiliationOf("blue")),
+  red: frameColor(affiliationOf("red")),
+  neutral: frameColor(affiliationOf("neutral")),
+};
+
 export interface MapUnit
   extends Pick<Unit, "id" | "side" | "name" | "domain" | "position" | "headingDeg" | "status" | "strength"> {
   detectedByEnemy?: boolean;
+  classId?: string; // ontology class, drives the symbol icon when present
 }
 
 export interface TheaterMapProps {
@@ -37,6 +50,9 @@ export interface TheaterMapProps {
   sensorRanges?: Record<string, number>; // unitId -> rangeKm
   showHexGrid?: boolean; // wargame board layer over the chart
   fogSide?: "blue" | "red" | null; // when set, render only what this side sees
+  weather?: string; // live environment, tints the display (storm)
+  daylight?: boolean; // false dims the display like a night watch
+  showLabels?: boolean; // permanent unit designation labels beside symbols
   height?: number;
 }
 
@@ -122,6 +138,15 @@ const hexStyles: Record<HexTerrain, { color: string; opacity: number; fillColor:
   sea: { color: "#5e7f96", opacity: 0.17, fillColor: "#0f1e29", fillOpacity: 0.1 },
 };
 
+// Variant for the pale "Nautical chart" base layer, where the dark-tuned
+// styles above wash out to invisibility.
+const hexStylesLight: Record<HexTerrain, { color: string; opacity: number; fillColor: string; fillOpacity: number }> = {
+  land: { color: "#55663a", opacity: 0.55, fillColor: "#6f8148", fillOpacity: 0.45 },
+  coast: { color: "#2f6b7a", opacity: 0.5, fillColor: "#7fb4c0", fillOpacity: 0.3 },
+  shallow: { color: "#2d6c86", opacity: 0.45, fillColor: "#8fc6da", fillOpacity: 0.28 },
+  sea: { color: "#3d637a", opacity: 0.3, fillColor: "#b9d3e2", fillOpacity: 0.12 },
+};
+
 function hexLabel(cell: HexCell): string {
   return `${String(cell.col).padStart(2, "0")}${String(cell.row).padStart(2, "0")}`;
 }
@@ -133,30 +158,7 @@ function visibleUnitsFor(units: MapUnit[], fogSide?: "blue" | "red" | null): Map
   return units.filter((u) => u.side === fogSide || u.detectedByEnemy || u.status === "destroyed");
 }
 
-// --- NATO-style counters -----------------------------------------------------------
-
-const glyphSvg = (body: string) =>
-  `<svg viewBox="0 0 20 12" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
-
-const DOMAIN_GLYPHS: Record<string, string> = {
-  land: glyphSvg(`<line x1="2" y1="1.5" x2="18" y2="10.5"/><line x1="18" y1="1.5" x2="2" y2="10.5"/>`),
-  sea: glyphSvg(`<ellipse cx="10" cy="6" rx="7.5" ry="4.3"/>`),
-  air: glyphSvg(`<path d="M2.5 11 Q10 -3.5 17.5 11"/>`),
-  cyber: glyphSvg(`<path d="M10 1.2 L18 6 L10 10.8 L2 6 Z"/><line x1="2" y1="6" x2="18" y2="6"/>`),
-  space: glyphSvg(`<path d="M4 10.5 Q10 1 16 10.5"/><circle cx="10" cy="4.4" r="1.6"/>`),
-};
-
-function counterHtml(unit: MapUnit, selected: boolean): string {
-  const dead = unit.status === "destroyed";
-  const color = dead ? "#5b6663" : sideColors[unit.side];
-  const strength = Math.max(0, Math.min(100, Math.round(unit.strength)));
-  const strengthColor = strength > 60 ? "#35c26e" : strength > 30 ? "#f5a524" : "#f04438";
-  const ring = selected ? `box-shadow:0 0 0 2px #ffffff,0 0 0 5px ${color}55;` : "";
-  const dim = dead ? "opacity:.62;filter:saturate(.35);" : "";
-  const glyph = DOMAIN_GLYPHS[unit.domain] ?? DOMAIN_GLYPHS.land;
-  const deadMark = dead ? `<span class="mc-dead">✕</span>` : "";
-  return `<div class="map-counter" style="background:${color};${ring}${dim}"><span class="mc-glyph">${glyph}</span><span class="mc-str"><i style="width:${strength}%;background:${strengthColor}"></i></span>${deadMark}</div>`;
-}
+// Unit symbols are rendered by ./milsym.ts (APP-6/2525-style frames and icons).
 
 export default function TheaterMap({
   center,
@@ -173,6 +175,9 @@ export default function TheaterMap({
   sensorRanges,
   showHexGrid,
   fogSide,
+  weather,
+  daylight,
+  showLabels,
   height = 420,
 }: TheaterMapProps) {
   const hasLeaflet = typeof window !== "undefined" && Boolean(window.L);
@@ -207,6 +212,9 @@ export default function TheaterMap({
       sensorRanges={sensorRanges}
       showHexGrid={showHexGrid}
       fogSide={fogSide}
+      weather={weather}
+      daylight={daylight}
+      showLabels={showLabels}
       height={height}
     />
   );
@@ -228,6 +236,9 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     sensorRanges,
     showHexGrid,
     fogSide,
+    weather,
+    daylight,
+    showLabels,
     height,
   } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -235,10 +246,14 @@ function LeafletTheaterMap(props: TheaterMapProps) {
   const overlayRef = useRef<any>(null);
   const hexLayerRef = useRef<any>(null);
   const hexLabelsRef = useRef<any>(null);
+  const graticuleRef = useRef<{ destroy: () => void } | null>(null);
+  const overlaySigRef = useRef<string>("");
   const clickRef = useRef(onMapClick);
   const selectRef = useRef(onSelectUnit);
   clickRef.current = onMapClick;
   selectRef.current = onSelectUnit;
+  // True while the pale "Nautical chart" base layer is active.
+  const [baseLight, setBaseLight] = useState(false);
 
   const visibleUnits = useMemo(() => visibleUnitsFor(units, fogSide), [units, fogSide]);
   const hexes = useMemo(
@@ -257,17 +272,54 @@ function LeafletTheaterMap(props: TheaterMapProps) {
       attributionControl: false,
       scrollWheelZoom: true,
     });
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom: 12, minZoom: 4 }).addTo(map);
-    // Dedicated panes keep the hex board between the tiles and the tactical overlay.
+    // Base layers: satellite imagery (default), a bathymetric nautical chart, and
+    // a low-light layer for darkened ops rooms. All keyless public tile services.
+    const satellite = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 13, minZoom: 4 }
+    );
+    const chart = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
+      { maxNativeZoom: 10, maxZoom: 13, minZoom: 4 }
+    );
+    const lowLight = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      maxZoom: 13,
+      minZoom: 4,
+    });
+    satellite.addTo(map);
+    L.control
+      .layers({ Satellite: satellite, "Nautical chart": chart, "Low light": lowLight }, undefined, {
+        position: "topleft",
+        collapsed: true,
+      })
+      .addTo(map);
+    L.control.scale({ imperial: false, position: "bottomleft" }).addTo(map);
+    graticuleRef.current = addGraticule(L, map, 1);
+    // Dedicated panes: theater polygons under the hex board, board under the
+    // tactical overlay (default overlayPane, z 400).
+    map.createPane("theaterPane").style.zIndex = "340";
     map.createPane("hexPane").style.zIndex = "350";
     map.createPane("hexLabelPane").style.zIndex = "360";
     map.on("click", (e: any) => {
       if (clickRef.current) clickRef.current({ lat: e.latlng.lat, lng: e.latlng.lng });
     });
+    map.on("baselayerchange", (e: any) => setBaseLight(e.name === "Nautical chart"));
+    // Permanent unit labels pile into an unreadable stack once the board
+    // shrinks below its design zoom; gate them the way hex labels are gated.
+    const syncLabels = () => {
+      if (containerRef.current) containerRef.current.classList.toggle("map-labels-off", map.getZoom() < 7);
+    };
+    syncLabels();
+    map.on("zoomend", syncLabels);
     mapRef.current = map;
     overlayRef.current = L.layerGroup().addTo(map);
+    overlaySigRef.current = ""; // fresh overlay group, force the first draw
     if ((import.meta as any).env?.DEV) (window as any).__sandtableMap = map; // browser-QA hook, dev builds only
     return () => {
+      if (graticuleRef.current) {
+        graticuleRef.current.destroy();
+        graticuleRef.current = null;
+      }
       map.remove();
       mapRef.current = null;
       overlayRef.current = null;
@@ -297,11 +349,12 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     }
     if (!showHexGrid || hexes.length === 0) return;
 
+    const styleTable = baseLight ? hexStylesLight : hexStyles;
     const layer = L.layerGroup();
     for (const cell of hexes) {
       L.polygon(
         cell.vertices.map((v) => [v.lat, v.lng]),
-        { ...hexStyles[cell.terrain], weight: 1, pane: "hexPane", interactive: false }
+        { ...styleTable[cell.terrain], weight: 1, pane: "hexPane", interactive: false }
       ).addTo(layer);
     }
     layer.addTo(map);
@@ -340,37 +393,54 @@ function LeafletTheaterMap(props: TheaterMapProps) {
         hexLabelsRef.current = null;
       }
     };
-  }, [hexes, showHexGrid]);
+  }, [hexes, showHexGrid, baseLight]);
 
   useEffect(() => {
     const L = window.L;
     const overlay = overlayRef.current;
     if (!L || !overlay) return;
+
+    // Pollers hand this effect fresh object identities every tick even when
+    // nothing moved; skip the rebuild when the rendered content is unchanged
+    // so open tooltips and running animations survive idle ticks.
+    const signature = JSON.stringify([
+      fogSide,
+      selectedUnitId,
+      showLabels,
+      theater.map((f) => f.name),
+      objectives?.map((o) => [o.id, o.side, o.title, o.area?.center.lat, o.area?.center.lng, o.area?.radiusKm]),
+      visibleUnits.map((u) => [u.id, u.position.lat, u.position.lng, u.headingDeg, u.status, u.strength, u.classId]),
+      trails ? Object.entries(trails).map(([id, p]) => [id, p.length, p[p.length - 1]?.lat, p[p.length - 1]?.lng]) : null,
+      events?.map((e) => e.id),
+      sensorRingsFor,
+      sensorRanges,
+    ]);
+    if (signature === overlaySigRef.current) return;
+    overlaySigRef.current = signature;
     overlay.clearLayers();
 
     for (const feature of theater) {
       const latlngs = feature.polygon.map((p) => [p.lat, p.lng]);
+      if (feature.kind === "island") {
+        // Coastline glow under the landmass reads like chart cartography.
+        L.polygon(latlngs, { color: "#cfdcb0", weight: 5, opacity: 0.16, fill: false, interactive: false, pane: "theaterPane" }).addTo(overlay);
+        L.polygon(latlngs, { color: "#cfdcb0", weight: 1.2, opacity: 0.85, fillColor: "#66784f", fillOpacity: 0.92, pane: "theaterPane" })
+          .bindTooltip(feature.name, { direction: "center", className: "map-feature-label" })
+          .addTo(overlay);
+        continue;
+      }
       const style =
-        feature.kind === "island"
-          ? { color: "#5c6f66", weight: 1, fillColor: "#3d4a44", fillOpacity: 0.9 }
-          : feature.kind === "shoal"
-            ? { color: "#3f5a63", weight: 1, dashArray: "4 4", fillColor: "#27424a", fillOpacity: 0.5 }
-            : { color: "#8a7b3f", weight: 1, dashArray: "6 4", fillOpacity: 0.06, fillColor: "#8a7b3f" };
-      L.polygon(latlngs, style).bindTooltip(feature.name, { direction: "center", className: "map-feature-label" }).addTo(overlay);
+        feature.kind === "shoal"
+          ? { color: "#6fc7d6", weight: 1, dashArray: "4 4", fillColor: "#2a5b66", fillOpacity: 0.4 }
+          : { color: "#8a7b3f", weight: 1, dashArray: "6 4", fillOpacity: 0.06, fillColor: "#8a7b3f" };
+      L.polygon(latlngs, { ...style, pane: "theaterPane" })
+        .bindTooltip(feature.name, { direction: "center", className: "map-feature-label" })
+        .addTo(overlay);
     }
 
     if (objectives) {
       for (const objective of objectives) {
-        if (!objective.area) continue;
-        L.circle([objective.area.center.lat, objective.area.center.lng], {
-          radius: objective.area.radiusKm * 1000,
-          color: sideColors[objective.side],
-          weight: 1.5,
-          dashArray: "8 6",
-          fillOpacity: 0.05,
-        })
-          .bindTooltip(`OBJ · ${objective.title}`, { direction: "top" })
-          .addTo(overlay);
+        drawObjective(L, overlay, objective);
       }
     }
 
@@ -381,7 +451,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
         if (!unit && fogSide) continue; // no trails for units this side cannot see
         L.polyline(
           path.map((p) => [p.lat, p.lng]),
-          { color: unit ? sideColors[unit.side] : "#888", weight: 1.5, opacity: 0.55, dashArray: "2 5" }
+          { color: unit ? TAC_COLORS[unit.side] : "#888", weight: 1.5, opacity: 0.5, dashArray: "2 5", interactive: false }
         ).addTo(overlay);
       }
     }
@@ -393,50 +463,95 @@ function LeafletTheaterMap(props: TheaterMapProps) {
         if (!unit || !rangeKm) continue;
         L.circle([unit.position.lat, unit.position.lng], {
           radius: rangeKm * 1000,
-          color: sideColors[unit.side],
+          color: TAC_COLORS[unit.side],
           weight: 1,
-          opacity: 0.5,
+          opacity: 0.45,
           fillOpacity: 0.03,
+          interactive: false,
         }).addTo(overlay);
       }
     }
 
     for (const unit of visibleUnits) {
+      const sym = milSymbolHtml({
+        side: unit.side,
+        domain: unit.domain,
+        classId: unit.classId,
+        status: unit.status,
+        strength: unit.strength,
+        selected: unit.id === selectedUnitId,
+      });
       const icon = L.divIcon({
         className: "map-unit-icon",
-        html: counterHtml(unit, unit.id === selectedUnitId),
-        iconSize: [28, 24],
-        iconAnchor: [14, 12],
+        html: sym.html,
+        iconSize: [sym.width, sym.height],
+        iconAnchor: [sym.anchorX, sym.anchorY],
       });
       const marker = L.marker([unit.position.lat, unit.position.lng], { icon });
-      marker.bindTooltip(
-        `<strong>${unit.name}</strong><br/>${unit.status.toUpperCase()} · str ${Math.round(unit.strength)}%`,
-        { direction: "top", offset: [0, -12] }
-      );
+      if (showLabels) {
+        const short = unit.name.length > 22 ? `${unit.name.slice(0, 21)}…` : unit.name;
+        marker.bindTooltip(short, {
+          permanent: true,
+          direction: "right",
+          offset: [Math.round(sym.width / 2) + 3, 0],
+          className: "unit-label",
+          opacity: 1,
+        });
+      } else {
+        marker.bindTooltip(
+          `<strong>${unit.name}</strong><br/>${unit.status.toUpperCase()} · str ${Math.round(unit.strength)}%`,
+          { direction: "top", offset: [0, -14] }
+        );
+      }
       marker.on("click", () => {
         if (selectRef.current) selectRef.current(unit.id);
       });
       marker.addTo(overlay);
+      if (unit.status === "active" || unit.status === "damaged") {
+        drawHeadingVector(L, overlay, unit);
+      }
     }
 
+    // Fire lines from shooter to impact for recent engagements; other event types
+    // keep their pulse markers.
+    const unitPositions: Record<string, LatLng> = {};
+    for (const u of visibleUnits) unitPositions[u.id] = u.position;
+    drawEngagements(L, overlay, events ?? [], unitPositions);
     if (events) {
       for (const event of events) {
-        if (!event.position) continue;
-        const color = event.type === "destroyed" ? "#e5484d" : event.type === "engagement" ? "#f5a524" : "#7cc4ff";
-        L.circleMarker([event.position.lat, event.position.lng], {
+        if (!event.position || event.type === "engagement") continue;
+        const color = event.type === "destroyed" ? "#e5484d" : "#7cc4ff";
+        const pulse = L.circleMarker([event.position.lat, event.position.lng], {
           radius: 9,
           color,
           weight: 2,
           fillOpacity: 0.15,
           className: "map-event-pulse",
-        })
-          .bindTooltip(event.title, { direction: "top" })
-          .addTo(overlay);
+        }).bindTooltip(event.title, { direction: "top" });
+        pulse.addTo(overlay);
+        // Keep the pulse phase continuous across overlay rebuilds.
+        const el = pulse.getElement && pulse.getElement();
+        if (el && el.style) el.style.animationDelay = `-${Date.now() % 1600}ms`;
       }
     }
-  }, [visibleUnits, fogSide, theater, objectives, selectedUnitId, trails, events, sensorRingsFor, sensorRanges]);
+  }, [visibleUnits, fogSide, theater, objectives, selectedUnitId, trails, events, sensorRingsFor, sensorRanges, showLabels]);
 
-  return <div ref={containerRef} className="theater-map" style={{ height }} />;
+  const tint = tintClass(weather, daylight ?? true);
+  return (
+    <div className={`theater-map-wrap${tint ? ` ${tint}` : ""}${baseLight ? " map-base-light" : ""}`} style={{ height }}>
+      <div ref={containerRef} className="theater-map" />
+      <div className="map-north" aria-hidden="true">
+        <svg viewBox="0 0 24 38" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <path d="M12 30 L12 9" />
+          <path d="M7 14 L12 4 L17 14 Z" fill="currentColor" stroke="none" />
+          <text x="12" y="37" textAnchor="middle" fontSize="9" fill="currentColor" stroke="none" fontFamily="monospace">
+            N
+          </text>
+        </svg>
+      </div>
+      <div className="map-attrib">Imagery: Esri, Maxar | © Carto</div>
+    </div>
+  );
 }
 
 // --- SVG fallback (offline) ---------------------------------------------------

@@ -2718,3 +2718,23 @@ th {
 [data-theme="light"] .asm-commentary {
   background: color-mix(in srgb, var(--blue) 8%, #ffffff);
 }
+
+/* Theater map wrapper: hosts furniture (north arrow, attribution, tint overlays)
+   around the Leaflet container without touching its panes. */
+.theater-map-wrap {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.theater-map-wrap .theater-map {
+  height: 100%;
+  border-radius: 0;
+  border: 0;
+}
+
+.theater-map-wrap {
+  border: 1px solid #1c2c3a;
+  background: #0d1a24;
+}

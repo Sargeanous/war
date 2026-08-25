@@ -3,7 +3,7 @@
 Localhost demo platform mirroring the DOOH platform layout. Frontend Vite + React 18 + TS
 on :5188, backend plain Node (`node:http`) on :5189 (Vite proxies `/api` and `/health`).
 Run with `pnpm dev`. **All content is fictional**: the theater is the invented
-"Meridian Archipelago" (island polygons drawn over open Atlantic ocean around
+"Meridian Archipelago" (island polygons drawn over the Gulf of Oman / NW Arabian Sea near the UAE, in verified open water)
 lat 34.0, lng -40.0), sides are BLUE "Coalition Task Force" and RED "Opposing Force
 (OPFOR)", exercise codename AZURE HORIZON. No real countries, forces or persons.
 

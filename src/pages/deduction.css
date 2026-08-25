@@ -466,7 +466,7 @@
 .ded-map-reopen {
   position: absolute;
   top: 10px;
-  left: 10px;
+  left: 56px; /* clear of the Leaflet zoom control in the corner */
   z-index: 900;
 }
 

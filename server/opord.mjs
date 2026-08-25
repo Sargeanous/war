@@ -263,7 +263,7 @@ function statsTemplateFor(classId, domain, state) {
 }
 
 function centroid(entities) {
-  if (!entities.length) return { lat: 34, lng: -40.9 };
+  if (!entities.length) return { lat: 23.85, lng: 61.1 };
   return {
     lat: round2(entities.reduce((s, e) => s + e.position.lat, 0) / entities.length),
     lng: round2(entities.reduce((s, e) => s + e.position.lng, 0) / entities.length),

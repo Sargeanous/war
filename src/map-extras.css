@@ -1,0 +1,173 @@
+/*
+ * map-extras.css - tactical map graphics and map furniture.
+ * Dark ops-console aesthetic; text carries shadows so it stays
+ * legible over bright satellite imagery.
+ */
+
+/* Graticule edge labels ("34N", "40W") */
+.grat-label {
+  font: 9px "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+  color: rgba(200, 220, 232, 0.55);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Engagement fire line: marching dashes */
+.tac-fire-line {
+  animation: fireline-dash 1.2s linear infinite;
+}
+
+@keyframes fireline-dash {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Impact ring at the target position: slow pulse */
+.tac-impact {
+  animation: impact-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes impact-pulse {
+  0% {
+    stroke-opacity: 0.9;
+  }
+  50% {
+    stroke-opacity: 0.2;
+  }
+  100% {
+    stroke-opacity: 0.9;
+  }
+}
+
+/* Heading vectors: static, no animation */
+.tac-heading {
+  animation: none;
+}
+
+/* Objective label pinned to the top edge of its circle. The centering
+   transform sits on the inner span: Leaflet owns the root's inline
+   transform (it positions the marker with translate3d). */
+.tac-obj-label {
+  pointer-events: none;
+}
+
+.tac-obj-label-inner {
+  display: inline-block;
+  transform: translate(-50%, -100%);
+  font: 10px "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: #e8dfae;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+}
+
+/* Unit label tooltip skin (Leaflet tooltip) */
+.unit-label {
+  background: rgba(10, 16, 14, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font: 10px "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+  color: #dfe9f0;
+  box-shadow: none;
+}
+
+.unit-label::before {
+  display: none; /* kill the tooltip arrow */
+}
+
+/* Labels off below zoom 7: at design-board zooms they pile into one blob. */
+.map-labels-off .unit-label {
+  display: none;
+}
+
+/* Attribution line, bottom-right of the map container */
+.map-attrib {
+  position: absolute;
+  bottom: 2px;
+  right: 6px;
+  z-index: 800;
+  font: 9px "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+  color: rgba(220, 230, 240, 0.45);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+
+/* North arrow holder (inline SVG placed inside). Bottom-left, above the
+   scale bar; the top-left corner belongs to the zoom + layers controls. */
+.map-north {
+  position: absolute;
+  bottom: 36px;
+  left: 12px;
+  z-index: 800;
+  width: 26px;
+  height: 34px;
+  pointer-events: none;
+  color: rgba(220, 230, 240, 0.8);
+}
+
+.map-north svg {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+}
+
+/* Environment tints: overlay laid over the whole map container.
+   The map container already has position: relative. */
+.map-tint-night::after,
+.map-tint-storm::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 780;
+}
+
+.map-tint-night::after {
+  background: rgba(8, 18, 40, 0.32);
+}
+
+.map-tint-storm::after {
+  background: rgba(70, 78, 86, 0.28);
+}
+
+/* Leaflet control skin, scoped to the theater map */
+.theater-map .leaflet-bar a,
+.theater-map .leaflet-control-layers {
+  background: rgba(16, 22, 20, 0.88);
+  color: #dfe9f0;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.theater-map .leaflet-control-layers-expanded {
+  padding: 8px 10px;
+  font: 11.5px "Manrope", system-ui, sans-serif;
+}
+
+.theater-map .leaflet-control-scale-line {
+  background: rgba(16, 22, 20, 0.7);
+  color: #cfe0da;
+  border-color: rgba(255, 255, 255, 0.35);
+  font: 9.5px "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+}
+
+/* Light basemap ("Nautical chart"): the dark-tuned text washes out on the
+   pale chart, so flip ink and shadows while it is the active base layer. */
+.map-base-light .grat-label,
+.map-base-light .hex-coord-label,
+.map-base-light .map-attrib {
+  color: rgba(25, 50, 64, 0.75);
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.75);
+}
+
+.map-base-light .map-north {
+  color: rgba(25, 50, 64, 0.8);
+}
+
+.map-base-light .map-north svg {
+  filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.8));
+}

@@ -56,6 +56,7 @@ import {
   timeAgo,
 } from "../components";
 import { eventTones, sideColors, statusTone } from "../data";
+import { affiliationOf, frameColor } from "../milsym";
 import TheaterMap from "../map";
 import type { PageProps } from "../shell";
 import type {
@@ -538,7 +539,14 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
                       className={`ded-orbat-row${unit.id === selectedUnitId ? " active" : ""}${unit.status === "destroyed" ? " dead" : ""}`}
                       onClick={() => setSelectedUnitId(unit.id === selectedUnitId ? null : unit.id)}
                     >
-                      <span className="ded-orbat-chip" style={{ background: unit.status === "destroyed" ? "#5b6663" : sideColors[unit.side] }}>
+                      <span
+                        className="ded-orbat-chip"
+                        style={
+                          unit.status === "destroyed"
+                            ? { background: "#5b6663" }
+                            : { background: frameColor(affiliationOf(unit.side)), color: "#10100E", borderColor: "rgba(0, 0, 0, 0.45)" }
+                        }
+                      >
                         {unit.domain[0].toUpperCase()}
                       </span>
                       <span className="ded-orbat-name">{unit.name}</span>
@@ -589,6 +597,9 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
               onSelectUnit={(id) => setSelectedUnitId(id)}
               showHexGrid
               fogSide={fogSide}
+              weather={env?.weather}
+              daylight={daylight}
+              showLabels
               height={560}
             />
             {!orbatOpen ? (
@@ -1102,8 +1113,8 @@ function InterventionModal({
   const [severity, setSeverity] = useState("warn");
   const [unitId, setUnitId] = useState("");
   const [amount, setAmount] = useState("40");
-  const [lat, setLat] = useState("34.0");
-  const [lng, setLng] = useState("-40.5");
+  const [lat, setLat] = useState("23.85");
+  const [lng, setLng] = useState("61.5");
   const [weather, setWeather] = useState("storm");
   const blueUnits = branchUnits.filter((u) => u.side === "blue");
 

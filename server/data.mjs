@@ -11,7 +11,7 @@ import { buildOntology } from "./ontology.mjs";
 // --------------------------------------------------------------------------
 
 const KM_PER_DEG_LAT = 111;
-const KM_PER_DEG_LNG = 92; // at ~34° N
+const KM_PER_DEG_LNG = 101; // at ~24 N
 
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -25,7 +25,12 @@ function mulberry32(seed) {
 }
 
 const round4 = (n) => Math.round(n * 10000) / 10000;
-const wp = (lat, lng) => ({ lat, lng });
+// Theater relocation: authored coordinates are legacy mid-Atlantic; every point
+// is shifted into the Gulf of Oman / NW Arabian Sea near the UAE. The islands
+// remain fictional and sit in verified open water, deliberately clear of the
+// UAE, Omani and Iranian coasts and east of the real Hormuz chokepoint.
+const THEATER_SHIFT = { lat: -10.15, lng: 102.0 };
+const wp = (lat, lng) => ({ lat: round4(lat + THEATER_SHIFT.lat), lng: round4(lng + THEATER_SHIFT.lng) });
 const sensor = (type, rangeKm) => ({ type, rangeKm });
 const weapon = (type, rangeKm, pk, ammo) => ({ type, rangeKm, pk, ammo });
 
