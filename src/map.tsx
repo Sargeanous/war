@@ -160,6 +160,18 @@ function visibleUnitsFor(units: MapUnit[], fogSide?: "blue" | "red" | null): Map
 
 // Unit symbols are rendered by ./milsym.ts (APP-6/2525-style frames and icons).
 
+// Counter size tracks the zoom level so zoomed-out views declutter instead of
+// piling full-size symbols into a clump. Below 20 the symbol itself simplifies.
+function symbolSizeForZoom(z: number): number {
+  if (z >= 10) return 32;
+  if (z >= 9) return 30;
+  if (z >= 8) return 27;
+  if (z >= 7) return 24;
+  if (z >= 6) return 18;
+  if (z >= 5) return 14;
+  return 11;
+}
+
 export default function TheaterMap({
   center,
   zoom,
@@ -254,6 +266,8 @@ function LeafletTheaterMap(props: TheaterMapProps) {
   selectRef.current = onSelectUnit;
   // True while the pale "Nautical chart" base layer is active.
   const [baseLight, setBaseLight] = useState(false);
+  // Live zoom level (user pan/zoom included), drives counter sizing.
+  const [mapZoom, setMapZoom] = useState(zoom);
 
   const visibleUnits = useMemo(() => visibleUnitsFor(units, fogSide), [units, fogSide]);
   const hexes = useMemo(
@@ -306,11 +320,13 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     map.on("baselayerchange", (e: any) => setBaseLight(e.name === "Nautical chart"));
     // Permanent unit labels pile into an unreadable stack once the board
     // shrinks below its design zoom; gate them the way hex labels are gated.
-    const syncLabels = () => {
+    // The same handler tracks the live zoom for counter sizing.
+    const syncZoomUi = () => {
       if (containerRef.current) containerRef.current.classList.toggle("map-labels-off", map.getZoom() < 7);
+      setMapZoom(map.getZoom());
     };
-    syncLabels();
-    map.on("zoomend", syncLabels);
+    syncZoomUi();
+    map.on("zoomend", syncZoomUi);
     mapRef.current = map;
     overlayRef.current = L.layerGroup().addTo(map);
     overlaySigRef.current = ""; // fresh overlay group, force the first draw
@@ -400,6 +416,8 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     const overlay = overlayRef.current;
     if (!L || !overlay) return;
 
+    const symbolSize = symbolSizeForZoom(mapZoom);
+
     // Pollers hand this effect fresh object identities every tick even when
     // nothing moved; skip the rebuild when the rendered content is unchanged
     // so open tooltips and running animations survive idle ticks.
@@ -407,6 +425,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
       fogSide,
       selectedUnitId,
       showLabels,
+      symbolSize,
       theater.map((f) => f.name),
       objectives?.map((o) => [o.id, o.side, o.title, o.area?.center.lat, o.area?.center.lng, o.area?.radiusKm]),
       visibleUnits.map((u) => [u.id, u.position.lat, u.position.lng, u.headingDeg, u.status, u.strength, u.classId]),
@@ -480,6 +499,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
         status: unit.status,
         strength: unit.strength,
         selected: unit.id === selectedUnitId,
+        size: symbolSize,
       });
       const icon = L.divIcon({
         className: "map-unit-icon",
@@ -534,7 +554,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
         if (el && el.style) el.style.animationDelay = `-${Date.now() % 1600}ms`;
       }
     }
-  }, [visibleUnits, fogSide, theater, objectives, selectedUnitId, trails, events, sensorRingsFor, sensorRanges, showLabels]);
+  }, [visibleUnits, fogSide, theater, objectives, selectedUnitId, trails, events, sensorRingsFor, sensorRanges, showLabels, mapZoom]);
 
   const tint = tintClass(weather, daylight ?? true);
   return (

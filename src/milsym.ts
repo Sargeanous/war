@@ -361,6 +361,10 @@ export function milSymbolSvg(opts: MilSymbolOptions): string {
   const classId = (opts.classId || "").toLowerCase();
   const icon = pickIcon(classId, opts.domain);
   const paths = framePaths(g.shape, g.fx, g.fy, g.fw, g.fh, 2);
+  // Below ~20px the icon glyph and strength bar read as noise, not information;
+  // compact symbols keep only frame, fill, status overlays and selection ring.
+  const compact = g.size < 20;
+  const strokeW = compact ? 1.25 : FRAME_STROKE_W;
 
   const destroyed = opts.status === "destroyed";
   const withdrawn = opts.status === "withdrawn";
@@ -377,7 +381,7 @@ export function milSymbolSvg(opts: MilSymbolOptions): string {
 
   // Subtle dark outer stroke (halo) so the symbol reads on satellite imagery.
   body.push(
-    `<path d="${paths.edge}" fill="none" stroke="#000000" stroke-width="${n(FRAME_STROKE_W + 2)}" ` +
+    `<path d="${paths.edge}" fill="none" stroke="#000000" stroke-width="${n(strokeW + (compact ? 1.5 : 2))}" ` +
       `stroke-opacity="0.55" stroke-linejoin="round" stroke-linecap="round"${dash}/>`
   );
 
@@ -387,12 +391,14 @@ export function milSymbolSvg(opts: MilSymbolOptions): string {
 
   // Frame stroke; open frames stroke only the open outline.
   body.push(
-    `<path d="${paths.edge}" fill="none" stroke="${INK}" stroke-width="${FRAME_STROKE_W}" ` +
+    `<path d="${paths.edge}" fill="none" stroke="${INK}" stroke-width="${strokeW}" ` +
       `stroke-linejoin="miter" stroke-linecap="square"${dash}/>`
   );
 
   // Icon.
-  body.push(iconMarkup(icon, g.shape, interiorBox(g.shape, g.fx, g.fy, g.fw, g.fh), g.size));
+  if (!compact) {
+    body.push(iconMarkup(icon, g.shape, interiorBox(g.shape, g.fx, g.fy, g.fw, g.fh), g.size));
+  }
 
   if (destroyed) {
     parts.push(`<g opacity="0.55">${body.join("")}</g>`);
@@ -401,32 +407,37 @@ export function milSymbolSvg(opts: MilSymbolOptions): string {
   }
 
   // Status overlays drawn at full opacity across the frame box.
+  const slashW = compact ? 1.5 : 2;
+  const crossW = compact ? 1.8 : 2.5;
   if (damaged) {
     parts.push(
       `<line x1="${n(g.fx)}" y1="${n(g.fy + g.fh)}" x2="${n(g.fx + g.fw)}" y2="${n(g.fy)}" ` +
-        `stroke="${AMBER}" stroke-width="2" stroke-linecap="round"/>`
+        `stroke="${AMBER}" stroke-width="${slashW}" stroke-linecap="round"/>`
     );
   }
   if (destroyed) {
     parts.push(
       `<line x1="${n(g.fx)}" y1="${n(g.fy + g.fh)}" x2="${n(g.fx + g.fw)}" y2="${n(g.fy)}" ` +
-        `stroke="${RED}" stroke-width="2.5" stroke-linecap="round"/>` +
+        `stroke="${RED}" stroke-width="${crossW}" stroke-linecap="round"/>` +
         `<line x1="${n(g.fx)}" y1="${n(g.fy)}" x2="${n(g.fx + g.fw)}" y2="${n(g.fy + g.fh)}" ` +
-        `stroke="${RED}" stroke-width="2.5" stroke-linecap="round"/>`
+        `stroke="${RED}" stroke-width="${crossW}" stroke-linecap="round"/>`
     );
   }
 
-  // Strength bar directly under the frame, on a dark track.
-  const st = Number.isFinite(opts.strength) ? Math.max(0, Math.min(100, opts.strength)) : 0;
-  const barColor = st > 60 ? BAR_GREEN : st > 30 ? BAR_AMBER : BAR_RED;
-  const barW = (g.fw * st) / 100;
-  parts.push(
-    `<rect x="${n(g.fx)}" y="${n(g.barY)}" width="${n(g.fw)}" height="${BAR_H}" fill="${INK}" opacity="0.85"/>`
-  );
-  if (barW > 0) {
+  // Strength bar directly under the frame, on a dark track. Compact symbols
+  // omit it (the geometry still reserves its slot so anchors stay stable).
+  if (!compact) {
+    const st = Number.isFinite(opts.strength) ? Math.max(0, Math.min(100, opts.strength)) : 0;
+    const barColor = st > 60 ? BAR_GREEN : st > 30 ? BAR_AMBER : BAR_RED;
+    const barW = (g.fw * st) / 100;
     parts.push(
-      `<rect x="${n(g.fx)}" y="${n(g.barY)}" width="${n(barW)}" height="${BAR_H}" fill="${barColor}"/>`
+      `<rect x="${n(g.fx)}" y="${n(g.barY)}" width="${n(g.fw)}" height="${BAR_H}" fill="${INK}" opacity="0.85"/>`
     );
+    if (barW > 0) {
+      parts.push(
+        `<rect x="${n(g.fx)}" y="${n(g.barY)}" width="${n(barW)}" height="${BAR_H}" fill="${barColor}"/>`
+      );
+    }
   }
 
   // Selected: 2px white ring offset ~2px outside the frame silhouette.
