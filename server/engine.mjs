@@ -16,6 +16,8 @@ const MAX_SALVOS_PER_TICK = 6;
 
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 const round1 = (n) => Math.round(n * 10) / 10;
+// Sim times carry quarter-hour ticks; one decimal would turn x.25/x.75 into
+// x.3/x.8 and the clock would render :18/:48 instead of :15/:45.
 const round2 = (n) => Math.round(n * 100) / 100;
 const round4 = (n) => Math.round(n * 10000) / 10000;
 const nowIso = () => new Date().toISOString();
@@ -218,7 +220,7 @@ function pushEvent(branch, partial) {
   const event = {
     id: `ev-${branch.id}-${(branch._evSeq += 1)}`,
     tick: branch._tick,
-    simTimeH: round1(branch._simTimeH),
+    simTimeH: round2(branch._simTimeH),
     ...partial,
   };
   branch._full.events.push(event);
@@ -337,7 +339,7 @@ const snapshotPublic = (branch) => snapshot(branch);
 function snapshot(branch) {
   branch._full.snapshots.push({
     tick: branch._tick,
-    simTimeH: round1(branch._simTimeH),
+    simTimeH: round2(branch._simTimeH),
     units: branch.units.map((u) => ({
       id: u.id,
       position: { ...u.position },
@@ -361,7 +363,7 @@ export function tickRun(run, ctx) {
     if (branch.status === "running") tickBranch(run, branch, ctx);
   }
   run.clock.tick = Math.max(...run.branches.map((b) => b._tick), run.clock.tick);
-  run.clock.simTimeH = round1(Math.max(...run.branches.map((b) => b._simTimeH), 0));
+  run.clock.simTimeH = round2(Math.max(...run.branches.map((b) => b._simTimeH), 0));
 
   const terminal = run.branches.every((b) => b.status === "completed" || b.status === "aborted");
   if (terminal) {
@@ -674,7 +676,7 @@ function tickBranch(run, branch, ctx) {
   branch.score = computeScore(branch, scenario);
   if (branch.metrics.objectiveScore >= 50 && branch._objHalfTick === null) branch._objHalfTick = branch._tick;
   if (branch._tick % SNAPSHOT_EVERY === 0) {
-    branch.metricsHistory.push({ tick: branch._tick, simTimeH: round1(branch._simTimeH), ...branch.metrics });
+    branch.metricsHistory.push({ tick: branch._tick, simTimeH: round2(branch._simTimeH), ...branch.metrics });
     if (branch.metricsHistory.length > 320) branch.metricsHistory.splice(0, branch.metricsHistory.length - 320);
     snapshot(branch);
   }
@@ -748,7 +750,7 @@ function completeBranch(branch, scenario, duration) {
     title: `Branch complete, ${outcome}`,
     detail: `T+${round1(branch._simTimeH)}h of ${duration}h. Objectives ${m.objectiveScore}%, BLUE ${m.blueStrength}%, RED ${m.redStrength}%.`,
   });
-  branch.metricsHistory.push({ tick: branch._tick, simTimeH: round1(branch._simTimeH), ...branch.metrics });
+  branch.metricsHistory.push({ tick: branch._tick, simTimeH: round2(branch._simTimeH), ...branch.metrics });
   snapshot(branch);
 }
 
@@ -781,7 +783,7 @@ function maybeCreateDecision(run, branch, ctx, phaseName) {
   const decision = {
     id: `dp-${branch.id}-${branch.decisions.length + 1}`,
     tick: branch._tick,
-    simTimeH: round1(branch._simTimeH),
+    simTimeH: round2(branch._simTimeH),
     title: spec.title,
     situation: spec.situation,
     options: spec.options,

@@ -87,6 +87,107 @@
   display: none;
 }
 
+/* Unit counters glide between poll ticks. During Leaflet's animated zoom the
+   stock 0.25s tween must run instead (Leaflet moves markers by setting their
+   FINAL transform at zoom start and relying on exactly that transition), so
+   the zoom-anim rules RE-DECLARE it rather than disable transitions. The
+   .map-no-glide class (camera flights, which reposition markers per frame)
+   and per-node .no-glide (fresh or teleported nodes) do disable it. */
+.map-unit-icon {
+  transition: transform 1.2s linear;
+  will-change: transform;
+}
+
+/* Permanent unit labels ride along with their counters. */
+.theater-map .unit-label {
+  transition: transform 1.2s linear;
+}
+
+/* Sub-second replay stepping wants a tighter tween than live polling. */
+.map-glide-fast .map-unit-icon,
+.map-glide-fast .unit-label {
+  transition-duration: 0.5s;
+}
+
+/* Leaflet animates a zoom by setting each marker's FINAL transform at zoom
+   start and relying on this exact stock transition; it must out-cascade the
+   glide rules above (equal specificity, so order decides). */
+.leaflet-zoom-anim .map-unit-icon,
+.leaflet-zoom-anim .unit-label {
+  transition: transform 0.25s cubic-bezier(0, 0, 0.25, 1);
+}
+
+/* Suspensions win over everything: camera flights (.map-no-glide) and fresh
+   or teleported nodes (.no-glide). */
+.map-no-glide .map-unit-icon,
+.map-unit-icon.no-glide,
+.map-no-glide .unit-label,
+.theater-map .unit-label.no-glide {
+  transition: none;
+}
+
+/* One-shot battle FX: destruction shockwave and damage spark. */
+.map-fx {
+  pointer-events: none;
+}
+
+.map-fx > span {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.map-fx i,
+.map-fx b {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border-radius: 50%;
+}
+
+.fx-shock i {
+  background: radial-gradient(circle, rgba(255, 236, 200, 0.95) 0%, rgba(255, 150, 80, 0.55) 35%, transparent 62%);
+  animation: fx-flash 0.5s ease-out forwards;
+}
+
+.fx-shock b {
+  border: 2px solid rgba(255, 154, 92, 0.9);
+  box-shadow: 0 0 14px rgba(255, 130, 60, 0.5);
+  animation: fx-ring 1.4s ease-out forwards;
+}
+
+.fx-spark i {
+  background: radial-gradient(circle, rgba(255, 224, 130, 0.9) 0%, rgba(245, 165, 36, 0.4) 30%, transparent 55%);
+  animation: fx-flash 0.4s ease-out forwards;
+}
+
+.fx-spark b {
+  border: 1.5px solid rgba(245, 165, 36, 0.8);
+  animation: fx-ring 0.85s ease-out forwards;
+}
+
+@keyframes fx-flash {
+  0% {
+    opacity: 1;
+    transform: scale(0.3);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes fx-ring {
+  0% {
+    opacity: 0.95;
+    transform: scale(0.12);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
 /* Attribution line, bottom-right of the map container */
 .map-attrib {
   position: absolute;

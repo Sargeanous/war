@@ -396,6 +396,8 @@ export default function Assessment({ notify, goTo }: PageProps) {
                     units={replayUnits}
                     theater={boot?.theater ?? []}
                     objectives={scenario.objectives}
+                    worldKey={`replay:${runId}:${assessment?.branchId ?? ""}`}
+                    glideSpeed="fast"
                     height={430}
                   />
                   <div className="asm-events">

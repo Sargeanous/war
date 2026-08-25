@@ -294,6 +294,7 @@ export default function CommandDashboard(props: PageProps) {
             objectives={mapScenario ? mapScenario.objectives : undefined}
             onSelectUnit={handleSelectUnit}
             events={mapEvents}
+            worldKey={focusBranch ? `${run?.id}:${focusBranch.id}` : `scenario:${mapScenario?.id}`}
             height={440}
           />
           <div className="cmd-map-foot">

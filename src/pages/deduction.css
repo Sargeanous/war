@@ -52,6 +52,22 @@
   gap: 12px;
 }
 
+/* One-shot attention pulse, only for a decision that opened live while
+   watching (.fresh set from the poll diff). Long-open decisions revisited
+   via branch tabs or page entry render calm. */
+.ded-decision.fresh {
+  animation: decision-alarm 1s ease-out 2;
+}
+
+@keyframes decision-alarm {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--amber) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 14px transparent;
+  }
+}
+
 .ded-decision-head {
   display: flex;
   align-items: center;
@@ -468,6 +484,93 @@
   top: 10px;
   left: 56px; /* clear of the Leaflet zoom control in the corner */
   z-index: 900;
+}
+
+/* Live event ticker over the bottom edge of the map. Clicking an item flies
+   the camera to the action. Sits clear of the scale bar (bottom-left) and
+   the attribution line (bottom-right). */
+.ded-ticker {
+  position: absolute;
+  left: 96px;
+  right: 96px;
+  bottom: 44px;
+  z-index: 900;
+  display: grid;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.ded-ticker-item {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  background: rgba(10, 16, 14, 0.78);
+  backdrop-filter: blur(3px);
+  color: #dfe9f0;
+  font: 10.5px "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+  padding: 2px 8px;
+  cursor: pointer;
+  text-align: left;
+  animation: ticker-in 0.35s ease;
+}
+
+.ded-ticker-item.no-pos {
+  cursor: default;
+}
+
+.ded-ticker-item:not(.no-pos):hover {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.ded-ticker-item i {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #9aa8a3;
+}
+
+.ded-ticker-item.tone-info i {
+  background: #7cc4ff;
+}
+
+.ded-ticker-item.tone-warn i {
+  background: #f5a524;
+}
+
+.ded-ticker-item.tone-danger i {
+  background: #e5484d;
+}
+
+.ded-ticker-item.tone-good i {
+  background: #35c26e;
+}
+
+.ded-ticker-time {
+  color: rgba(223, 233, 240, 0.6);
+  flex: none;
+}
+
+.ded-ticker-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes ticker-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .ded-hintbar {

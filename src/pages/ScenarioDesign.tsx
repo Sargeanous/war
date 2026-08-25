@@ -989,6 +989,7 @@ export default function ScenarioDesign(props: PageProps) {
           onMapClick={handleMapClick}
           showHexGrid
           showLabels
+          worldKey={`design:${scn.id}`}
           height={460}
         />
         {selectedUnit ? (

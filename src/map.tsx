@@ -53,7 +53,21 @@ export interface TheaterMapProps {
   weather?: string; // live environment, tints the display (storm)
   daylight?: boolean; // false dims the display like a night watch
   showLabels?: boolean; // permanent unit designation labels beside symbols
+  focusOn?: MapFocus | null; // fly the camera to a point (token retriggers)
+  // Identifies the world the units belong to (run + branch + view). When it
+  // changes, the diff engine treats the pass as a data-source switch: no
+  // battle FX, no gliding, vitals reset. Heuristics cannot detect a switch
+  // to a branch that merely did worse, so pages must declare it.
+  worldKey?: string;
+  glideSpeed?: "normal" | "fast"; // fast suits sub-second replay stepping
   height?: number;
+}
+
+export interface MapFocus {
+  lat: number;
+  lng: number;
+  zoom?: number;
+  token: number; // change to re-trigger a flight to the same point
 }
 
 // --- Hex board -----------------------------------------------------------------
@@ -172,6 +186,60 @@ function symbolSizeForZoom(z: number): number {
   return 11;
 }
 
+function makeUnitIcon(L: any, unit: MapUnit, selected: boolean, size: number) {
+  const sym = milSymbolHtml({
+    side: unit.side,
+    domain: unit.domain,
+    classId: unit.classId,
+    status: unit.status,
+    strength: unit.strength,
+    selected,
+    size,
+  });
+  const icon = L.divIcon({
+    className: "map-unit-icon",
+    html: sym.html,
+    iconSize: [sym.width, sym.height],
+    iconAnchor: [sym.anchorX, sym.anchorY],
+  });
+  return { icon, sym };
+}
+
+function bindUnitTooltip(marker: any, unit: MapUnit, symWidth: number, showLabels: boolean | undefined): void {
+  marker.unbindTooltip();
+  if (showLabels) {
+    const short = unit.name.length > 22 ? `${unit.name.slice(0, 21)}…` : unit.name;
+    marker.bindTooltip(short, {
+      permanent: true,
+      direction: "right",
+      offset: [Math.round(symWidth / 2) + 3, 0],
+      className: "unit-label",
+      opacity: 1,
+    });
+  } else {
+    marker.bindTooltip(
+      `<strong>${unit.name}</strong><br/>${unit.status.toUpperCase()} · str ${Math.round(unit.strength)}%`,
+      { direction: "top", offset: [0, -14] }
+    );
+  }
+}
+
+// A marker's DOM node was just created or replaced (or teleported): block the
+// glide transition until its transform has committed, on the icon AND its
+// tooltip label (which is repositioned in the same move and would otherwise
+// slide across the map detached). A timeout rather than requestAnimationFrame
+// so the class also clears while the tab is hidden.
+function suppressGlide(marker: any): void {
+  const els: any[] = [marker.getElement && marker.getElement()];
+  const tip = marker.getTooltip && marker.getTooltip();
+  if (tip && tip.getElement) els.push(tip.getElement());
+  for (const el of els) {
+    if (!el) continue;
+    el.classList.add("no-glide");
+    window.setTimeout(() => el.classList.remove("no-glide"), 90);
+  }
+}
+
 export default function TheaterMap({
   center,
   zoom,
@@ -190,6 +258,9 @@ export default function TheaterMap({
   weather,
   daylight,
   showLabels,
+  focusOn,
+  worldKey,
+  glideSpeed,
   height = 420,
 }: TheaterMapProps) {
   const hasLeaflet = typeof window !== "undefined" && Boolean(window.L);
@@ -227,6 +298,9 @@ export default function TheaterMap({
       weather={weather}
       daylight={daylight}
       showLabels={showLabels}
+      focusOn={focusOn}
+      worldKey={worldKey}
+      glideSpeed={glideSpeed}
       height={height}
     />
   );
@@ -251,6 +325,9 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     weather,
     daylight,
     showLabels,
+    focusOn,
+    worldKey,
+    glideSpeed,
     height,
   } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -260,6 +337,12 @@ function LeafletTheaterMap(props: TheaterMapProps) {
   const hexLabelsRef = useRef<any>(null);
   const graticuleRef = useRef<{ destroy: () => void } | null>(null);
   const overlaySigRef = useRef<string>("");
+  // Persistent unit markers (diffed per tick so positions glide) and one-shot FX.
+  const unitsLayerRef = useRef<any>(null);
+  const unitRegRef = useRef<Map<string, { marker: any; iconKey: string }>>(new Map());
+  const prevVitalsRef = useRef<Map<string, { status: string; strength: number }>>(new Map());
+  const prevWorldKeyRef = useRef<string | undefined>(undefined);
+  const fxTimersRef = useRef<Set<number>>(new Set());
   const clickRef = useRef(onMapClick);
   const selectRef = useRef(onSelectUnit);
   clickRef.current = onMapClick;
@@ -326,24 +409,54 @@ function LeafletTheaterMap(props: TheaterMapProps) {
       setMapZoom(map.getZoom());
     };
     syncZoomUi();
-    map.on("zoomend", syncZoomUi);
+    // .map-no-glide is set by the camera-flight effect (flyTo repositions
+    // markers per frame, which must not tween). Removal listens on BOTH
+    // zoomend and moveend because an interrupted flight (user grabs the map
+    // mid-flight or a setView cancels it) never fires zoomend, only moveend.
+    // Ordinary animated zooms never get the class: Leaflet's own 0.25s marker
+    // tween must run for counters to track the tiles.
+    map.on("zoomend moveend", () => {
+      syncZoomUi();
+      window.setTimeout(() => containerRef.current?.classList.remove("map-no-glide"), 80);
+    });
     mapRef.current = map;
     overlayRef.current = L.layerGroup().addTo(map);
     overlaySigRef.current = ""; // fresh overlay group, force the first draw
+    unitsLayerRef.current = L.layerGroup().addTo(map);
+    unitRegRef.current = new Map();
+    prevVitalsRef.current = new Map();
+    prevWorldKeyRef.current = undefined;
     if ((import.meta as any).env?.DEV) (window as any).__sandtableMap = map; // browser-QA hook, dev builds only
     return () => {
       if (graticuleRef.current) {
         graticuleRef.current.destroy();
         graticuleRef.current = null;
       }
+      for (const t of fxTimersRef.current) window.clearTimeout(t);
+      fxTimersRef.current.clear();
       map.remove();
       mapRef.current = null;
       overlayRef.current = null;
+      unitsLayerRef.current = null;
+      unitRegRef.current = new Map();
+      prevVitalsRef.current = new Map();
+      prevWorldKeyRef.current = undefined;
       hexLayerRef.current = null;
       hexLabelsRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Camera flight to a point of interest (event click, decision focus). The
+  // flight moves markers per animation frame, so the glide transition is
+  // suspended for its duration (cleared by the zoomend/moveend handler).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focusOn) return;
+    containerRef.current?.classList.add("map-no-glide");
+    map.flyTo([focusOn.lat, focusOn.lng], Math.max(map.getZoom(), focusOn.zoom ?? 9), { duration: 1.1 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusOn?.token]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -491,42 +604,9 @@ function LeafletTheaterMap(props: TheaterMapProps) {
       }
     }
 
+    // Unit counters live in their own persistent layer (see the effect below)
+    // so positions glide; only their heading vectors redraw with the overlay.
     for (const unit of visibleUnits) {
-      const sym = milSymbolHtml({
-        side: unit.side,
-        domain: unit.domain,
-        classId: unit.classId,
-        status: unit.status,
-        strength: unit.strength,
-        selected: unit.id === selectedUnitId,
-        size: symbolSize,
-      });
-      const icon = L.divIcon({
-        className: "map-unit-icon",
-        html: sym.html,
-        iconSize: [sym.width, sym.height],
-        iconAnchor: [sym.anchorX, sym.anchorY],
-      });
-      const marker = L.marker([unit.position.lat, unit.position.lng], { icon });
-      if (showLabels) {
-        const short = unit.name.length > 22 ? `${unit.name.slice(0, 21)}…` : unit.name;
-        marker.bindTooltip(short, {
-          permanent: true,
-          direction: "right",
-          offset: [Math.round(sym.width / 2) + 3, 0],
-          className: "unit-label",
-          opacity: 1,
-        });
-      } else {
-        marker.bindTooltip(
-          `<strong>${unit.name}</strong><br/>${unit.status.toUpperCase()} · str ${Math.round(unit.strength)}%`,
-          { direction: "top", offset: [0, -14] }
-        );
-      }
-      marker.on("click", () => {
-        if (selectRef.current) selectRef.current(unit.id);
-      });
-      marker.addTo(overlay);
       if (unit.status === "active" || unit.status === "damaged") {
         drawHeadingVector(L, overlay, unit);
       }
@@ -556,9 +636,119 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     }
   }, [visibleUnits, fogSide, theater, objectives, selectedUnitId, trails, events, sensorRingsFor, sensorRanges, showLabels, mapZoom]);
 
+  // Persistent unit counters: diffed against a registry instead of rebuilt, so
+  // position changes tween via the CSS transition on .map-unit-icon and the
+  // DOM nodes (and their tooltips) survive poll ticks. Status transitions
+  // spawn one-shot FX: a destruction shockwave or a damage spark.
+  useEffect(() => {
+    const L = window.L;
+    const layer = unitsLayerRef.current;
+    if (!L || !layer) return;
+    const symbolSize = symbolSizeForZoom(mapZoom);
+    const reg = unitRegRef.current;
+    const vitals = prevVitalsRef.current;
+    const seen = new Set<string>();
+
+    const spawnFx = (pos: LatLng, cls: string, ttlMs: number) => {
+      const fx = L.marker([pos.lat, pos.lng], {
+        interactive: false,
+        keyboard: false,
+        icon: L.divIcon({
+          className: "map-fx",
+          html: `<span class="${cls}"><i></i><b></b></span>`,
+          iconSize: [96, 96],
+          iconAnchor: [48, 48],
+        }),
+      });
+      layer.addLayer(fx);
+      const t = window.setTimeout(() => {
+        layer.removeLayer(fx);
+        fxTimersRef.current.delete(t);
+      }, ttlMs);
+      fxTimersRef.current.add(t);
+    };
+
+    // A worldKey change means the units now describe a different reality
+    // (other branch, other run, other fog view): no FX, no gliding, vitals
+    // reset. Pages declare it because no heuristic can detect a switch to a
+    // branch that merely did worse. First pass after mount counts as a switch.
+    const wk = worldKey ?? "";
+    const contextSwitch = prevWorldKeyRef.current === undefined || prevWorldKeyRef.current !== wk;
+    prevWorldKeyRef.current = wk;
+
+    for (const unit of visibleUnits) {
+      seen.add(unit.id);
+      const selected = unit.id === selectedUnitId;
+      const iconKey = [
+        unit.side,
+        unit.domain,
+        unit.classId ?? "",
+        unit.status,
+        Math.round(unit.strength),
+        selected ? 1 : 0,
+        symbolSize,
+        showLabels ? 1 : 0,
+        unit.name,
+      ].join("|");
+      let entry = reg.get(unit.id);
+      if (!entry) {
+        const { icon, sym } = makeUnitIcon(L, unit, selected, symbolSize);
+        const marker = L.marker([unit.position.lat, unit.position.lng], { icon });
+        bindUnitTooltip(marker, unit, sym.width, showLabels);
+        marker.on("click", () => {
+          if (selectRef.current) selectRef.current(unit.id);
+        });
+        layer.addLayer(marker);
+        suppressGlide(marker);
+        entry = { marker, iconKey };
+        reg.set(unit.id, entry);
+      } else {
+        const at = entry.marker.getLatLng();
+        if (at.lat !== unit.position.lat || at.lng !== unit.position.lng) {
+          // Context switches and true anomalies teleport; everything else,
+          // including fast aircraft covering a degree or two per poll at high
+          // sim speed, glides. (3 degrees is beyond any legitimate move.)
+          if (contextSwitch || Math.abs(at.lat - unit.position.lat) + Math.abs(at.lng - unit.position.lng) > 3.0) {
+            suppressGlide(entry.marker);
+          }
+          entry.marker.setLatLng([unit.position.lat, unit.position.lng]);
+        }
+        if (entry.iconKey !== iconKey) {
+          entry.iconKey = iconKey;
+          const { icon, sym } = makeUnitIcon(L, unit, selected, symbolSize);
+          const hadOpenTooltip = !showLabels && entry.marker.isTooltipOpen && entry.marker.isTooltipOpen();
+          entry.marker.setIcon(icon);
+          bindUnitTooltip(entry.marker, unit, sym.width, showLabels);
+          if (hadOpenTooltip) entry.marker.openTooltip(); // keep a hovered readout alive across the rebind
+          suppressGlide(entry.marker);
+        }
+      }
+      const prev = vitals.get(unit.id);
+      if (prev && !contextSwitch) {
+        if (prev.status !== "destroyed" && unit.status === "destroyed") {
+          spawnFx(unit.position, "fx-shock", 1500);
+        } else if (unit.status !== "destroyed" && unit.strength <= prev.strength - 12) {
+          spawnFx(unit.position, "fx-spark", 900);
+        }
+      }
+      vitals.set(unit.id, { status: unit.status, strength: unit.strength });
+    }
+
+    for (const [id, entry] of reg) {
+      if (!seen.has(id)) {
+        layer.removeLayer(entry.marker);
+        reg.delete(id);
+        vitals.delete(id); // stale vitals would fire FX at re-reveal time
+      }
+    }
+  }, [visibleUnits, selectedUnitId, showLabels, mapZoom, worldKey]);
+
   const tint = tintClass(weather, daylight ?? true);
   return (
-    <div className={`theater-map-wrap${tint ? ` ${tint}` : ""}${baseLight ? " map-base-light" : ""}`} style={{ height }}>
+    <div
+      className={`theater-map-wrap${tint ? ` ${tint}` : ""}${baseLight ? " map-base-light" : ""}${glideSpeed === "fast" ? " map-glide-fast" : ""}`}
+      style={{ height }}
+    >
       <div ref={containerRef} className="theater-map" />
       <div className="map-north" aria-hidden="true">
         <svg viewBox="0 0 24 38" fill="none" stroke="currentColor" strokeWidth="1.6">

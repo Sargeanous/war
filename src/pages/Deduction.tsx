@@ -58,6 +58,7 @@ import {
 import { eventTones, sideColors, statusTone } from "../data";
 import { affiliationOf, frameColor } from "../milsym";
 import TheaterMap from "../map";
+import type { MapFocus } from "../map";
 import type { PageProps } from "../shell";
 import type {
   Bootstrap,
@@ -99,8 +100,17 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
   const [sageBusy, setSageBusy] = useState<ExplainTopic | null>(null);
   const [agents, setAgents] = useState<AgentDef[]>([]);
   const [seatBusy, setSeatBusy] = useState<string | null>(null);
+  const [mapFocus, setMapFocus] = useState<MapFocus | null>(null);
+  // Id of a decision that opened live while watching (drives the alarm pulse
+  // and the auto-scroll; decisions that were already open when the page or
+  // run was entered get neither).
+  const [freshDecisionId, setFreshDecisionId] = useState<string | null>(null);
   const trailsRef = useRef<Record<string, LatLng[]>>({});
+  const prevOpenDecisionsRef = useRef<Set<string> | null>(null);
+  const branchIdRef = useRef<string>("");
+  const decisionBlockRef = useRef<HTMLDivElement | null>(null);
   const canIntervene = profile.id === "operator" || profile.id === "admin";
+  branchIdRef.current = branchId;
 
   // Launcher state
   const [scenarioId, setScenarioId] = useState("");
@@ -167,22 +177,52 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
     };
   }, [scenarioId]);
 
-  const applyRun = useCallback((next: SimRun) => {
-    setRun(next);
-    setBranchId((current) => (next.branches.some((b) => b.id === current) ? current : next.branches[0]?.id ?? ""));
-    for (const branch of next.branches) {
-      for (const unit of branch.units) {
-        const key = `${branch.id}:${unit.id}`;
-        const trail = trailsRef.current[key] ?? [];
-        const last = trail[trail.length - 1];
-        if (!last || last.lat !== unit.position.lat || last.lng !== unit.position.lng) {
-          trail.push({ ...unit.position });
-          if (trail.length > 12) trail.shift();
-          trailsRef.current[key] = trail;
+  const applyRun = useCallback(
+    (next: SimRun) => {
+      setRun(next);
+      setBranchId((current) => (next.branches.some((b) => b.id === current) ? current : next.branches[0]?.id ?? ""));
+      for (const branch of next.branches) {
+        for (const unit of branch.units) {
+          const key = `${branch.id}:${unit.id}`;
+          const trail = trailsRef.current[key] ?? [];
+          const last = trail[trail.length - 1];
+          if (!last || last.lat !== unit.position.lat || last.lng !== unit.position.lng) {
+            trail.push({ ...unit.position });
+            if (trail.length > 12) trail.shift();
+            trailsRef.current[key] = trail;
+          }
         }
       }
-    }
-  }, []);
+      // A decision point OPENING live is the moment the run interrupts the
+      // commander; decisions that were already open when the page or run was
+      // entered get no fanfare (first pass only seeds the set).
+      const openNow = next.branches.flatMap((b) =>
+        b.decisions.filter((d) => d.status === "open").map((d) => ({ id: d.id, title: d.title, branch: b }))
+      );
+      const before = prevOpenDecisionsRef.current;
+      prevOpenDecisionsRef.current = new Set(openNow.map((d) => d.id));
+      if (before) {
+        const fresh = openNow.filter((d) => !before.has(d.id));
+        if (fresh.length) {
+          const first = fresh[0];
+          const inActive = first.branch.id === branchIdRef.current;
+          const where = inActive ? "" : ` in ${first.branch.name}`;
+          const more = fresh.length > 1 ? ` (+${fresh.length - 1} more)` : "";
+          notify(`Commander decision required${where}: ${first.title}${more}`);
+          const activeFresh = fresh.find((d) => d.branch.id === branchIdRef.current);
+          if (activeFresh) setFreshDecisionId(activeFresh.id);
+        }
+      }
+    },
+    [notify]
+  );
+
+  // Bring a decision that opened LIVE into view (the poll can land it while
+  // the presenter is scrolled into the map or a drawer). Branch tab switches
+  // and page loads with long-open decisions must not scroll-hijack.
+  useEffect(() => {
+    if (freshDecisionId) decisionBlockRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [freshDecisionId]);
 
   // Poll the active run
   useEffect(() => {
@@ -375,6 +415,9 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
             setActiveRunId(null);
             setRun(null);
             setSelectedUnitId(null);
+            setMapFocus(null);
+            setFreshDecisionId(null);
+            prevOpenDecisionsRef.current = null;
             fetchRuns().then(setRuns).catch(() => undefined);
           }}
         >
@@ -473,7 +516,11 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
       ) : null}
 
       {openDecision && branch ? (
-        <div className="ded-decision">
+        <div
+          key={openDecision.id}
+          className={`ded-decision${openDecision.id === freshDecisionId ? " fresh" : ""}`}
+          ref={decisionBlockRef}
+        >
           <div className="ded-decision-head">
             <AlertTriangle size={19} color="var(--amber)" />
             <strong>Commander decision required, {openDecision.title}</strong>
@@ -600,8 +647,31 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
               weather={env?.weather}
               daylight={daylight}
               showLabels
+              focusOn={mapFocus}
+              worldKey={`${run.id}:${branchId}:${viewSide}`}
               height={560}
             />
+            {branch.recentEvents.length ? (
+              <div className="ded-ticker" aria-live="polite">
+                {branch.recentEvents.slice(0, 3).map((event) => (
+                  <button
+                    key={event.id}
+                    type="button"
+                    className={`ded-ticker-item tone-${eventTones[event.type] ?? "neutral"}${event.position ? "" : " no-pos"}`}
+                    title={event.position ? "Fly to the action" : undefined}
+                    onClick={() => {
+                      if (event.position) {
+                        setMapFocus({ lat: event.position.lat, lng: event.position.lng, zoom: 9, token: Date.now() });
+                      }
+                    }}
+                  >
+                    <i />
+                    <span className="ded-ticker-time">{simClock(event.simTimeH)}</span>
+                    <span className="ded-ticker-title">{event.title}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {!orbatOpen ? (
               <button type="button" className="ded-map-reopen" title="Open ORBAT" onClick={() => setOrbatOpen(true)}>
                 <PanelLeftOpen size={15} />
