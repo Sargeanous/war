@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { LatLng, Objective, SimEvent, TheaterFeature, Unit } from "./types";
 import { sideColors } from "./data";
 import { affiliationOf, frameColor, milSymbolHtml } from "./milsym";
-import { addGraticule, drawEngagements, drawHeadingVector, drawObjective, tintClass } from "./tactical";
+import { addGraticule, drawEngagements, drawHeadingVector, drawObjective, objectiveLabelWidth, tintClass } from "./tactical";
 import "./map-extras.css";
 
 declare global {
@@ -205,14 +205,14 @@ function makeUnitIcon(L: any, unit: MapUnit, selected: boolean, size: number) {
   return { icon, sym };
 }
 
-function bindUnitTooltip(marker: any, unit: MapUnit, symWidth: number, showLabels: boolean | undefined): void {
+function bindUnitTooltip(marker: any, unit: MapUnit, symWidth: number, showLabels: boolean | undefined, labelDy = 0): void {
   marker.unbindTooltip();
   if (showLabels) {
     const short = unit.name.length > 22 ? `${unit.name.slice(0, 21)}…` : unit.name;
     marker.bindTooltip(short, {
       permanent: true,
       direction: "right",
-      offset: [Math.round(symWidth / 2) + 3, 0],
+      offset: [Math.round(symWidth / 2) + 3, labelDy],
       className: "unit-label",
       opacity: 1,
     });
@@ -539,6 +539,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
       selectedUnitId,
       showLabels,
       symbolSize,
+      mapZoom, // objective label deconfliction is solved in screen space
       theater.map((f) => f.name),
       objectives?.map((o) => [o.id, o.side, o.title, o.area?.center.lat, o.area?.center.lng, o.area?.radiusKm]),
       visibleUnits.map((u) => [u.id, u.position.lat, u.position.lng, u.headingDeg, u.status, u.strength, u.classId]),
@@ -571,8 +572,55 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     }
 
     if (objectives) {
+      // Collision-aware label placement: contested water often carries a BLUE
+      // and a RED objective on nearly the same circle, and independent
+      // top-edge labels overprint. Each label tries the circle top, then the
+      // bottom, then stacks downward until it finds clear screen space.
+      const map = mapRef.current;
+      const placedRects: Array<{ x: number; y: number; w: number; h: number }> = [];
+      const clashes = (a: { x: number; y: number; w: number; h: number }) =>
+        placedRects.some((b) => a.x < b.x + b.w + 4 && b.x < a.x + a.w + 4 && a.y < b.y + b.h + 3 && b.y < a.y + a.h + 3);
       for (const objective of objectives) {
-        drawObjective(L, overlay, objective);
+        if (!objective.area || !map) {
+          drawObjective(L, overlay, objective);
+          continue;
+        }
+        const w = objectiveLabelWidth(objective.title);
+        const h = 14;
+        const rKm = objective.area.radiusKm;
+        const c = objective.area.center;
+        const top = { lat: c.lat + rKm / 111, lng: c.lng };
+        const bottom = { lat: c.lat - rKm / 111, lng: c.lng };
+        const candidates: Array<{ at: LatLng; placement: "above" | "below" }> = [
+          { at: top, placement: "above" },
+          { at: bottom, placement: "below" },
+        ];
+        let chosen: { at: LatLng; placement: "above" | "below" } | null = null;
+        let rect: { x: number; y: number; w: number; h: number } | null = null;
+        for (const cand of candidates) {
+          const p = map.latLngToLayerPoint([cand.at.lat, cand.at.lng]);
+          const r = cand.placement === "above" ? { x: p.x - w / 2, y: p.y - h, w, h } : { x: p.x - w / 2, y: p.y, w, h };
+          if (!clashes(r)) {
+            chosen = cand;
+            rect = r;
+            break;
+          }
+        }
+        if (!chosen || !rect) {
+          // Both edges taken: stack below the bottom edge in clear rows.
+          const p = map.latLngToLayerPoint([bottom.lat, bottom.lng]);
+          let y = p.y;
+          let r = { x: p.x - w / 2, y, w, h };
+          while (clashes(r)) {
+            y += h + 3;
+            r = { ...r, y };
+          }
+          const at = map.layerPointToLatLng(L.point(p.x, y));
+          chosen = { at: { lat: at.lat, lng: at.lng }, placement: "below" };
+          rect = r;
+        }
+        placedRects.push(rect);
+        drawObjective(L, overlay, objective, { at: chosen.at, placement: chosen.placement });
       }
     }
 
@@ -676,9 +724,51 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     const contextSwitch = prevWorldKeyRef.current === undefined || prevWorldKeyRef.current !== wk;
     prevWorldKeyRef.current = wk;
 
+    // Permanent labels are far wider than the spacing between clustered
+    // counters, so they are deconflicted greedily in screen space: each label
+    // tries a ladder of vertical offsets beside its counter and hides
+    // (falling back to a hover tooltip) when no rung is clear. Stable id
+    // order keeps the same labels winning between ticks.
+    const LABEL_H = 17; // rendered height incl. padding and border
+    const labelPlan = new Map<string, number | null>();
+    const planMap = mapRef.current;
+    if (showLabels && planMap) {
+      const placedLabels: Array<{ x: number; y: number; w: number; h: number }> = [];
+      const clash = (r: { x: number; y: number; w: number; h: number }) =>
+        placedLabels.some((b) => r.x < b.x + b.w + 4 && b.x < r.x + r.w + 4 && r.y < b.y + b.h + 3 && b.y < r.y + r.h + 3);
+      const xOff = Math.round((symbolSize + 8) / 2) + 3; // matches the tooltip offset
+      for (const u of [...visibleUnits].sort((a, b) => (a.id < b.id ? -1 : 1))) {
+        const p = planMap.latLngToLayerPoint([u.position.lat, u.position.lng]);
+        const w = Math.min(u.name.length, 22) * 6.5 + 14;
+        let dy: number | null = null;
+        for (const cand of [0, 21, -21, 42, -42]) {
+          const rect = { x: p.x + xOff, y: p.y + cand - LABEL_H / 2, w, h: LABEL_H };
+          if (!clash(rect)) {
+            dy = cand;
+            placedLabels.push(rect);
+            break;
+          }
+        }
+        labelPlan.set(u.id, dy);
+      }
+      if ((import.meta as any).env?.DEV) {
+        (window as any).__labelPlanDebug = {
+          zoom: planMap.getZoom(),
+          units: visibleUnits.map((u) => {
+            const p = planMap.latLngToLayerPoint([u.position.lat, u.position.lng]);
+            return { id: u.id, name: u.name.slice(0, 16), x: Math.round(p.x), y: Math.round(p.y), dy: labelPlan.get(u.id) };
+          }),
+        };
+      }
+    }
+
     for (const unit of visibleUnits) {
       seen.add(unit.id);
       const selected = unit.id === selectedUnitId;
+      // Distinguish "no plan entry" (0) from a deliberate null (= hide this
+      // label, the cluster is full); ?? would erase the null.
+      const plan: number | null = showLabels ? (labelPlan.has(unit.id) ? labelPlan.get(unit.id)! : 0) : 0;
+      const labelOn = Boolean(showLabels) && plan !== null;
       const iconKey = [
         unit.side,
         unit.domain,
@@ -687,14 +777,15 @@ function LeafletTheaterMap(props: TheaterMapProps) {
         Math.round(unit.strength),
         selected ? 1 : 0,
         symbolSize,
-        showLabels ? 1 : 0,
+        labelOn ? 1 : 0,
+        String(plan),
         unit.name,
       ].join("|");
       let entry = reg.get(unit.id);
       if (!entry) {
         const { icon, sym } = makeUnitIcon(L, unit, selected, symbolSize);
         const marker = L.marker([unit.position.lat, unit.position.lng], { icon });
-        bindUnitTooltip(marker, unit, sym.width, showLabels);
+        bindUnitTooltip(marker, unit, sym.width, labelOn, plan ?? 0);
         marker.on("click", () => {
           if (selectRef.current) selectRef.current(unit.id);
         });
@@ -716,9 +807,9 @@ function LeafletTheaterMap(props: TheaterMapProps) {
         if (entry.iconKey !== iconKey) {
           entry.iconKey = iconKey;
           const { icon, sym } = makeUnitIcon(L, unit, selected, symbolSize);
-          const hadOpenTooltip = !showLabels && entry.marker.isTooltipOpen && entry.marker.isTooltipOpen();
+          const hadOpenTooltip = !labelOn && entry.marker.isTooltipOpen && entry.marker.isTooltipOpen();
           entry.marker.setIcon(icon);
-          bindUnitTooltip(entry.marker, unit, sym.width, showLabels);
+          bindUnitTooltip(entry.marker, unit, sym.width, labelOn, plan ?? 0);
           if (hadOpenTooltip) entry.marker.openTooltip(); // keep a hovered readout alive across the rebind
           suppressGlide(entry.marker);
         }

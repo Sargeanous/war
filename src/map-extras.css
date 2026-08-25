@@ -67,6 +67,12 @@
   white-space: nowrap;
 }
 
+/* Deconflicted placement: label hangs under its anchor (circle bottom edge)
+   when another label already occupies the top position. */
+.tac-obj-label-inner.below {
+  transform: translate(-50%, 4px);
+}
+
 /* Unit label tooltip skin (Leaflet tooltip) */
 .unit-label {
   background: rgba(10, 16, 14, 0.78);

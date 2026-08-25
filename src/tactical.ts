@@ -286,7 +286,8 @@ export function drawObjective(
     side: string;
     title: string;
     area?: { center: LatLngLike; radiusKm: number };
-  }
+  },
+  labelOpts?: { at?: LatLngLike; placement?: "above" | "below" }
 ): void {
   if (!objective.area) return;
   const area = objective.area;
@@ -307,23 +308,37 @@ export function drawObjective(
     })
   );
 
-  const labelText = "OBJ " + objective.title.toUpperCase().slice(0, 22);
+  const labelText = "OBJ " + truncateLabel(objective.title, 24);
+  const at = labelOpts?.at ?? { lat: area.center.lat + area.radiusKm / 111, lng: area.center.lng };
+  const below = labelOpts?.placement === "below";
   // Leaflet overwrites the icon root's inline transform to position the marker,
   // so the centering transform must live on an inner element.
   layer.addLayer(
-    L.marker(
-      { lat: area.center.lat + area.radiusKm / 111, lng: area.center.lng },
-      {
-        icon: L.divIcon({
-          className: "tac-obj-label",
-          html: '<span class="tac-obj-label-inner">' + labelText + "</span>",
-          iconSize: null,
-        }),
-        interactive: false,
-        keyboard: false,
-      }
-    )
+    L.marker(at, {
+      icon: L.divIcon({
+        className: "tac-obj-label",
+        html: '<span class="tac-obj-label-inner' + (below ? " below" : "") + '">' + labelText + "</span>",
+        iconSize: null,
+      }),
+      interactive: false,
+      keyboard: false,
+    })
   );
+}
+
+// Estimated on-screen label width in px (10px mono plus letter spacing), used
+// by callers to deconflict label placement.
+export function objectiveLabelWidth(title: string): number {
+  return ("OBJ " + truncateLabel(title, 24)).length * 6.6 + 8;
+}
+
+// Uppercase and cut at a word boundary; mid-word cuts read as bugs.
+function truncateLabel(title: string, max: number): string {
+  const up = title.toUpperCase();
+  if (up.length <= max) return up;
+  const head = up.slice(0, max + 1);
+  const space = head.lastIndexOf(" ");
+  return (space > max * 0.55 ? head.slice(0, space) : up.slice(0, max)).trim();
 }
 
 /* ------------------------------------------------------------------ */
