@@ -270,6 +270,95 @@ function centroid(entities) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Objective targets
+//
+// objectiveCompletion in engine.mjs scores "destroy" as the fraction of
+// objective.targetUnitIds destroyed, and "protect" as the mean surviving
+// strength of the same list. An objective of either kind that names no unit is
+// unplayable: a target-less protect returns 1, so the run reads 100% on the
+// first tick and can end there, and a target-less destroy returns 0 forever. So
+// both kinds leave materializeScenario with a small, deterministic target list
+// drawn from the units that were just built.
+// ---------------------------------------------------------------------------
+
+const KM_PER_DEG_LAT = 111;
+
+function distanceKm(a, b) {
+  const dLat = (a.lat - b.lat) * KM_PER_DEG_LAT;
+  const dLng = (a.lng - b.lng) * KM_PER_DEG_LAT * Math.cos(((a.lat + b.lat) / 2) * (Math.PI / 180));
+  return Math.sqrt(dLat * dLat + dLng * dLng);
+}
+
+// What a commander would put a protect task around, in the order a planner would
+// name them. Escorts protect these, they are not themselves the thing protected.
+const HVU_CLASS_IDS = [
+  "maritime.carrier",
+  "maritime.amphibious",
+  "land.marine-battalion",
+  "maritime.auxiliary",
+  "facility.command-post",
+  "facility.logistics-depot",
+];
+
+const DESTROY_TARGET_CAP = 4;
+const PROTECT_TARGET_CAP = 3;
+// How close a second high-value unit has to sit to count as part of the same group.
+const PROTECT_GROUP_KM = 15;
+
+const otherSide = (side) => (side === "blue" ? "red" : "blue");
+
+function byDistance(units, center) {
+  return units
+    .map((u) => ({ unit: u, km: distanceKm(u.position, center) }))
+    .sort((a, b) => a.km - b.km || (a.unit.id < b.unit.id ? -1 : 1));
+}
+
+// The core of the enemy grouping the objective points at: the enemy units inside
+// the objective area, nearest first, and never the whole opposing order of battle.
+function destroyTargets(objective, units) {
+  const enemy = units.filter((u) => u.side === otherSide(objective.side));
+  if (!enemy.length) return [];
+  const ranked = byDistance(enemy, objective.area.center);
+  const inside = ranked.filter((r) => r.km <= objective.area.radiusKm);
+  const pool = inside.length ? inside : ranked.slice(0, 3);
+  return pool.slice(0, DESTROY_TARGET_CAP).map((r) => r.unit.id);
+}
+
+// The owner high-value units: what the objective names if the owner fields it,
+// otherwise the highest-value class present, plus anything high value sitting
+// with it.
+function protectTargets(objective, units, classes) {
+  const own = units.filter((u) => u.side === objective.side);
+  if (!own.length) return [];
+
+  const named = matchClass(objective.title, classes);
+  let seed = named ? own.filter((u) => u.classId === named.id) : [];
+  if (!seed.length) {
+    for (const classId of HVU_CLASS_IDS) {
+      seed = own.filter((u) => u.classId === classId);
+      if (seed.length) break;
+    }
+  }
+  if (!seed.length) seed = byDistance(own, objective.area.center).slice(0, 1).map((r) => r.unit);
+
+  const picked = seed.slice(0, PROTECT_TARGET_CAP);
+  if (picked.length < PROTECT_TARGET_CAP) {
+    const nearby = own.filter((u) => !picked.includes(u) && HVU_CLASS_IDS.includes(u.classId));
+    for (const row of byDistance(nearby, centroid(picked))) {
+      if (picked.length >= PROTECT_TARGET_CAP || row.km > PROTECT_GROUP_KM) break;
+      picked.push(row.unit);
+    }
+  }
+  return picked.map((u) => u.id);
+}
+
+function targetUnitIdsFor(objective, units, classes) {
+  if (objective.kind === "destroy") return destroyTargets(objective, units);
+  if (objective.kind === "protect") return protectTargets(objective, units, classes);
+  return []; // control-area, deny and deliver are scored off the area, not a unit list
+}
+
 export function materializeScenario(parse, opts, state, nowIso) {
   const name = String(opts.name || parse.title || "OPORD scenario").slice(0, 80);
   const codename = String(opts.codename || name.replace(/^opord\s*[\d-]*\s*[—-]?\s*/i, "") || "IMPORTED ORDER")
@@ -317,11 +406,12 @@ export function materializeScenario(parse, opts, state, nowIso) {
     }
   }
 
+  const classes = state && state.ontology && Array.isArray(state.ontology.classes) ? state.ontology.classes : [];
   const objectives = parse.objectives.map((o, i) => {
     const own = o.side === "blue" ? blue : red;
     const enemy = o.side === "blue" ? red : blue;
     const anchor = o.kind === "protect" || o.kind === "deliver" ? centroid(own) : centroid(enemy);
-    return {
+    const objective = {
       id: `obj-${id}-${i + 1}`,
       side: o.side,
       title: o.title,
@@ -330,6 +420,9 @@ export function materializeScenario(parse, opts, state, nowIso) {
       area: { center: anchor, radiusKm: o.kind === "protect" ? 30 : 40 },
       weight: 1,
     };
+    const targets = targetUnitIdsFor(objective, units, classes);
+    if (targets.length) objective.targetUnitIds = targets;
+    return objective;
   });
   for (const side of ["blue", "red"]) {
     const own = objectives.filter((o) => o.side === side);

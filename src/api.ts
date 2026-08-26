@@ -8,7 +8,15 @@ import type {
   Assessment,
   Bootstrap,
   Coa,
+  CollectionOptionsResult,
+  CollectionTaskResult,
+  CueMutationResult,
+  CueScenarioResult,
   EngineKind,
+  IdentifyResult,
+  IntelCue,
+  IntelSyncResult,
+  InterrogateResult,
   InterventionRequest,
   Mission,
   Ontology,
@@ -65,7 +73,54 @@ const put = <T>(path: string, body: unknown) => request<T>(path, { method: "PUT"
 
 // --- Bootstrap -------------------------------------------------------------
 
-export const fetchBootstrap = () => get<Bootstrap>("/api/bootstrap");
+// Scenario Design opens whichever scenario the bootstrap payload reports as
+// ready first, so a page that generates a scenario and then sends the operator
+// there has no way to name the one it just made. This one-shot hand-off lets the
+// sending page put its scenario at the front of that payload. It is set
+// immediately before the navigation and cleared by the very next bootstrap read.
+let handedOffScenarioId: string | null = null;
+
+export function handOffScenario(id: string | null): void {
+  handedOffScenarioId = id;
+}
+
+export const fetchBootstrap = async (): Promise<Bootstrap> => {
+  const boot = await get<Bootstrap>("/api/bootstrap");
+  const wanted = handedOffScenarioId;
+  handedOffScenarioId = null;
+  if (!wanted) return boot;
+  const index = boot.scenarios.findIndex((scenario) => scenario.id === wanted);
+  if (index <= 0) return boot;
+  const picked = boot.scenarios[index];
+  return {
+    ...boot,
+    scenarios: [picked, ...boot.scenarios.slice(0, index), ...boot.scenarios.slice(index + 1)],
+  };
+};
+
+// --- Intel bridge ------------------------------------------------------------
+
+export const fetchIntelCues = () => get<IntelCue[]>("/api/intel/cues");
+export const fetchIntelCue = (id: string) => get<IntelCue>(`/api/intel/cues/${id}`);
+export const interrogateCue = (id: string, question: string) =>
+  post<InterrogateResult>(`/api/intel/cues/${id}/interrogate`, { question });
+export const identifyCue = (id: string) => post<IdentifyResult>(`/api/intel/cues/${id}/identify`);
+export const fetchCollectionOptions = (id: string) =>
+  post<CollectionOptionsResult>(`/api/intel/cues/${id}/collect/options`);
+export const requestCollection = (id: string, optionIndex: number) =>
+  post<CollectionTaskResult>(`/api/intel/cues/${id}/collect`, { optionIndex });
+export const approveCollection = (id: string, taskId: string, approver: string) =>
+  post<CollectionTaskResult>(`/api/intel/cues/${id}/collect/${taskId}/approve`, { approver });
+// Landing the product is its own step: release and result are separate events
+// with separate timestamps and separate hand-off records.
+export const reportCollection = (id: string, taskId: string, by: string) =>
+  post<CollectionTaskResult>(`/api/intel/cues/${id}/collect/${taskId}/report`, { by });
+export const confirmCue = (id: string, by: string) => post<CueMutationResult>(`/api/intel/cues/${id}/confirm`, { by });
+export const dismissCue = (id: string, by: string, reason: string) =>
+  post<CueMutationResult>(`/api/intel/cues/${id}/dismiss`, { by, reason });
+export const spawnScenarioFromCue = (id: string, createdBy: string) =>
+  post<CueScenarioResult>(`/api/intel/cues/${id}/scenario`, { createdBy });
+export const syncIntelFeed = () => post<IntelSyncResult>("/api/intel/feed/sync");
 
 // --- Scenarios ---------------------------------------------------------------
 

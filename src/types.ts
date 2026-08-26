@@ -63,6 +63,157 @@ export interface Ontology {
 }
 
 // ---------------------------------------------------------------------------
+// Intel bridge (normalised cues consumed from BASEER)
+// ---------------------------------------------------------------------------
+
+export type IntelOrigin = "focalpoint" | "chokepoint" | "surge" | "conflict" | "event";
+export type IntelCueState = "new" | "reviewing" | "confirmed" | "dismissed" | "spawned";
+export type IntelEntityKind = "vessel" | "aircraft" | "ground" | "facility";
+export type IntelAffiliation = "hostile" | "unknown" | "neutral";
+export type CollectionMode = "EO/IR" | "SAR" | "FMV";
+export type CollectionPriority = "routine" | "priority" | "urgent";
+export type CollectionStatus = "requested" | "approved" | "collected";
+export type CollectionOutcome = "resolved" | "inconclusive";
+export type HandoffAutonomy = "auto" | "human-required";
+
+export interface IntelEntity {
+  id: string;
+  kind: IntelEntityKind;
+  name: string;
+  lat: number;
+  lng: number;
+  courseDeg: number | null;
+  speedKts: number | null;
+  classHint: string | null; // ontology class id hint, e.g. "class-frigate"
+  affiliation: IntelAffiliation;
+}
+
+export interface IntelAssessment {
+  unitType: string; // e.g. "Coastal missile battery, reinforced"
+  intent: string;
+  confidence: number; // 0..100
+  sources: string[];
+  reasoning: string;
+  source: "anthropic" | "offline";
+  latencyMs: number;
+  atIso: string;
+  handoffId: string | null; // HandoffRecord.id written for the identification
+}
+
+export interface CollectionTask {
+  id: string;
+  taskingId: string; // human-facing, e.g. "902853-RRN"
+  asset: string; // e.g. "IRIS-52 MQ-9"
+  mode: CollectionMode;
+  resolutionM: number;
+  etaMinutes: number;
+  priority: CollectionPriority;
+  status: CollectionStatus;
+  requestedAt: string;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  collectedAt: string | null;
+  result: string | null; // narrative of what the collection showed
+  note: string | null; // the trade-off the operator accepted when choosing this asset
+  // Whether the product actually settled the question the cue was carrying. An
+  // asset too coarse for the discriminator comes back inconclusive, and an
+  // inconclusive product cannot unlock confirmation.
+  outcome: CollectionOutcome | null;
+  // HandoffRecord.id per step, so the inspector addresses a record rather than
+  // searching the trail for wording that looks like the right one.
+  requestHandoffId: string | null;
+  approveHandoffId: string | null;
+  collectHandoffId: string | null;
+}
+
+// Audit trail behind every AI output in the intel bridge, so the hand-off
+// inspector can show who acted and whether a human had to close the step.
+export interface HandoffRecord {
+  id: string;
+  at: string;
+  actor: string; // "SAGE", a sensor callsign, or a human role name
+  kind: "ai" | "human" | "machine";
+  autonomy: HandoffAutonomy;
+  action: string; // short verb phrase, e.g. "Identified unit"
+  detail: string;
+  source: "anthropic" | "offline" | null;
+  latencyMs: number | null;
+}
+
+export interface IntelCue {
+  id: string; // "cue-<slug>"
+  origin: IntelOrigin;
+  title: string;
+  severity: "critical" | "high" | "medium" | "low";
+  confidence: number; // 0..100 normalised
+  state: IntelCueState;
+  geo: { lat: number; lng: number; radiusKm: number };
+  observedAt: string;
+  narrative: string;
+  entities: IntelEntity[];
+  provenance: { sources: string[]; sensor: string; detector: string; collectedAt: string };
+  assessment: IntelAssessment | null;
+  collection: CollectionTask[];
+  handoffs: HandoffRecord[];
+  scenarioId: string | null;
+  ingestHandoffId: string | null; // HandoffRecord.id for the original machine push
+}
+
+export interface InterrogateResult {
+  answer: string;
+  source: "anthropic" | "offline";
+  latencyMs: number;
+  handoff: HandoffRecord;
+}
+
+export interface IdentifyResult {
+  assessment: IntelAssessment;
+  handoff: HandoffRecord;
+}
+
+// A collection option is a proposed task, before it carries any tasking identity,
+// approval state or audit record. The note is the trade-off the backend writes
+// for every option, and it is what makes the operator choice a real choice.
+export type CollectionOption = Omit<
+  CollectionTask,
+  | "id"
+  | "taskingId"
+  | "status"
+  | "requestedAt"
+  | "approvedBy"
+  | "approvedAt"
+  | "collectedAt"
+  | "result"
+  | "requestHandoffId"
+  | "approveHandoffId"
+  | "collectHandoffId"
+> & { note: string };
+
+export interface CollectionOptionsResult {
+  options: CollectionOption[];
+}
+
+export interface CollectionTaskResult {
+  task: CollectionTask;
+  handoff: HandoffRecord;
+}
+
+export interface CueMutationResult {
+  cue: IntelCue;
+  handoff: HandoffRecord;
+}
+
+export interface CueScenarioResult {
+  scenario: Scenario;
+  handoff: HandoffRecord;
+}
+
+export interface IntelSyncResult {
+  source: "baseer" | "replay";
+  count: number;
+}
+
+// ---------------------------------------------------------------------------
 // Scenario design
 // ---------------------------------------------------------------------------
 

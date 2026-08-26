@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Moon,
   Radar,
+  Satellite,
   Scale,
   Send,
   Swords,
@@ -29,6 +30,7 @@ import { askCopilot } from "./api";
 import { Toast } from "./components";
 import type { PageId, PageProps, Profile } from "./shell";
 import CommandDashboard from "./pages/CommandDashboard";
+import Intel from "./pages/Intel";
 import ScenarioDesign from "./pages/ScenarioDesign";
 import CoaGeneration from "./pages/CoaGeneration";
 import RuleConfig from "./pages/RuleConfig";
@@ -55,14 +57,14 @@ const profiles: Profile[] = [
     name: "Joint Force Commander",
     role: "Command decision authority",
     organization: "Exercise AZURE HORIZON",
-    pages: ["dashboard", "deduction", "assessment", "ailayer"],
+    pages: ["dashboard", "intel", "deduction", "assessment", "ailayer"],
   },
   {
     id: "planner",
     name: "Plans Cell (J5)",
     role: "Scenario & COA planner",
     organization: "Exercise AZURE HORIZON",
-    pages: ["dashboard", "scenario", "coa", "rules"],
+    pages: ["dashboard", "intel", "scenario", "coa", "rules"],
   },
   {
     id: "operator",
@@ -76,14 +78,14 @@ const profiles: Profile[] = [
     name: "Analysis Cell (J8)",
     role: "Assessment analyst",
     organization: "Wargame Center",
-    pages: ["dashboard", "assessment", "ailayer", "foundation"],
+    pages: ["dashboard", "intel", "assessment", "ailayer", "foundation"],
   },
   {
     id: "admin",
     name: "Platform Admin",
     role: "Platform governance",
     organization: "Wargame Center",
-    pages: ["dashboard", "scenario", "coa", "rules", "deduction", "assessment", "ailayer", "foundation", "admin"],
+    pages: ["dashboard", "intel", "scenario", "coa", "rules", "deduction", "assessment", "ailayer", "foundation", "admin"],
   },
 ];
 
@@ -99,6 +101,7 @@ const PROFILE_META: Record<string, { icon: LucideIcon; scope: string; privileged
 
 const navItems: Record<PageId, NavItem> = {
   dashboard: { id: "dashboard", label: "Command Overview", icon: LayoutDashboard },
+  intel: { id: "intel", label: "Intelligence Feed", icon: Satellite },
   scenario: { id: "scenario", label: "Scenario Design", icon: MapIcon },
   coa: { id: "coa", label: "Data & COA Generation", icon: Split },
   rules: { id: "rules", label: "Simulation Rules", icon: Scale },
@@ -111,13 +114,14 @@ const navItems: Record<PageId, NavItem> = {
 
 const navGroups: NavGroup[] = [
   { label: "Command", pages: ["dashboard"] },
+  { label: "Intelligence", pages: ["intel", "ailayer"] },
   { label: "Planning & Simulation", pages: ["scenario", "coa", "rules", "deduction", "assessment"] },
-  { label: "Intelligence", pages: ["ailayer"] },
   { label: "Platform", pages: ["foundation", "admin"] },
 ];
 
 const pageComponents: Record<PageId, (props: PageProps) => JSX.Element> = {
   dashboard: CommandDashboard,
+  intel: Intel,
   scenario: ScenarioDesign,
   coa: CoaGeneration,
   rules: RuleConfig,

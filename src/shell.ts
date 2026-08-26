@@ -2,6 +2,7 @@
 
 export type PageId =
   | "dashboard"
+  | "intel"
   | "scenario"
   | "coa"
   | "rules"

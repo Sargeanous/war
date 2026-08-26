@@ -31,6 +31,15 @@ import {
 } from "./engine.mjs";
 import { decomposeMission, generateCoas, agentActivityFor, buildCoaAnalysis, COA_STRATEGIES } from "./agents.mjs";
 import { parseOpordOffline, parseOpordAnthropic, materializeScenario } from "./opord.mjs";
+import {
+  buildIntelCues,
+  nextScriptedCue,
+  fetchBaseerCues,
+  cueToParse,
+  offlineIdentify,
+  offlineInterrogate,
+  collectionOptionsFor,
+} from "./intel.mjs";
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(SERVER_DIR, "..");
@@ -121,7 +130,7 @@ const STATE_KEYS = [
   "platform",
 ];
 
-/** @type {{scenarios: any[], theater: any[], ontology: any, missions: any[], coas: any[], ruleSets: any[], agents: any[], runs: any[], assessments: any[], users: any[], auditLogs: any[], platform: any}} */
+/** @type {{scenarios: any[], theater: any[], ontology: any, missions: any[], coas: any[], ruleSets: any[], agents: any[], runs: any[], assessments: any[], users: any[], auditLogs: any[], platform: any, intelCues: any[], intelFeed: {cursor: number}}} */
 let state = null;
 
 let persistTimer = null;
@@ -264,9 +273,68 @@ function loadPersistedState() {
   }
 }
 
+/**
+ * Backfill state slices added after a demo has already written state.json. The
+ * required keys in STATE_KEYS decide whether a file is usable at all; anything
+ * newer than the file is defaulted here rather than discarding the run history.
+ */
+function migrateState(loaded) {
+  let changed = false;
+  if (!Array.isArray(loaded.intelCues)) {
+    loaded.intelCues = buildIntelCues();
+    changed = true;
+  }
+  if (!loaded.intelFeed || typeof loaded.intelFeed !== "object" || !Number.isInteger(loaded.intelFeed.cursor)) {
+    loaded.intelFeed = { cursor: 0 };
+    changed = true;
+  }
+  if (normalizeCueRecords(loaded.intelCues)) changed = true;
+  return changed;
+}
+
+/**
+ * Every hand-off record is addressable by its id, so a cue, its assessment and each
+ * of its collection tasks carry the id of the record that produced them. State files
+ * written before those fields existed are filled in here, once, rather than leaving
+ * the hand-off inspector to match records on their action verb.
+ */
+function normalizeCueRecords(cues) {
+  let changed = false;
+  for (const cue of Array.isArray(cues) ? cues : []) {
+    if (!cue || typeof cue !== "object") continue;
+    const handoffs = Array.isArray(cue.handoffs) ? cue.handoffs : [];
+    if (cue.ingestHandoffId === undefined || cue.ingestHandoffId === null) {
+      const ingest = handoffs.find((h) => h && typeof h.action === "string" && h.action.startsWith("Ingested"));
+      cue.ingestHandoffId = ingest ? ingest.id : null;
+      changed = true;
+    }
+    if (cue.assessment && cue.assessment.handoffId === undefined) {
+      const identified = handoffs.find((h) => h && h.action === "Identified unit");
+      cue.assessment.handoffId = identified ? identified.id : null;
+      changed = true;
+    }
+    for (const task of Array.isArray(cue.collection) ? cue.collection : []) {
+      if (!task || typeof task !== "object") continue;
+      for (const key of ["requestHandoffId", "approveHandoffId", "collectHandoffId", "note"]) {
+        if (task[key] === undefined) {
+          task[key] = null;
+          changed = true;
+        }
+      }
+      if (task.outcome === undefined) {
+        // A task that landed before the outcome field existed carries a corroborating
+        // product in its result, so it reads as resolving rather than inconclusive.
+        task.outcome = task.status === "collected" ? "resolved" : null;
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
 function buildSeedState() {
   const ontology = buildOntology();
-  return {
+  const seeded = {
     scenarios: buildScenarios(),
     theater: buildTheater(),
     ontology,
@@ -279,7 +347,11 @@ function buildSeedState() {
     users: buildUsers(),
     auditLogs: buildAuditSeed(),
     platform: buildPlatform(),
+    intelCues: buildIntelCues(),
+    intelFeed: { cursor: 0 },
   };
+  normalizeCueRecords(seeded.intelCues);
+  return seeded;
 }
 
 /**
@@ -376,6 +448,7 @@ function boot() {
   const persisted = loadPersistedState();
   if (persisted) {
     state = persisted;
+    if (migrateState(state)) persistNow();
     console.log(`[sandtable] state restored from ${path.relative(ROOT_DIR, STATE_PATH)}`);
   } else {
     state = buildSeedState();
@@ -511,14 +584,17 @@ function validateScenario(scenario) {
     }
   }
 
+  // The Meridian Archipelago sits in the Gulf of Oman, so the stray check has to use
+  // the box every seeded scenario, intel cue and projected order of battle is built
+  // inside. The old Atlantic box failed every unit on the board.
   const strays = scenario.units.filter(
-    (u) => u.position.lat < 31 || u.position.lat > 37 || u.position.lng < -45 || u.position.lng > -35
+    (u) => u.position.lat < 22.9 || u.position.lat > 25.1 || u.position.lng < 58.7 || u.position.lng > 63.7
   );
   if (strays.length) {
     issues.push({
       level: "error",
       code: "unit-out-of-theater",
-      message: `${strays.length} unit(s) positioned outside the Meridian Archipelago theater box (lat 31..37, lng -45..-35).`,
+      message: `${strays.length} ${strays.length === 1 ? "unit is" : "units are"} positioned outside the Meridian Archipelago theater box (lat 22.9..25.1, lng 58.7..63.7).`,
     });
   }
 
@@ -527,7 +603,7 @@ function validateScenario(scenario) {
     issues.push({
       level: "warning",
       code: "unit-inert",
-      message: `${inert.length} unit(s) carry no sensors or weapons and will neither detect nor engage.`,
+      message: `${inert.length} ${inert.length === 1 ? "unit carries" : "units carry"} no sensors or weapons and will neither detect nor engage.`,
     });
   }
 
@@ -1362,6 +1438,622 @@ function handleScenarioFromOpord(body) {
   );
   schedulePersist();
   return scenario;
+}
+
+// --- Intel bridge (BASEER cues to scenarios) -------------------------------------
+// BASEER owns detection, sensor ingest and fusion. SANDTABLE only consumes the
+// normalised cue and walks it from "possible" to a live scenario. Every step writes
+// a hand-off record, and the consequential steps refuse to run without a named human.
+
+function requireCue(id) {
+  const cue = state.intelCues.find((c) => c.id === id);
+  if (!cue) throw httpError(404, `Unknown intel cue "${id}".`);
+  return cue;
+}
+
+/** Trim a human actor name out of a request body. An empty fallback demands one. */
+function actorName(value, fallback) {
+  const name = typeof value === "string" ? value.trim() : "";
+  return name ? name.slice(0, 60) : fallback;
+}
+
+function recordHandoff(cue, fields) {
+  const handoff = {
+    id: nextId("hof"),
+    at: nowIso(),
+    actor: fields.actor,
+    kind: fields.kind,
+    autonomy: fields.autonomy,
+    action: fields.action,
+    detail: fields.detail,
+    source: fields.source || null,
+    latencyMs: Number.isFinite(fields.latencyMs) ? Math.round(fields.latencyMs) : null,
+  };
+  if (!Array.isArray(cue.handoffs)) cue.handoffs = [];
+  cue.handoffs.push(handoff);
+  if (cue.handoffs.length > 60) cue.handoffs.splice(0, cue.handoffs.length - 60);
+  return handoff;
+}
+
+/** The authoritative brief every grounded intel prompt is answered from. */
+function cueContext(cue) {
+  const lines = [
+    `CUE ${cue.id} (${cue.origin}) "${cue.title}"`,
+    `Severity ${cue.severity}, confidence ${cue.confidence}%, workflow state ${cue.state}, observed ${cue.observedAt}.`,
+    `Centre ${cue.geo.lat.toFixed(2)}N ${cue.geo.lng.toFixed(2)}E, radius ${cue.geo.radiusKm} km, Meridian Archipelago, Gulf of Oman.`,
+    `Sensor ${cue.provenance.sensor}, detector ${cue.provenance.detector}, sources ${cue.provenance.sources.join(", ")}, collected ${cue.provenance.collectedAt}.`,
+    `Narrative: ${cue.narrative}`,
+  ];
+  for (const entity of cue.entities) {
+    const course = entity.courseDeg === null ? "" : `, course ${entity.courseDeg} deg`;
+    const speed = entity.speedKts === null ? "" : `, ${entity.speedKts} kts`;
+    const hint = entity.classHint ? `, class hint ${entity.classHint}` : "";
+    lines.push(
+      `Track ${entity.name} (${entity.kind}, ${entity.affiliation}) at ${entity.lat.toFixed(2)}N ${entity.lng.toFixed(2)}E${course}${speed}${hint}.`
+    );
+  }
+  if (cue.assessment) {
+    lines.push(`Prior identification: ${cue.assessment.unitType} at ${cue.assessment.confidence}%, intent "${cue.assessment.intent}".`);
+  }
+  for (const task of cue.collection) {
+    lines.push(
+      `Collection ${task.taskingId}, ${task.asset} ${task.mode} at ${task.resolutionM} m, status ${task.status}${task.result ? `: ${task.result}` : "."}`
+    );
+  }
+  return lines.join(nlLiteral());
+}
+
+async function handleCueInterrogate(id, body) {
+  const cue = requireCue(id);
+  const question = typeof body.question === "string" ? body.question.trim() : "";
+  if (!question) throw httpError(400, "Field 'question' is required.");
+  if (question.length > 400) throw httpError(400, "Question too long (400 character cap).");
+  const started = Date.now();
+  let answer = "";
+  let source = "offline";
+  let latencyMs = 0;
+  if (process.env.ANTHROPIC_API_KEY) {
+    const prompt =
+      "An analyst is interrogating one intelligence cue that BASEER pushed into SANDTABLE. Answer only from the cue context below, " +
+      "name the sensor or track you relied on, and say plainly when the cue does not carry the answer. Never invent tracks, sensors or " +
+      "collection results, and never name a real country: the adversary is RED / OPFOR. At most 90 words, no markdown." +
+      nlLiteral() +
+      nlLiteral() +
+      `CUE CONTEXT (authoritative):${nlLiteral()}${cueContext(cue)}${nlLiteral()}${nlLiteral()}ANALYST QUESTION: ${question}`;
+    const result = await askAnthropic(prompt, `intel-cue:${cue.id}`, started, process.env.ANTHROPIC_API_KEY);
+    if (result.source === "anthropic" && result.answer) {
+      answer = result.answer;
+      source = "anthropic";
+      latencyMs = result.latencyMs;
+    }
+  }
+  if (!answer) {
+    answer = offlineInterrogate(cue, question);
+    latencyMs = Date.now() - started;
+  }
+  const handoff = recordHandoff(cue, {
+    actor: "SAGE",
+    kind: "ai",
+    autonomy: "auto",
+    action: "Answered interrogation",
+    detail: `"${question.slice(0, 140)}" answered from cue provenance via ${source}.`,
+    source,
+    latencyMs,
+  });
+  audit("analyst", "intel-interrogated", cue.id, `Cue "${cue.title}" interrogated via ${source} in ${latencyMs} ms.`);
+  schedulePersist();
+  return { answer, source, latencyMs, handoff };
+}
+
+async function handleCueIdentify(id) {
+  const cue = requireCue(id);
+  // Identification is the machine step, and it runs itself. Once a named human has
+  // ruled on the cue, an automatic re-identification would rewrite the assessment
+  // that ruling was made on, so the machine stops at the human decision.
+  if (cue.state === "confirmed" || cue.state === "spawned") {
+    throw httpError(
+      409,
+      `Cue "${cue.id}" is "${cue.state}" and a named human has already ruled on this identification. Re-identifying it would overwrite the assessment behind that decision.`
+    );
+  }
+  if (cue.state === "dismissed") {
+    throw httpError(409, `Cue "${cue.id}" was dismissed by a named human. A dismissed cue is not re-identified.`);
+  }
+  const started = Date.now();
+  let assessment = null;
+  if (process.env.ANTHROPIC_API_KEY) {
+    const prompt =
+      "Identify what this fictional intelligence cue is showing. Return STRICT JSON only: " +
+      '{"unitType":string,"intent":string,"confidence":number,"sources":string[],"reasoning":string}. ' +
+      "unitType names the unit type and its posture in at most 12 words. intent is one sentence on what RED / OPFOR is doing. " +
+      "confidence is 0 to 100 and must stay at or below 80 while no collection task has been collected. sources cites only the sensors " +
+      "and tracks listed below. reasoning is 40 to 80 words tying the observed track behaviour to the identification. Never name a real " +
+      "country: the adversary is RED / OPFOR. No markdown." +
+      nlLiteral() +
+      nlLiteral() +
+      `CUE CONTEXT (authoritative):${nlLiteral()}${cueContext(cue)}`;
+    const result = await askAnthropic(prompt, `intel-identify:${cue.id}`, started, process.env.ANTHROPIC_API_KEY);
+    if (result.source === "anthropic" && result.answer) {
+      try {
+        const cleaned = result.answer.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+        const parsed = JSON.parse(cleaned);
+        if (parsed && parsed.unitType && parsed.intent) {
+          const stated = Number(parsed.confidence);
+          assessment = {
+            unitType: String(parsed.unitType).slice(0, 90),
+            intent: String(parsed.intent).slice(0, 240),
+            confidence: Number.isFinite(stated) ? clamp(Math.round(stated), 0, 100) : cue.confidence,
+            sources: Array.isArray(parsed.sources) && parsed.sources.length
+              ? parsed.sources.slice(0, 6).map((s) => String(s).slice(0, 60))
+              : cue.provenance.sources.slice(),
+            reasoning: String(parsed.reasoning || "").slice(0, 700),
+            source: "anthropic",
+            latencyMs: result.latencyMs,
+            atIso: nowIso(),
+          };
+        }
+      } catch {
+        // keep the deterministic identification
+      }
+    }
+  }
+  if (!assessment) {
+    assessment = { ...offlineIdentify(cue), source: "offline", latencyMs: Date.now() - started, atIso: nowIso() };
+  }
+  assessment.handoffId = null;
+  cue.assessment = assessment;
+  if (cue.state === "new") cue.state = "reviewing";
+  const handoff = recordHandoff(cue, {
+    actor: "SAGE",
+    kind: "ai",
+    autonomy: "auto",
+    action: "Identified unit",
+    detail: `${assessment.unitType} at ${assessment.confidence}% confidence. ${assessment.intent}`,
+    source: assessment.source,
+    latencyMs: assessment.latencyMs,
+  });
+  assessment.handoffId = handoff.id;
+  audit("SAGE", "intel-identified", cue.id, `Cue "${cue.title}" identified as ${assessment.unitType} (${assessment.confidence}%) via ${assessment.source}.`);
+  schedulePersist();
+  return { assessment, handoff };
+}
+
+function handleCueCollectOptions(id) {
+  const cue = requireCue(id);
+  return { options: collectionOptionsFor(cue) };
+}
+
+const COLLECTION_PRIORITIES = ["routine", "priority", "urgent"];
+
+function handleCueCollect(id, body) {
+  const cue = requireCue(id);
+  const options = collectionOptionsFor(cue);
+  if (!options.length) throw httpError(409, `No collection assets are available against cue "${cue.id}".`);
+  const index = Number.isInteger(body.optionIndex) ? body.optionIndex : 0;
+  if (index < 0 || index >= options.length) {
+    throw httpError(400, `Field 'optionIndex' must be between 0 and ${options.length - 1}.`);
+  }
+  const option = options[index];
+  const requestedBy = actorName(body.requestedBy, "collection manager");
+  const task = {
+    id: nextId("tsk"),
+    taskingId: `${(Date.now() % 900000) + 100000}-RRN`,
+    asset: String(option.asset || "IRIS-52 MQ-9").slice(0, 60),
+    mode: ["EO/IR", "SAR", "FMV"].includes(option.mode) ? option.mode : "EO/IR",
+    resolutionM: Number.isFinite(option.resolutionM) ? option.resolutionM : 0.3,
+    etaMinutes: Number.isFinite(option.etaMinutes) ? option.etaMinutes : 18,
+    priority: COLLECTION_PRIORITIES.includes(option.priority) ? option.priority : "priority",
+    // The trade-off the operator was shown when they picked this asset. With the mode
+    // and the resolution it decides what the pass can honestly report later.
+    note: typeof option.note === "string" ? option.note.slice(0, 240) : null,
+    status: "requested",
+    outcome: null,
+    requestedAt: nowIso(),
+    approvedBy: null,
+    approvedAt: null,
+    collectedAt: null,
+    result: null,
+    requestHandoffId: null,
+    approveHandoffId: null,
+    collectHandoffId: null,
+  };
+  if (!Array.isArray(cue.collection)) cue.collection = [];
+  cue.collection.push(task);
+  if (cue.state === "new") cue.state = "reviewing";
+  const handoff = recordHandoff(cue, {
+    actor: requestedBy,
+    kind: "human",
+    autonomy: "human-required",
+    action: "Requested collection",
+    detail: `Tasking ${task.taskingId}, ${task.asset} ${task.mode} at ${task.resolutionM} m, ETA ${task.etaMinutes} min, ${task.priority}. Held for named approval.`,
+  });
+  task.requestHandoffId = handoff.id;
+  audit(requestedBy, "intel-collection-requested", cue.id, `Tasking ${task.taskingId} (${task.asset} ${task.mode}) drafted against "${cue.title}".`);
+  schedulePersist();
+  return { task, handoff };
+}
+
+// What a resolving sensor came back with. Written from the cue's own tracks so the
+// product reads like a collection report rather than a generic success message.
+const COLLECTION_DETAIL = {
+  vessel: "Canister launchers on the aft deck, a surface-search emitter turning and two tenders alongside are all resolved",
+  aircraft: "Underwing stores, the tanker track feeding the orbit and a second pair holding on the deck are all resolved",
+  ground: "Launcher canisters, an associated fire-control emitter and two support vehicles under netting are all resolved",
+  facility: "Revetted launch positions, a powered radar mast and freshly cut vehicle tracks are all resolved",
+};
+
+// The question a cue of each kind actually has to settle before its identification is
+// worth confirming, and how fine a pass has to be to settle it. Radar reads structure
+// and shape, so it resolves a revetment or a mast but never a canister fit or a store
+// under a wing; optical and video resolve the fit only when they are fine enough.
+const COLLECTION_DISCRIMINATOR = {
+  vessel: { question: "the launcher fit on the hulls", optical: 0.5, radar: 0.25 },
+  aircraft: { question: "the underwing stores", optical: 0.4, radar: 0 },
+  ground: { question: "the launcher canisters under the netting", optical: 0.45, radar: 0.2 },
+  facility: { question: "the revetted launch positions and the radar mast", optical: 0.8, radar: 0.6 },
+};
+
+/**
+ * What the chosen asset can honestly report. The option note the operator picked from
+ * is carried on the task, so an asset offered with a stated limitation ("it will not
+ * resolve a launcher fit") comes back inconclusive however fine its nominal
+ * resolution reads. Corroboration is never the default.
+ */
+function collectionResultFor(cue, task) {
+  const lead = cue.entities.length ? cue.entities[0] : null;
+  const track = lead ? lead.name : "the primary contact";
+  const spec = (lead && COLLECTION_DISCRIMINATOR[lead.kind]) || COLLECTION_DISCRIMINATOR.vessel;
+  const assessed = cue.assessment ? cue.assessment.unitType.toLowerCase() : "the grouping the cue reported";
+  const radar = task.mode === "SAR";
+  const resolutionM = Number.isFinite(task.resolutionM) ? task.resolutionM : 1;
+  const warned = typeof task.note === "string" && /(will not|cannot|does not) resolve/i.test(task.note);
+  const resolves = !warned && resolutionM <= (radar ? spec.radar : spec.optical);
+  const pass =
+    `${task.asset} completed its ${task.mode} pass at ${resolutionM} m over ` +
+    `${cue.geo.lat.toFixed(2)}N ${cue.geo.lng.toFixed(2)}E and held ${track} in frame.`;
+  if (resolves) {
+    const detail = (lead && COLLECTION_DETAIL[lead.kind]) || "The reported grouping is resolved";
+    return {
+      resolves: true,
+      question: spec.question,
+      text: `${pass} ${detail}, which corroborates ${assessed} and rules out the civil-traffic alternative the cue was carrying.`,
+    };
+  }
+  const why = radar
+    ? `radar imagery at ${resolutionM} m reads hull shape and heading, not ${spec.question}`
+    : `imagery at ${resolutionM} m is too coarse to read ${spec.question}`;
+  return {
+    resolves: false,
+    question: spec.question,
+    text:
+      `${pass} The count, the geometry and the heading match the cue, but ${why}. ` +
+      `Inconclusive: ${assessed} is neither corroborated nor ruled out, and a finer pass is needed before this cue can be called confirmed.`,
+  };
+}
+
+function requireCollectionTask(cue, taskId) {
+  const tasks = Array.isArray(cue.collection) ? cue.collection : [];
+  const task = tasks.find((t) => t.id === taskId || t.taskingId === taskId);
+  if (!task) throw httpError(404, `Unknown collection task "${taskId}" on cue "${cue.id}".`);
+  return task;
+}
+
+/**
+ * Release, and nothing more. A named human puts the asset on the tasking; the asset
+ * has not flown and no product exists yet, so this step ends at "approved". Landing
+ * the collection is a separate call, and the operator sees the two as two events.
+ */
+function handleCueApproveCollection(id, taskId, body) {
+  const cue = requireCue(id);
+  const task = requireCollectionTask(cue, taskId);
+  if (task.status === "collected") throw httpError(409, `Tasking ${task.taskingId} has already been collected.`);
+  if (task.status === "approved") {
+    throw httpError(
+      409,
+      `Tasking ${task.taskingId} was already released by ${task.approvedBy} at ${task.approvedAt}. It is out, waiting on its product.`
+    );
+  }
+  const approver = actorName(body.approver, "");
+  if (!approver) throw httpError(400, "Field 'approver' is required: collection tasking needs a named human approval.");
+  task.status = "approved";
+  task.approvedBy = approver;
+  task.approvedAt = nowIso();
+  if (cue.state === "new") cue.state = "reviewing";
+  const handoff = recordHandoff(cue, {
+    actor: approver,
+    kind: "human",
+    autonomy: "human-required",
+    action: "Approved collection",
+    detail: `${approver} released tasking ${task.taskingId} to ${task.asset} (${task.mode}, ${task.priority}). Nothing has been collected yet.`,
+  });
+  task.approveHandoffId = handoff.id;
+  audit(
+    approver,
+    "intel-collection-approved",
+    cue.id,
+    `${approver} released tasking ${task.taskingId} (${task.asset} ${task.mode}) against "${cue.title}".`
+  );
+  schedulePersist();
+  return { task, handoff, cue };
+}
+
+/**
+ * The product lands. What it says depends on the asset the operator chose, and the
+ * confidence movement is derived from that product, so a coarse pass buys almost
+ * nothing and cannot carry the cue to a confirmable picture on its own.
+ */
+function handleCueCollectionReport(id, taskId) {
+  const cue = requireCue(id);
+  const task = requireCollectionTask(cue, taskId);
+  if (task.status === "requested") {
+    throw httpError(
+      409,
+      `Tasking ${task.taskingId} has not been released. A named human has to approve the tasking before its product can land.`
+    );
+  }
+  if (task.status === "collected") throw httpError(409, `Tasking ${task.taskingId} already reported at ${task.collectedAt}.`);
+  const outcome = collectionResultFor(cue, task);
+  task.status = "collected";
+  task.collectedAt = nowIso();
+  task.result = outcome.text;
+  task.outcome = outcome.resolves ? "resolved" : "inconclusive";
+  // The movement follows the product: a resolved discriminator is worth a real step,
+  // a pass that could not read it is worth the geometry it did confirm and no more.
+  // Neither is allowed to manufacture certainty the collection did not produce.
+  const before = cue.confidence;
+  cue.confidence = clamp(before + (outcome.resolves ? 18 : 2), 0, 94);
+  const gained = cue.confidence - before;
+  let assessmentNote = "";
+  if (cue.assessment && outcome.resolves) {
+    const wasAssessed = cue.assessment.confidence;
+    cue.assessment.confidence = clamp(wasAssessed + 18, 0, 94);
+    assessmentNote = ` The identification moves with it, ${wasAssessed}% to ${cue.assessment.confidence}%, on the same product.`;
+  } else if (cue.assessment) {
+    assessmentNote = ` The identification stands where SAGE left it, ${cue.assessment.confidence}%.`;
+  }
+  if (cue.state === "new") cue.state = "reviewing";
+  const elapsedMin = Math.max(
+    0,
+    Math.round((Date.parse(task.collectedAt) - Date.parse(task.approvedAt || task.collectedAt)) / 60000)
+  );
+  const timing =
+    elapsedMin >= 1
+      ? `${task.taskingId} reported ${elapsedMin} min after release, against a ${task.etaMinutes} min planned window.`
+      : `${task.taskingId} reported inside the same minute it was released, the exercise clock does not wait out the ${task.etaMinutes} min planned window.`;
+  let movement;
+  if (outcome.resolves) {
+    movement = `Cue confidence ${before}% to ${cue.confidence}% on a resolved discriminator.`;
+  } else if (gained > 0) {
+    movement = `Cue confidence ${before}% to ${cue.confidence}%, the geometry only: the pass did not resolve ${outcome.question}.`;
+  } else {
+    movement = `Cue confidence held at ${cue.confidence}%: the pass did not resolve ${outcome.question}.`;
+  }
+  // The sensor reports, not SAGE. Attributing this to an autonomous copilot would put
+  // the confidence movement on the model rather than on the collection that earned it.
+  const handoff = recordHandoff(cue, {
+    actor: task.asset,
+    kind: "machine",
+    autonomy: "auto",
+    action: outcome.resolves ? "Reported collection" : "Reported inconclusive collection",
+    detail: `${timing} ${outcome.text} ${movement}${assessmentNote}`,
+    source: "offline",
+    latencyMs: null,
+  });
+  task.collectHandoffId = handoff.id;
+  audit(
+    task.asset,
+    "intel-collection-reported",
+    cue.id,
+    `Tasking ${task.taskingId} reported ${outcome.resolves ? "a resolving product" : "an inconclusive product"} against "${cue.title}"; cue confidence ${before}% to ${cue.confidence}%.`
+  );
+  schedulePersist();
+  return { task, handoff, cue };
+}
+
+/**
+ * The gate the whole bridge exists for. A cue only reaches confirmed from "reviewing",
+ * with an identification on file and a collection that actually resolved the
+ * discriminator behind it, and only a named human can move it.
+ */
+function handleCueConfirm(id, body) {
+  const cue = requireCue(id);
+  if (cue.state === "spawned") {
+    throw httpError(409, `Cue "${cue.id}" is "spawned" and already produced scenario "${cue.scenarioId}". It cannot be confirmed again.`);
+  }
+  if (cue.state === "confirmed") {
+    throw httpError(409, `Cue "${cue.id}" is already "confirmed" and is waiting on scenario generation, not on a second confirmation.`);
+  }
+  if (cue.state === "dismissed") {
+    throw httpError(409, `Cue "${cue.id}" is "dismissed". A dismissed cue cannot be confirmed, BASEER has to push the picture again for it to be worked.`);
+  }
+  if (cue.state !== "reviewing") {
+    throw httpError(
+      409,
+      `Cue "${cue.id}" is "${cue.state}". It has to be identified and collected against, so it reads "reviewing", before a named human can confirm it.`
+    );
+  }
+  if (!cue.assessment) {
+    throw httpError(409, `Cue "${cue.id}" carries no identification. Confirmation needs something to confirm, so run identification first.`);
+  }
+  const tasks = Array.isArray(cue.collection) ? cue.collection : [];
+  const landed = tasks.filter((t) => t.status === "collected");
+  if (!landed.length) {
+    const pending =
+      tasks.length === 0
+        ? "nothing has been tasked yet"
+        : tasks.length === 1
+          ? "the one tasking on it has not reported"
+          : `none of the ${tasks.length} taskings on it have reported`;
+    throw httpError(
+      409,
+      `Cue "${cue.id}" has no collection product on file. Confirmation needs an approved tasking that has reported back, ${pending}.`
+    );
+  }
+  // A tasking that came back inconclusive is a collection, not a corroboration. It
+  // cannot be the evidence a confirmation rests on.
+  const resolving = landed.filter((t) => t.outcome !== "inconclusive");
+  if (!resolving.length) {
+    throw httpError(
+      409,
+      `Every collection on cue "${cue.id}" came back inconclusive. Task an asset that can resolve the discriminator before a named human confirms it.`
+    );
+  }
+  const by = actorName(body.by, "");
+  if (!by) throw httpError(400, "Field 'by' is required: only a named human can move a cue to confirmed.");
+  cue.state = "confirmed";
+  const evidence = resolving.length === 1 ? "a resolving collection" : `${resolving.length} resolving collections`;
+  const handoff = recordHandoff(cue, {
+    actor: by,
+    kind: "human",
+    autonomy: "human-required",
+    action: "Confirmed cue",
+    detail: `${by} moved the cue from possible to confirmed at ${cue.confidence}% confidence on ${evidence}, releasing it for course of action generation.`,
+  });
+  audit(by, "intel-confirmed", cue.id, `Cue "${cue.title}" confirmed by ${by} at ${cue.confidence}% confidence on ${evidence}.`);
+  schedulePersist();
+  return { cue, handoff };
+}
+
+function handleCueDismiss(id, body) {
+  const cue = requireCue(id);
+  if (cue.state === "spawned") {
+    throw httpError(409, `Cue "${cue.id}" is "spawned" and already produced scenario "${cue.scenarioId}". Close the scenario rather than the cue behind it.`);
+  }
+  if (cue.state === "dismissed") {
+    throw httpError(409, `Cue "${cue.id}" was already dismissed. The dismissal on file stands.`);
+  }
+  const by = actorName(body.by, "");
+  if (!by) throw httpError(400, "Field 'by' is required: only a named human can dismiss a cue.");
+  const reason = typeof body.reason === "string" && body.reason.trim() ? body.reason.trim().slice(0, 300) : "No reason recorded.";
+  const from = cue.state;
+  cue.state = "dismissed";
+  const handoff = recordHandoff(cue, {
+    actor: by,
+    kind: "human",
+    autonomy: "human-required",
+    action: "Dismissed cue",
+    detail: `${by} dismissed the cue at the "${from}" step. ${reason}`,
+  });
+  audit(by, "intel-dismissed", cue.id, `Cue "${cue.title}" dismissed by ${by} from "${from}". ${reason}`);
+  schedulePersist();
+  return { cue, handoff };
+}
+
+// A cue title carries the place name, and the capitalised words in it make a far
+// better scenario codename than the whole sentence truncated.
+function cueCodename(cue) {
+  const words = cue.title.replace(/[^A-Za-z0-9 -]+/g, " ").split(/\s+/).filter(Boolean);
+  const proper = words.slice(1).filter((w) => /^[A-Z]/.test(w));
+  const picked = proper.length ? proper.slice(-3) : words.slice(0, 3);
+  return picked.join(" ").toUpperCase().slice(0, 40) || "INTEL CUE";
+}
+
+/** The payoff: a confirmed cue becomes a real scenario, so COA generation answers a real situation. */
+function handleCueScenario(id, body) {
+  const cue = requireCue(id);
+  if (cue.state === "spawned" && cue.scenarioId) {
+    throw httpError(409, `Cue "${cue.id}" already produced scenario "${cue.scenarioId}".`);
+  }
+  if (cue.state !== "confirmed") {
+    throw httpError(409, `Cue "${cue.id}" is "${cue.state}". A named human must confirm the cue before it can become a scenario.`);
+  }
+  // The loop closes on a name. Every other gate refuses an unnamed actor, and the step
+  // that turns intelligence into a plannable scenario is the last place to invent one.
+  const createdBy = actorName(body.createdBy, "");
+  if (!createdBy) {
+    throw httpError(400, "Field 'createdBy' is required: only a named human can turn a confirmed cue into a scenario.");
+  }
+  const parse = cueToParse(cue, state);
+  if (!parse || !Array.isArray(parse.sides)) throw httpError(422, `Cue "${cue.id}" could not be projected into a scenario order of battle.`);
+  const scenario = materializeScenario(
+    parse,
+    { name: body.name, codename: body.codename || cueCodename(cue), durationHours: body.durationHours, createdBy },
+    state,
+    nowIso
+  );
+  state.scenarios.push(scenario);
+  state.platform.lowCode.scenarios = state.scenarios.length;
+  cue.scenarioId = scenario.id;
+  cue.state = "spawned";
+  const handoff = recordHandoff(cue, {
+    actor: createdBy,
+    kind: "human",
+    autonomy: "human-required",
+    action: "Generated scenario",
+    detail: `${createdBy} turned the confirmed cue into scenario "${scenario.name}" (${scenario.units.length} units, ${scenario.objectives.length} objectives), ready for course of action generation.`,
+  });
+  audit(
+    createdBy,
+    "intel-scenario-spawned",
+    scenario.id,
+    `Scenario "${scenario.name}" generated from confirmed intel cue ${cue.id} (${scenario.units.length} units, ${scenario.objectives.length} objectives).`
+  );
+  schedulePersist();
+  return { scenario, handoff, cue };
+}
+
+/** Advance the scripted BASEER replay by one cue so the demo can be driven without the live feed. */
+function handleIntelFeedAdvance() {
+  const cue = nextScriptedCue(state.intelFeed.cursor, nowIso());
+  if (!cue) return { cue: null };
+  state.intelFeed.cursor += 1;
+  if (!state.intelCues.some((c) => c.id === cue.id)) {
+    recordIngest(cue, "BASEER scripted replay");
+    state.intelCues.unshift(cue);
+  }
+  audit("BASEER", "intel-cue-received", cue.id, `Cue "${cue.title}" (${cue.severity}, ${cue.confidence}%) pushed from BASEER.`);
+  schedulePersist();
+  return { cue };
+}
+
+/** The machine step at the head of every cue: BASEER pushed it, nobody chose it. */
+function recordIngest(cue, channel) {
+  if (!Array.isArray(cue.handoffs)) cue.handoffs = [];
+  const handoff = recordHandoff(cue, {
+    actor: "BASEER",
+    kind: "machine",
+    autonomy: "auto",
+    action: "Ingested cue",
+    detail: `Normalised the ${channel} push into an intel cue, ${cue.severity} severity at ${cue.confidence}% reported confidence. Nothing is assessed and nothing is tasked yet.`,
+    source: "offline",
+    latencyMs: null,
+  });
+  cue.ingestHandoffId = handoff.id;
+  return handoff;
+}
+
+async function handleIntelFeedSync() {
+  const baseUrl = process.env.BASEER_URL;
+  if (baseUrl) {
+    let fetched = null;
+    try {
+      fetched = await fetchBaseerCues(baseUrl, process.env.BASEER_TOKEN);
+    } catch (err) {
+      console.error(`[sandtable] BASEER sync failed (${err.message}); falling back to the scripted replay.`);
+    }
+    if (Array.isArray(fetched)) {
+      let count = 0;
+      for (const cue of fetched) {
+        if (!cue || typeof cue.id !== "string") continue;
+        if (state.intelCues.some((c) => c.id === cue.id)) continue;
+        recordIngest(cue, `BASEER feed at ${baseUrl}`);
+        state.intelCues.unshift(cue);
+        count += 1;
+      }
+      if (count) {
+        audit(
+          "BASEER",
+          "intel-feed-synced",
+          "intel-feed",
+          `${count === 1 ? "1 new cue" : `${count} new cues`} merged from the BASEER feed at ${baseUrl}.`
+        );
+        schedulePersist();
+      }
+      return { source: "baseer", count };
+    }
+  }
+  const advanced = handleIntelFeedAdvance();
+  return { source: "replay", count: advanced.cue ? 1 : 0 };
 }
 
 function handleCreateMission(body) {
@@ -2209,6 +2901,32 @@ const routes = [
     handler: () => [...state.auditLogs].sort((a, b) => b.at.localeCompare(a.at)),
   },
   { method: "POST", re: /^\/api\/audit$/, handler: ({ body }) => handleAppendAudit(body) },
+
+  { method: "GET", re: /^\/api\/intel\/cues$/, handler: () => [...state.intelCues].sort((a, b) => b.observedAt.localeCompare(a.observedAt)) },
+  { method: "GET", re: new RegExp(`^/api/intel/cues/${ID}$`), handler: ({ params }) => requireCue(params[0]) },
+  {
+    method: "POST",
+    re: new RegExp(`^/api/intel/cues/${ID}/interrogate$`),
+    handler: ({ params, body }) => handleCueInterrogate(params[0], body),
+  },
+  { method: "POST", re: new RegExp(`^/api/intel/cues/${ID}/identify$`), handler: ({ params }) => handleCueIdentify(params[0]) },
+  { method: "POST", re: new RegExp(`^/api/intel/cues/${ID}/collect/options$`), handler: ({ params }) => handleCueCollectOptions(params[0]) },
+  { method: "POST", re: new RegExp(`^/api/intel/cues/${ID}/collect$`), handler: ({ params, body }) => handleCueCollect(params[0], body) },
+  {
+    method: "POST",
+    re: new RegExp(`^/api/intel/cues/${ID}/collect/${ID}/approve$`),
+    handler: ({ params, body }) => handleCueApproveCollection(params[0], params[1], body),
+  },
+  {
+    method: "POST",
+    re: new RegExp(`^/api/intel/cues/${ID}/collect/${ID}/report$`),
+    handler: ({ params }) => handleCueCollectionReport(params[0], params[1]),
+  },
+  { method: "POST", re: new RegExp(`^/api/intel/cues/${ID}/confirm$`), handler: ({ params, body }) => handleCueConfirm(params[0], body) },
+  { method: "POST", re: new RegExp(`^/api/intel/cues/${ID}/dismiss$`), handler: ({ params, body }) => handleCueDismiss(params[0], body) },
+  { method: "POST", re: new RegExp(`^/api/intel/cues/${ID}/scenario$`), handler: ({ params, body }) => handleCueScenario(params[0], body) },
+  { method: "POST", re: /^\/api\/intel\/feed\/advance$/, handler: () => handleIntelFeedAdvance() },
+  { method: "POST", re: /^\/api\/intel\/feed\/sync$/, handler: () => handleIntelFeedSync() },
 
   { method: "POST", re: /^\/api\/ask$/, handler: ({ body }) => handleAsk(body) },
 ];

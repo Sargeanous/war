@@ -1,0 +1,749 @@
+/* Intel page styles, every class carries the intel- prefix. */
+
+.intel-console {
+  /* The rail and the investigation column are pinned to the map height so each
+     zone scrolls inside itself instead of stretching the row. */
+  --intel-h: 588px;
+  display: grid;
+  grid-template-columns: 268px minmax(340px, 1fr) minmax(330px, 0.92fr);
+  gap: var(--s4);
+  align-items: stretch;
+}
+
+/* --- Zone 1, the cue inbox ---------------------------------------------------- */
+
+.intel-inbox {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--s3);
+  height: var(--intel-h);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.intel-inbox-head {
+  display: grid;
+  gap: var(--s2);
+}
+
+.intel-inbox-count {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--muted);
+  font-size: var(--t-kicker);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.intel-inbox-list {
+  display: grid;
+  gap: 3px;
+  align-content: start;
+  overflow-y: auto;
+  padding-inline-end: 4px;
+}
+
+.intel-cue-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s3);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  text-align: start;
+}
+
+.intel-cue-row:hover {
+  background: var(--surface-2);
+}
+
+.intel-cue-row.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.intel-sev {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.intel-cue-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.intel-cue-main strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-sm);
+  font-weight: 650;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.intel-cue-main small {
+  color: var(--muted);
+  font-size: var(--t-xs);
+}
+
+.intel-origin {
+  display: inline-flex;
+  margin-inline-end: 5px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.intel-cue-row .status-pill {
+  flex: none;
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+}
+
+.intel-inbox-empty {
+  margin: var(--s2) 2px;
+  color: var(--muted);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+
+/* --- Zone 2, the investigation ------------------------------------------------- */
+
+.intel-invest {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: var(--s3);
+  min-width: 0;
+  height: var(--intel-h);
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.intel-blank {
+  grid-row: 1 / -1;
+  display: grid;
+  place-content: center;
+}
+
+.intel-invest-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+.intel-invest-title {
+  flex: 1 1 220px;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.intel-invest-title strong {
+  font-size: var(--t-h2);
+  line-height: 1.3;
+}
+
+.intel-invest-title span {
+  color: var(--muted);
+  font-size: var(--t-xs);
+}
+
+.intel-conf {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  color: var(--ink);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.intel-conf small {
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.intel-ladder {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.intel-ladder li {
+  padding: 4px 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: var(--t-kicker);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.intel-ladder li.done {
+  border-color: color-mix(in srgb, var(--primary) 34%, transparent);
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+}
+
+.intel-transcript {
+  display: grid;
+  gap: var(--s4);
+  align-content: start;
+  overflow-y: auto;
+  padding-inline-end: 4px;
+}
+
+/* --- Transcript cards --------------------------------------------------------- */
+
+.intel-card {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.intel-card > header {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.intel-card-icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+.intel-card-kicker {
+  color: var(--muted);
+  font-size: var(--t-kicker);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.intel-card-time {
+  margin-inline-start: auto;
+  color: var(--muted);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: var(--t-kicker);
+}
+
+.intel-card-title {
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+
+.intel-narrative {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  line-height: 1.55;
+}
+
+/* The limitation the operator knowingly accepted when picking this asset. */
+.intel-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-xs);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+.intel-reasoning {
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: var(--t-xs);
+  line-height: 1.5;
+}
+
+.intel-subhead {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-kicker);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+/* The alert is the machine cueing the operator, so it reads as arriving. */
+.intel-card.alert {
+  border-color: color-mix(in srgb, var(--amber) 34%, var(--line));
+  background: color-mix(in srgb, var(--amber) 9%, var(--surface-3));
+  animation: intel-arrive 0.4s ease;
+}
+
+.intel-card.assess,
+.intel-card.answer {
+  background: color-mix(in srgb, var(--blue) 7%, var(--surface-3));
+}
+
+.intel-card.task.requested {
+  background: color-mix(in srgb, var(--amber) 7%, var(--surface-3));
+}
+
+.intel-card.task.approved {
+  background: color-mix(in srgb, var(--blue) 6%, var(--surface-3));
+}
+
+.intel-card.task.collected {
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface-3));
+}
+
+.intel-card.question {
+  justify-self: end;
+  max-width: 88%;
+  background: var(--surface-2);
+}
+
+.intel-card.thinking {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  border-style: dashed;
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+
+.intel-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.intel-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--blue);
+  animation: intel-blink 1.1s ease-in-out infinite;
+}
+
+.intel-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.intel-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes intel-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes intel-blink {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* --- Entities held in the cue -------------------------------------------------- */
+
+.intel-entity-list {
+  display: grid;
+  gap: 3px;
+}
+
+.intel-entity {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: start;
+}
+
+.intel-entity:hover {
+  background: var(--surface-2);
+}
+
+.intel-entity.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.intel-aff {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.intel-aff.hostile {
+  background: var(--red);
+}
+
+.intel-aff.unknown {
+  background: var(--amber);
+}
+
+.intel-aff.neutral {
+  background: var(--muted);
+}
+
+.intel-entity-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.intel-entity-main strong {
+  font-size: var(--t-sm);
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.intel-entity-main small {
+  color: var(--muted);
+  font-size: var(--t-xs);
+}
+
+.intel-approval,
+.intel-held {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  font-size: var(--t-xs);
+  font-weight: 650;
+}
+
+.intel-approval {
+  color: var(--primary-dark);
+}
+
+.intel-held {
+  color: var(--amber);
+}
+
+.intel-approval svg,
+.intel-held svg {
+  flex: none;
+}
+
+/* --- Hand-off inspector -------------------------------------------------------- */
+
+.intel-audit {
+  display: grid;
+  gap: var(--s2);
+}
+
+.intel-audit-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  padding: 5px var(--s3);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--t-kicker);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.intel-audit-toggle:hover {
+  border-color: var(--primary);
+  color: var(--ink-2);
+}
+
+.intel-audit-toggle em {
+  margin-inline-start: auto;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.intel-audit-body {
+  display: grid;
+  gap: var(--s2);
+}
+
+.intel-audit-rec {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.intel-audit-rec > header {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+.intel-audit-rec > header strong {
+  flex: 1 1 auto;
+  font-size: var(--t-sm);
+}
+
+.intel-audit-rec p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--t-xs);
+  line-height: 1.5;
+}
+
+/* --- Closing states ------------------------------------------------------------ */
+
+.intel-payoff {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s5) var(--s6);
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface-3));
+  animation: intel-arrive 0.45s ease;
+}
+
+.intel-payoff strong {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  font-size: 14px;
+}
+
+.intel-payoff strong svg {
+  flex: none;
+  color: var(--primary);
+}
+
+.intel-payoff p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  line-height: 1.55;
+}
+
+.intel-closed {
+  display: grid;
+  gap: 3px;
+  padding: var(--s4) var(--s5);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.intel-closed strong {
+  font-size: var(--t-sm);
+}
+
+.intel-closed p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-xs);
+  line-height: 1.5;
+}
+
+/* --- Question box -------------------------------------------------------------- */
+
+.intel-ask {
+  display: grid;
+  gap: var(--s2);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.intel-ask-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.intel-chip {
+  padding: 5px var(--s4);
+  border: 1px solid color-mix(in srgb, var(--blue) 45%, transparent);
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: var(--ink-2);
+  font-size: var(--t-xs);
+  font-weight: 650;
+}
+
+.intel-chip:hover {
+  color: var(--ink);
+}
+
+.intel-chip:disabled {
+  opacity: 0.5;
+}
+
+.intel-ask-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s3);
+}
+
+.intel-ask-row input {
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--t-sm);
+}
+
+/* --- Action ladder ------------------------------------------------------------- */
+
+.intel-actionbar {
+  display: grid;
+  gap: var(--s2);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.intel-actionbar-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-xs);
+  line-height: 1.45;
+}
+
+.intel-actionbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+/* --- Zone 3, the map ----------------------------------------------------------- */
+
+.intel-map-zone {
+  display: grid;
+  gap: var(--s2);
+  align-content: start;
+  min-width: 0;
+}
+
+.intel-map-hint {
+  color: var(--muted);
+  font-size: var(--t-xs);
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+/* --- Modals -------------------------------------------------------------------- */
+
+.intel-modal-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+
+.intel-option-list {
+  display: grid;
+  gap: var(--s3);
+}
+
+.intel-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px var(--s4);
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: start;
+}
+
+.intel-option:hover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.intel-option strong {
+  font-size: var(--t-body);
+}
+
+.intel-option span {
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+
+.intel-option .tag {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+@media (max-width: 1320px) {
+  .intel-console {
+    grid-template-columns: 250px minmax(0, 1fr);
+  }
+
+  .intel-map-zone {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 900px) {
+  .intel-console {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .intel-inbox {
+    height: 320px;
+  }
+
+  .intel-invest {
+    height: auto;
+  }
+
+  .intel-transcript {
+    max-height: 60vh;
+  }
+}
