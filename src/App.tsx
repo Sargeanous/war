@@ -215,7 +215,7 @@ function LoginScreen({
       <section className="login-panel">
         <div className="login-brand">
           <div className="brand-mark">
-            <BrandMark size={46} />
+            <BrandMark size={72} />
           </div>
           <div className="login-brand-text">
             <h1>Access profile</h1>
@@ -274,7 +274,7 @@ function Sidebar({
     <aside className="sidebar">
       <div className="sidebar-brand">
         <div className="brand-mark">
-          <BrandMark size={34} />
+          <BrandMark size={40} />
         </div>
         <div>
           <strong>SANDTABLE</strong>
