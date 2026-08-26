@@ -677,7 +677,9 @@ button:disabled {
 .submission-list button,
 .asset-registry button {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* The label takes the flexible column so a long name wraps; status badges
+     stay content-sized and are never squeezed into an unreadable sliver. */
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -1510,9 +1512,7 @@ select:focus {
 .bar-row > span {
   color: var(--ink-2);
   font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 .bar-row em {
@@ -1568,9 +1568,7 @@ select:focus {
 .timeline-label {
   font-weight: 700;
   color: var(--ink-2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 .timeline-track {
