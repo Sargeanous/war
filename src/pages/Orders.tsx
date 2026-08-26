@@ -4,7 +4,7 @@
 // paper: the five-paragraph order, the synchronisation matrix, the decision
 // support matrix, and the fragmentary orders cut when a commander overrides.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ClipboardCopy,
   Download,
@@ -69,6 +69,10 @@ export default function Orders({ notify, profile }: PageProps) {
   const [fragoText, setFragoText] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  // Changing scenario changes the COA under it, so two order fetches can be in
+  // flight at once. Only the newest may paint, or a slow first response overwrites
+  // the order the operator is actually looking at.
+  const orderTokenRef = useRef(0);
 
   useEffect(() => {
     let alive = true;
@@ -110,18 +114,23 @@ export default function Orders({ notify, profile }: PageProps) {
 
   const loadOrders = useCallback(
     async (id: string) => {
+      const token = (orderTokenRef.current += 1);
       if (!id) {
         setOrders(null);
         return;
       }
       setBusy(true);
       try {
-        setOrders(await fetchCoaOrders(id, `${profile.name}, ${profile.role}`));
+        const result = await fetchCoaOrders(id, `${profile.name}, ${profile.role}`);
+        if (token !== orderTokenRef.current) return;
+        setOrders(result);
       } catch (error) {
+        // A stale failure must not wipe the order that did arrive.
+        if (token !== orderTokenRef.current) return;
         setOrders(null);
         notify(errMsg(error));
       } finally {
-        setBusy(false);
+        if (token === orderTokenRef.current) setBusy(false);
       }
     },
     [notify, profile.name, profile.role]

@@ -67,11 +67,40 @@ check("scenario has RED units", scenario.units.some((u) => u.side === "red"));
 check("two COAs available for the comparison", scenarioCoas.length === 2, `got ${scenarioCoas.length}`);
 check("two authored adversary plans", ADVERSARY_PLANS.length === 2, `got ${ADVERSARY_PLANS.length}`);
 
-section("2. Seed fairness");
+section("2. Seed fairness and common random numbers");
 const fair = createRun({ scenario, coas: scenarioCoas, ruleSet, engine: "realtime", speed: 1, label: "seed", id: "check-seed" });
-const seeds = fair.branches.map((b) => b._rngState);
-check("every branch starts on the same RNG state", new Set(seeds).size === 1, `seeds ${seeds.join(", ")}`);
+const seeds = fair.branches.map((b) => b.seed);
+check("every branch carries the same seed", new Set(seeds).size === 1, `seeds ${seeds.join(", ")}`);
 check("the seed is published on the branch", fair.branches.every((b) => b.seed === ruleSet.adjudication.seed));
+check("no sequential RNG state survives on a branch", fair.branches.every((b) => b._rngState === undefined));
+
+// The claim on screen is that the difference between two branches is the plan and
+// not the dice. That is only true if the same decision meets the same die in both,
+// which a sequential stream cannot do: a different plan makes a different NUMBER of
+// draws and the streams desynchronise on the first tick. So assert the property
+// itself, on real adjudications that happened in both branches.
+const crn = runToCompletion(DEFAULT_ADVERSARY_PLAN_ID, "check CRN");
+const rollsByKey = crn.run.branches.map((branch) => {
+  const map = new Map();
+  for (const event of branch._full.events) {
+    if (!event.adjudication) continue;
+    map.set(`${event.tick}|${event.actorId}|${event.targetId}|${event.adjudication.weaponType}`, event.adjudication.roll);
+  }
+  return map;
+});
+const shared = [...rollsByKey[0].keys()].filter((k) => rollsByKey[1].has(k));
+const disagreed = shared.filter((k) => rollsByKey[0].get(k) !== rollsByKey[1].get(k));
+check(
+  "the two branches share adjudications to compare",
+  shared.length > 0,
+  "no engagement occurred at the same tick between the same pair in both branches"
+);
+check(
+  "a shared adjudication draws the same die in both branches",
+  shared.length > 0 && disagreed.length === 0,
+  `${disagreed.length} of ${shared.length} shared adjudications drew different dice`
+);
+console.log(`  (${shared.length} adjudications occurred identically in both branches)`);
 
 section("3. Adversary plan is resolved and masked");
 const plan = fair.branches[0]._red;

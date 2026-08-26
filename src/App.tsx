@@ -27,7 +27,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { askCopilot, fetchClassification } from "./api";
+import { askCopilot, fetchClassification, CLASSIFICATION_CHANGED } from "./api";
 import BrandMark from "./BrandMark";
 import { Toast } from "./components";
 import type { PageId, PageProps, Profile } from "./shell";
@@ -168,8 +168,17 @@ export default function App() {
     fetchClassification()
       .then((result) => alive && setMarking(result.marking))
       .catch(() => undefined);
+    // A marking change anywhere in the app repaints the banner at once. A shell
+    // that keeps saying RESTRICTED while the documents inside it read SECRET is
+    // under-marking the page, which is the one direction that actually matters.
+    const onChanged = (event: Event) => {
+      const next = (event as CustomEvent<{ marking?: string }>).detail;
+      if (alive && next && next.marking) setMarking(next.marking);
+    };
+    window.addEventListener(CLASSIFICATION_CHANGED, onChanged);
     return () => {
       alive = false;
+      window.removeEventListener(CLASSIFICATION_CHANGED, onChanged);
     };
   }, [profile]);
 

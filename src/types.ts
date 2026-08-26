@@ -1066,9 +1066,6 @@ export interface SimRun {
   completedAt?: string;
   label: string;
   seats?: CommandSeat[];
-  // Which adversary plan RED is playing. Chosen by the white cell at launch; the
-  // plan's content stays masked on branch.adversary until the reveal.
-  redPlanId?: string;
   resumedFrom?: {
     runId: string;
     runLabel: string;

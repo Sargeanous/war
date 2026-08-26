@@ -164,8 +164,11 @@ never `Math.random()` for engine outcomes.
 - `POST /api/runs/:id/branches/:bid/resume` {tick, speed?} -> SimRun. Picks the
   nearest recorded snapshot at or before `tick`, creates a new single-branch run on
   the same scenario/COA/rule set, and calls `rewindBranchToSnapshot()` to restore
-  unit positions, strengths, statuses, detection flags and the clock. The RNG state
-  is advanced by `tick * 2654435761` so the fork does not replay the parent's rolls.
+  unit positions, strengths, statuses, detection flags and the clock. The fork keeps
+  the parent's seed on purpose: draws are keyed by tick and by the identity of the
+  decision, so a fork that repeats the parent's choices meets the parent's dice, and
+  one that decides differently diverges only where the decision changed the world.
+  That is what isolates the decision, which is the reason to fork at all.
   The new run carries `resumedFrom {runId, runLabel, branchId, branchName, tick,
   simTimeH}` and inherits the parent's seat roster.
 - `POST /api/runs/:id/report` -> RunReport. Requires the run to be assessed. Builds
@@ -201,18 +204,35 @@ never `Math.random()` for engine outcomes.
   refuses an unnamed caller; completion reveals it automatically with the counter that
   would have broken it. `GET /api/runs/:id/adversary/truth` is the white-cell view.
   `GET /api/adversary/plans` is the launch catalogue; `POST /api/runs` accepts
-  `redPlanId`.
+  `redPlanId` and stores it as `run._redPlanId`, which `stripInternal` drops from
+  every player-facing payload. Serialized next to a branch reporting "Withheld",
+  the plan id would be the mask's own answer key, since the catalogue turns an id
+  into the full intent, risk and phases. For the same reason the run-started audit
+  entry does not name it, and `GET /api/runs/:id/adversary/truth` is gated on
+  `run.adversary.truth` (`?viewedBy=`), audited on every read: handing over the
+  whole plan mid-run is the same act as revealing it.
 - SAGE answers the "enemy" topic from the BLUE picture only. Before the reveal the
   grounded context tells the model the plan is withheld and must not be invented.
-- Branches now share one RNG seed (`ruleSet.adjudication.seed`), published as
-  `branch.seed`, so the gap between two COAs is the plan and never the dice.
+- Common random numbers, not just a common seed. A shared starting seed is not
+  enough: drawing from a sequential stream desynchronises two branches on the first
+  tick, because a different plan makes a different NUMBER of draws (measured: two
+  branches seeded identically at 20260810 sat at -611574860 and 1851826623 after one
+  tick). `die(branch, ruleSet, key)` therefore hashes `branch.seed`, `branch._tick`
+  and a key naming the decision (`det|observer|target`, `eng|actor|target|weapon`,
+  `dmg|...`). The same shot at the same moment meets the same die in every branch,
+  so where the plans agree the dice are identical and the difference is the plan.
+  `branch._rngState` no longer exists. `npm run check:engine` asserts the property
+  on real adjudications that occurred in both branches, not just on the seed value.
 - `node scripts/engine-check.mjs` (`npm run check:engine`) runs the engine headlessly
   with no server and no state.json and asserts all of the above in 38 checks.
 
 ## Addendum, autonomy is enforced (2026-08-26)
 
 - `GOVERNED_ACTIONS` in `index.mjs` is the single catalogue of actions the platform
-  gates: the eight intel-bridge steps plus the adversary reveal and umpire injects.
+  gates: the eight intel-bridge steps, the adversary reveal, the white-cell plan
+  read, umpire injects, and `run.decide`. A commander decision cuts a numbered order
+  under a name, so it passes the gate like everything else rather than falling back
+  to a literal "commander".
   `state.governance.policy` maps each action id to `auto` or `human-required`.
 - `gateAction(actionId, rawActor)` is the gate. Under `human-required` it refuses an
   unnamed actor with 403 and a machine-readable body (`code`, `actionId`,
@@ -220,7 +240,9 @@ never `Math.random()` for engine outcomes.
   Under `auto` the machine acts and the record says so. There are no invented
   fallback names anywhere in the bridge.
 - `recordHandoff()` reads `autonomy` from the policy for `fields.actionId` instead of
-  taking a literal, so the audit trail and the gate cannot disagree. Work the machine
+  taking a literal, and `kind` comes from `gate.kind` rather than being hardcoded:
+  under an auto policy nobody named the step, and a record claiming a human did it
+  would be a lie in the one place that must not lie. Work the machine
   performs under a human-required policy keeps the machine as `actor` and records the
   person in `signedBy`.
 - `GET /api/governance/policy` -> `{updatedAt, updatedBy, actions[]}` with the
@@ -246,7 +268,9 @@ never `Math.random()` for engine outcomes.
 - `buildFrago(...)` cuts a fragmentary order on every commander decision, marked as an
   override when the commander went against the machine, carrying the rationale and
   what the machine had recommended. Stored in `state.fragos`, read by
-  `GET /api/runs/:id/fragos` -> `{runId, runLabel, fragos, text}`.
+  `GET /api/runs/:id/fragos` -> `{runId, runLabel, fragos, marking, text}`. Orders
+  cut either side of a marking change carry different markings, so the compilation
+  banner is `highWater()` across all of them.
 
 ## Addendum, commander's requirements (2026-08-26)
 

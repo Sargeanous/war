@@ -10,7 +10,7 @@
 // already exist. No new authored content, so a document can never claim
 // something the simulation does not hold.
 
-import { markingLine, portionMark, highWater, normalizeClassification } from "./classification.mjs";
+import { markingLine, portionMark, normalizeClassification } from "./classification.mjs";
 
 const round1 = (n) => Math.round(n * 10) / 10;
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many || `${one}s`}`;
@@ -569,4 +569,3 @@ export function renderFragoText(doc) {
   ].join(nl);
 }
 
-export { highWater };

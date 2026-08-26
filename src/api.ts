@@ -206,12 +206,21 @@ export const fetchGovernance = () => get<GovernancePolicy>("/api/governance/poli
 // --- Classification and staff products -------------------------------------------
 
 export const fetchClassification = () => get<ClassificationState>("/api/classification");
-export const setClassification = (payload: {
+// The shell paints the marking at the head and foot of every workspace, so a
+// change has to reach it immediately. Under-marking a page is the failure that
+// matters here, and a stale banner is exactly that.
+export const CLASSIFICATION_CHANGED = "sandtable:classification-changed";
+
+export const setClassification = async (payload: {
   level: ClassificationLevelId;
   caveats?: string[];
   releasableTo?: string;
   changedBy: string;
-}) => put<ClassificationState>("/api/classification", payload);
+}): Promise<ClassificationState> => {
+  const result = await put<ClassificationState>("/api/classification", payload);
+  window.dispatchEvent(new CustomEvent<ClassificationState>(CLASSIFICATION_CHANGED, { detail: result }));
+  return result;
+};
 export const fetchCoaOrders = (coaId: string, issuedBy?: string) =>
   get<OrdersResult>(`/api/coas/${coaId}/orders${issuedBy ? `?issuedBy=${encodeURIComponent(issuedBy)}` : ""}`);
 export const fetchRunFragos = (runId: string) => get<FragoResult>(`/api/runs/${runId}/fragos`);

@@ -78,8 +78,9 @@ const errMsg = (error: unknown) => (error instanceof ApiError ? error.message : 
 
 type LadderStep = "cued" | "identified" | "tasked" | "collected" | "confirmed" | "scenario";
 type ActionId = "identify" | "request" | "approve" | "report" | "confirm" | "spawn" | "dismiss";
-// The two steps that end with a person's name on the record.
-type SignedAction = "confirm" | "spawn";
+// The steps that end with a person's name on the record. Identify joins them only
+// when the autonomy policy makes it human-required.
+type SignedAction = "confirm" | "spawn" | "identify";
 
 interface AskTurn {
   id: string;
@@ -468,13 +469,28 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
   // inbox row and the map all render one payload. The operator may have moved to
   // another cue while the read was in flight: the inbox row still takes the
   // update, the open investigation only if it is still the same cue.
-  const reload = useCallback(async (id: string) => {
-    const fresh = await fetchIntelCue(id);
-    mutationsRef.current += 1;
-    if (selectedRef.current === fresh.id) setCue(fresh);
-    setCues((list) => list.map((item) => (item.id === fresh.id ? fresh : item)));
-    return fresh;
+  // The board is derived from every cue's state, so anything that moves a cue
+  // moves the board. Fetched once at mount it would sit frozen through the exact
+  // demo it exists for: confirm the target, watch the commander's question get
+  // answered. Failures are swallowed on purpose; a stale board is worth more than
+  // a page that falls over because a secondary read failed.
+  const refreshBoard = useCallback(() => {
+    fetchRequirements()
+      .then(setBoard)
+      .catch(() => undefined);
   }, []);
+
+  const reload = useCallback(
+    async (id: string) => {
+      const fresh = await fetchIntelCue(id);
+      mutationsRef.current += 1;
+      if (selectedRef.current === fresh.id) setCue(fresh);
+      setCues((list) => list.map((item) => (item.id === fresh.id ? fresh : item)));
+      refreshBoard();
+      return fresh;
+    },
+    [refreshBoard]
+  );
 
   function selectCue(id: string) {
     selectedRef.current = id;
@@ -500,6 +516,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
     try {
       const sync = await syncIntelFeed();
       const list = await loadList(false);
+      refreshBoard();
       const fresh = list ? list.filter((item) => !before.has(item.id)) : [];
       notify(
         fresh.length
@@ -515,10 +532,24 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
 
   function doIdentify() {
     if (!cue) return;
+    // Under a human-required policy the name has to be typed deliberately for this
+    // step. Reading whatever is left in `signer` would sign one person's name to
+    // another person's act.
+    if (requiresHuman("intel.identify") && signFor !== "identify") {
+      setSigner(profile.name);
+      setSignFor("identify");
+      return;
+    }
     const id = cue.id;
+    const identifiedBy = requiresHuman("intel.identify") ? signer.trim() : "";
+    if (requiresHuman("intel.identify") && !identifiedBy) {
+      notify("Enter your name, this identification is governed as human required");
+      return;
+    }
     runAction("identify", async () => {
-      await identifyCue(id, requiresHuman("intel.identify") ? signer.trim() || profile.name : undefined);
+      await identifyCue(id, identifiedBy || undefined);
       const fresh = await reload(id);
+      setSignFor((current) => (current === "identify" ? null : current));
       notify(
         fresh.assessment
           ? `SAGE reads this as ${fresh.assessment.unitType}, ${fresh.assessment.confidence}% confidence`
@@ -543,7 +574,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
     if (!cue) return;
     const id = cue.id;
     runAction("request", async () => {
-      await requestCollection(id, optionIndex, signer.trim() || profile.name);
+      await requestCollection(id, optionIndex, profile.name);
       const fresh = await reload(id);
       setOptionsOpen(false);
       const task = fresh.collection[fresh.collection.length - 1];
@@ -576,7 +607,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
     const taskId = flyingTask.id;
     const asset = flyingTask.asset;
     runAction("report", async () => {
-      await reportCollection(id, taskId, signer.trim() || profile.name);
+      await reportCollection(id, taskId, profile.name);
       const fresh = await reload(id);
       notify(`Product from ${asset} logged against the tasking, confidence now ${fresh.confidence}%`);
     });
@@ -662,7 +693,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
     setQuestion("");
     setAsking(true);
     try {
-      const result = await interrogateCue(id, asked, requiresHuman("intel.interrogate") ? signer.trim() || profile.name : undefined);
+      const result = await interrogateCue(id, asked, requiresHuman("intel.interrogate") ? profile.name : undefined);
       setTurns((all) => ({
         ...all,
         [id]: (all[id] ?? []).map((turn) =>
@@ -1278,14 +1309,21 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
       ) : null}
 
       {signFor && cue ? (
-        <Modal title={signFor === "confirm" ? "Confirm the target" : "Generate the scenario"} onClose={() => setSignFor(null)}>
+        <Modal
+          title={signFor === "confirm" ? "Confirm the target" : signFor === "identify" ? "Identify the contact" : "Generate the scenario"}
+          onClose={() => setSignFor(null)}
+        >
           <DetailGrid>
             <Detail label="Cue" value={cue.title} />
             <Detail label="Confidence" value={`${cue.confidence}%`} />
           </DetailGrid>
           <Field
             label={
-              signFor === "confirm" ? "Name, recorded against the confirmation" : "Name, recorded against the generated scenario"
+              signFor === "confirm"
+                ? "Name, recorded against the confirmation"
+                : signFor === "identify"
+                  ? "Name, recorded against the identification"
+                  : "Name, recorded against the generated scenario"
             }
           >
             <input value={signer} onChange={(event) => setSigner(event.target.value)} placeholder="Rank and name" />
@@ -1293,10 +1331,16 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
           <p className="intel-modal-note">
             {signFor === "confirm"
               ? "SAGE cannot confirm a target. Your name moves this cue from possible to confirmed and stays in the hand-off record."
-              : "SAGE cannot open a scenario. Your name goes on the scenario and stays in the hand-off record."}
+              : signFor === "identify"
+                ? "This platform is set to require a named human for identification. SAGE still does the work; your name is recorded as having authorised it."
+                : "SAGE cannot open a scenario. Your name goes on the scenario and stays in the hand-off record."}
           </p>
           <ActionRow>
-            {signFor === "confirm" ? (
+            {signFor === "identify" ? (
+              <Button icon={BrainCircuit} onClick={doIdentify} disabled={busy !== null}>
+                {busy === "identify" ? "Identifying" : "Identify contact"}
+              </Button>
+            ) : signFor === "confirm" ? (
               <Button icon={Crosshair} onClick={doConfirm} disabled={busy !== null}>
                 {busy === "confirm" ? "Confirming" : "Confirm target"}
               </Button>

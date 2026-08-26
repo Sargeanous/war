@@ -36,8 +36,11 @@ model; without it every AI endpoint degrades to offline heuristics.
   harder to detect, until a BLUE capital ship crosses inside the coastal battery
   envelope. The plan is masked from the players until the run completes or an umpire
   reveals it, and the reveal includes what BLUE would have had to do to break it.
-- **The comparison is fair.** Every branch draws from the same seed, so the gap between
-  two courses of action is the plan and never the dice.
+- **The comparison is fair.** Branches do not merely share a seed, which would
+  desynchronise on the first tick because a different plan makes a different number of
+  dice rolls. Each roll is drawn from a hash of the seed, the clock and the identity of
+  the shot, so the same engagement at the same moment meets the same die in every
+  branch. Where two plans agree, the dice are identical and the difference is the plan.
 - **Autonomy is a control.** Each governed action carries a policy of `auto` or
   `human-required`. A human-required action refuses to execute without a named person,
   counts the refusal and audits it. Changing the policy in the Administration console

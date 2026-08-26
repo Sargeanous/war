@@ -24,6 +24,16 @@ function PutRaw($url, $obj) {
   }
 }
 function GetJ($url) { Invoke-RestMethod "$base$url" -TimeoutSec 60 }
+function GetRaw($url) {
+  try {
+    $r = Invoke-WebRequest "$base$url" -TimeoutSec 60
+    return @{ code = $r.StatusCode; body = $r.Content }
+  } catch {
+    $resp = $_.Exception.Response
+    $code = if ($resp) { [int]$resp.StatusCode } else { 0 }
+    return @{ code = $code; body = "" }
+  }
+}
 function PostRaw($url, $obj) {
   $body = if ($null -eq $obj) { "{}" } else { $obj | ConvertTo-Json -Depth 12 }
   try {
@@ -250,9 +260,36 @@ Step "16 OPFOR plan is played and masked" {
   if ($adv2.codename -ne "TIDEWALL") { throw "codename $($adv2.codename)" }
   if ($adv2.phases.Count -lt 3) { throw "only $($adv2.phases.Count) phases revealed" }
   if (-not $adv2.counter) { throw "no counter recorded" }
-  $truth = GetJ "/api/runs/$($run.id)/adversary/truth"
+  if ($run.PSObject.Properties.Name -contains "redPlanId") { throw "the plan id is serialized to players, which unmasks the plan via GET /api/adversary/plans" }
+  $openTruth = GetRaw "/api/runs/$($run.id)/adversary/truth"
+  if ($openTruth.code -ne 403) { throw "the white-cell plan view is readable by anyone (got $($openTruth.code))" }
+  $truth = GetJ "/api/runs/$($run.id)/adversary/truth?viewedBy=E2E%20White%20Cell"
   if ($truth.branches.Count -lt 2) { throw "white cell view missing a branch" }
+  $log = GetJ "/api/audit"
+  if (-not ($log | Where-Object { $_.action -eq "adversary-truth-read" })) { throw "reading the enemy plan was not audited" }
   $script:advRunId = $run.id
+  PostJ "/api/runs/$($run.id)/control" @{ action = "abort" } | Out-Null
+}
+
+# 16b - A decision cuts an order, so it cannot be made by nobody
+Step "16b Commander decisions require a named human" {
+  $coa = (GetJ "/api/coas") | Where-Object { $_.scenarioId -eq "scn-azure-horizon" } | Select-Object -First 1
+  $rs = (GetJ "/api/rulesets") | Where-Object { $_.status -eq "active" } | Select-Object -First 1
+  $run = PostJ "/api/runs" @{ scenarioId = "scn-azure-horizon"; coaIds = @($coa.id); ruleSetId = $rs.id; engine = "realtime"; speed = 8; label = "E2E decide gate" }
+  $open = $null
+  for ($i = 0; $i -lt 90 -and -not $open; $i++) {
+    Start-Sleep -Milliseconds 700
+    $run = GetJ "/api/runs/$($run.id)"
+    $open = $run.branches[0].decisions | Where-Object { $_.status -eq "open" } | Select-Object -First 1
+  }
+  if (-not $open) { throw "no decision point opened inside the window" }
+  $anon = PostRaw "/api/runs/$($run.id)/branches/$($run.branches[0].id)/decide" @{ decisionId = $open.id; optionId = $open.aiRecommendationId }
+  if ($anon.code -ne 403) { throw "an unnamed commander decision was accepted (got $($anon.code))" }
+  $f = GetJ "/api/runs/$($run.id)/fragos"
+  if ($f.fragos.Count -ne 0) { throw "a refused decision still cut an order" }
+  PostJ "/api/runs/$($run.id)/branches/$($run.branches[0].id)/decide" @{ decisionId = $open.id; optionId = $open.aiRecommendationId; decidedBy = "Maj Gen E2E"; rationale = "gate check" } | Out-Null
+  $f2 = GetJ "/api/runs/$($run.id)/fragos"
+  if ($f2.fragos[0].issuedBy -ne "Maj Gen E2E") { throw "order issued by $($f2.fragos[0].issuedBy)" }
   PostJ "/api/runs/$($run.id)/control" @{ action = "abort" } | Out-Null
 }
 
@@ -304,6 +341,22 @@ Step "18 Fragmentary orders are cut on decisions" {
   if (-not $override.machineLine) { throw "frago does not record what the machine recommended" }
   if ($override.rationale -notmatch "E2E override") { throw "frago lost the commander rationale" }
   if ($f.text.Length -lt 200) { throw "frago text renders empty" }
+  if (-not $f.marking) { throw "the frago compilation carries no marking of its own" }
+  # A compilation assembled across a marking change takes the highest of them.
+  PutJ "/api/classification" @{ level = "secret"; changedBy = "E2E Admin" } | Out-Null
+  $open2 = $null
+  for ($i = 0; $i -lt 90 -and -not $open2; $i++) {
+    Start-Sleep -Milliseconds 700
+    $run = GetJ "/api/runs/$($run.id)"
+    $open2 = $run.branches[0].decisions | Where-Object { $_.status -eq "open" } | Select-Object -First 1
+  }
+  if ($open2) {
+    PostJ "/api/runs/$($run.id)/branches/$($run.branches[0].id)/decide" @{ decisionId = $open2.id; optionId = $open2.aiRecommendationId; decidedBy = "E2E Commander"; rationale = "second order" } | Out-Null
+    $mixed = GetJ "/api/runs/$($run.id)/fragos"
+    if ($mixed.marking -notmatch "^SECRET") { throw "a compilation holding a SECRET order is banner-marked $($mixed.marking)" }
+    if ($mixed.text -notmatch "^SECRET") { throw "the downloaded compilation opens on the wrong marking" }
+  }
+  PutJ "/api/classification" @{ level = "restricted"; changedBy = "E2E Admin" } | Out-Null
   PostJ "/api/runs/$($run.id)/control" @{ action = "abort" } | Out-Null
 }
 
@@ -342,5 +395,5 @@ Step "20 Requirements board anchors cues" {
   }
 }
 
-$results | Select-Object -Last 8 | ForEach-Object { $_ }
+$results | Select-Object -Last 10 | ForEach-Object { $_ }
 "report source: $($script:reportSource)"

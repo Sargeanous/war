@@ -34,18 +34,47 @@ const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 /** A count with a real plural. */
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many || `${one}s`}`;
 
-// Mulberry32 step over a persisted numeric state, deterministic across save/load.
-function roll(branch) {
-  branch._rngState = (branch._rngState + 0x6d2b79f5) | 0;
-  let t = branch._rngState;
+// Common random numbers.
+//
+// A shared starting seed is not enough to make two branches comparable. Drawing
+// from a sequential stream desynchronises them on the very first tick, because a
+// different plan makes a different NUMBER of draws: branch one asks for a
+// detection roll that branch two never asks for, and from then on the two are
+// reading different pages of the same book. Measured before this changed, two
+// AZURE HORIZON branches seeded identically at 20260810 were at -611574860 and
+// 1851826623 after a single tick.
+//
+// So a draw is keyed instead of sequential: it is a hash of the seed, the tick
+// and the identity of the decision being made. The same shooter engaging the
+// same target with the same weapon at the same moment meets the same die in
+// every branch, whatever else happened. Where the plans put units in the same
+// place, the dice are identical and the difference is the plan; where the plans
+// diverge, the events differ because the plans differ. That is the claim the
+// product makes on screen, and this is what makes it true.
+function hash32(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function draw(branch, key) {
+  // Runs recorded before the branch carried its seed still have to adjudicate.
+  const seed = Number.isFinite(branch.seed) ? branch.seed : 0;
+  let t = (seed + hash32(`${branch._tick}|${key}`)) | 0;
   t = Math.imul(t ^ (t >>> 15), t | 1);
   t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
-/** Die respecting the rule set's model: deterministic = fixed midpoint. */
-function die(branch, ruleSet) {
-  return ruleSet.adjudication.dieModel === "deterministic" ? 0.5 : roll(branch);
+/**
+ * Die respecting the rule set's model: deterministic = fixed midpoint. The key
+ * names the decision, so the same decision draws the same number across branches.
+ */
+function die(branch, ruleSet, key) {
+  return ruleSet.adjudication.dieModel === "deterministic" ? 0.5 : draw(branch, key);
 }
 
 function distanceKm(a, b) {
@@ -183,10 +212,6 @@ export function createRun({ scenario, coas, ruleSet, engine, speed, label, id, r
       metricsHistory: [],
       _full: { events: [], snapshots: [] },
       _coa: deepClone(coa),
-      // Common random numbers: every branch draws from the same stream, so the
-      // gap between two COAs is the plan and never the dice. A branch seeded
-      // differently would make the comparison the whole product rests on unfair.
-      _rngState: ruleSet.adjudication.seed >>> 0,
       _tick: 0,
       _simTimeH: 0,
       _evSeq: 0,
@@ -600,7 +625,7 @@ function tickBranch(run, branch, ctx) {
       // RED under a held-fire plan is running silent, so BLUE is hunting a force
       // that is deliberately not radiating.
       if (redEmconSilent && target.side === "red") p *= 0.45;
-      if (reveal || die(branch, ruleSet) < clamp(p, 0.02, 0.95)) {
+      if (reveal || die(branch, ruleSet, `det|${observer.id}|${target.id}`) < clamp(p, 0.02, 0.95)) {
         target._detBy[observer.side] = true;
         target.detectedByEnemy = true;
         pushEvent(branch, {
@@ -663,9 +688,10 @@ function tickBranch(run, branch, ctx) {
       actor.detectedByEnemy = true;
     }
 
-    const rollValue = die(branch, ruleSet);
+    const shotKey = `${actor.id}|${target.id}|${weapon.type}`;
+    const rollValue = die(branch, ruleSet, `eng|${shotKey}`);
     const hit = rollValue < pk;
-    const damage = hit ? damageFor(weapon, branch, ruleSet) : 0;
+    const damage = hit ? damageFor(weapon, branch, ruleSet, shotKey) : 0;
     const pkModifiers = effects
       .filter(({ effect }) => effect.type === "modify-pk")
       .map(({ rule, effect }) => ({ rule: rule.name, factor: round2(Number(effect.params.factor) || 1) }));
@@ -830,8 +856,8 @@ function weaponCanEngage(weapon, target) {
   }
 }
 
-function damageFor(weapon, branch, ruleSet) {
-  const spread = die(branch, ruleSet);
+function damageFor(weapon, branch, ruleSet, shotKey) {
+  const spread = die(branch, ruleSet, `dmg|${shotKey}`);
   switch (weapon.type) {
     case "torpedo":
       return 26 + spread * 24;
@@ -1374,8 +1400,11 @@ export function rewindBranchToSnapshot(branch, snapshot, sourceLabel) {
   }
   branch._tick = snapshot.tick;
   branch._simTimeH = snapshot.simTimeH;
-  // Advance the stream so the fork does not replay the parent's exact rolls.
-  branch._rngState = (branch._rngState + snapshot.tick * 2654435761) >>> 0;
+  // The fork keeps the parent's seed on purpose. Draws are keyed by tick and by
+  // the identity of the decision, so a fork that repeats the parent's choices
+  // meets the parent's dice, and a fork that decides differently diverges only
+  // where the decision actually changed the world. That is what isolates the
+  // decision, which is the whole reason to fork.
   branch.metrics = { ...snapshot.metrics };
   branch._full = { events: [], snapshots: [] };
   branch.recentEvents = [];

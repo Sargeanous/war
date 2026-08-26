@@ -27,11 +27,16 @@ function centroid(points) {
   return { lat: round4(lat), lng: round4(lng) };
 }
 
-/** Point km along the bearing from `from` towards `to`. */
+/**
+ * Point km along the bearing from `from` towards `to`, never past it. Every call
+ * site wants a point BETWEEN the two ends; an uncapped fraction turns a 60 km
+ * reach across a 0.2 km separation into a 300x extrapolation, which is how RED
+ * ended up ordered to a station on the far side of the BLUE force.
+ */
 function towards(from, to, km) {
   const total = distanceKm(from, to);
   if (!total) return { ...from };
-  const frac = km / total;
+  const frac = Math.min(km / total, 1);
   return {
     lat: round4(from.lat + (to.lat - from.lat) * frac),
     lng: round4(from.lng + (to.lng - from.lng) * frac),
@@ -160,6 +165,10 @@ export const ADVERSARY_PLANS = [
         id: "adv-p2",
         name: "Massed salvo",
         toFraction: 0.72,
+        // The release IS this phase's start line. A coastal force whose ambush has
+        // been sprung is not still on silent watch, so releasing fires early pulls
+        // the plan forward rather than leaving the phase card contradicting the log.
+        startsOnRelease: true,
         intent: "On release, every launcher and squadron engages the closest capital target in one exchange.",
         tasks: {
           "coastal-fires": "hold-station",
@@ -316,12 +325,19 @@ export function resolveAdversaryPlan({ scenario, planId, durationHours }) {
   const redObjective = (scenario.objectives || []).find(
     (o) => o.side === "red" && o.area && (o.kind === "deny" || o.kind === "control-area")
   );
-  const denyCentre = redObjective && redObjective.area ? { ...redObjective.area.center } : batteryCentre;
+  const objectiveCentre = redObjective && redObjective.area ? { ...redObjective.area.center } : null;
   const denyRadiusKm = redObjective && redObjective.area ? redObjective.area.radiusKm : 50;
+  // A scenario materialised from an intel cue anchors a RED deny objective on the
+  // centroid of the force it is denying, which can sit on top of BLUE itself. That
+  // gives no usable axis: the bearing becomes rounding noise and RED is sent
+  // through the BLUE formation and out the other side. Fall back to the ground RED
+  // is actually standing on.
+  const denyCentre = objectiveCentre && distanceKm(objectiveCentre, blueCentre) > 25 ? objectiveCentre : batteryCentre;
 
   // Contact line: where a forward-fighting RED wants the first exchange, short
-  // of BLUE and outside its own denial area.
-  const reachKm = clamp(distanceKm(denyCentre, blueCentre) * 0.55, 60, 260);
+  // of BLUE and outside its own denial area. Never past BLUE.
+  const separationKm = distanceKm(denyCentre, blueCentre);
+  const reachKm = Math.min(clamp(separationKm * 0.55, 60, 260), separationKm * 0.9);
   const contactLine = towards(denyCentre, blueCentre, reachKm);
 
   const geometry = {
@@ -346,6 +362,7 @@ export function resolveAdversaryPlan({ scenario, planId, durationHours }) {
       intent: phase.intent,
       startH,
       endH: Math.max(endH, startH),
+      startsOnRelease: Boolean(phase.startsOnRelease),
       tasks: { ...phase.tasks },
     };
     startH = resolved.endH;
@@ -385,7 +402,14 @@ export function resolveAdversaryPlan({ scenario, planId, durationHours }) {
 
 export function adversaryPhaseAt(redPlan, simTimeH) {
   if (!redPlan || !redPlan.phases.length) return null;
-  return redPlan.phases.find((p) => simTimeH >= p.startH && simTimeH < p.endH) || redPlan.phases[redPlan.phases.length - 1];
+  const byClock = redPlan.phases.find((p) => simTimeH >= p.startH && simTimeH < p.endH) || redPlan.phases[redPlan.phases.length - 1];
+  if (!redPlan.fires.released) return byClock;
+  // Once fires are out, the plan cannot still be in a phase that only begins on
+  // release. Jump to it, and never backwards: a later phase stays where it is.
+  const salvo = redPlan.phases.find((p) => p.startsOnRelease);
+  if (!salvo) return byClock;
+  const order = redPlan.phases.indexOf(byClock);
+  return order < redPlan.phases.indexOf(salvo) ? salvo : byClock;
 }
 
 export function taskForUnit(redPlan, unit, simTimeH) {
@@ -526,6 +550,7 @@ export function projectAdversary(redPlan) {
       intent: p.intent,
       startH: p.startH,
       endH: p.endH,
+      startsOnRelease: Boolean(p.startsOnRelease),
       tasks: Object.entries(p.tasks).map(([role, task]) => ({
         role,
         roleLabel: roleLabel(role),

@@ -37,6 +37,7 @@ import {
   normalizeClassification,
   classificationCatalogue,
   markingLine,
+  highWater,
   CLASSIFICATION_LEVELS,
 } from "./classification.mjs";
 import { buildOpord, renderOpordText, buildFrago, renderFragoText, buildSyncMatrix, buildDecisionSupport } from "./orders.mjs";
@@ -437,7 +438,7 @@ function runHistoricalDeduction() {
     id: "run-historical-001",
     redPlanId: DEFAULT_ADVERSARY_PLAN_ID,
   });
-  run.redPlanId = DEFAULT_ADVERSARY_PLAN_ID;
+  run._redPlanId = DEFAULT_ADVERSARY_PLAN_ID;
   const ctx = { scenario, ruleSet };
 
   let iterations = 0;
@@ -1578,6 +1579,15 @@ const GOVERNED_ACTIONS = [
     detail: "The step where intelligence becomes a plannable operation. The last place to invent a name.",
   },
   {
+    id: "run.decide",
+    label: "Rule on a commander decision",
+    group: "Exercise control",
+    actorField: "decidedBy",
+    machineActor: "SAGE auto-umpire",
+    defaultAutonomy: "human-required",
+    detail: "Choosing at a decision point. It changes the run and cuts a numbered order under the name it is given.",
+  },
+  {
     id: "run.adversary.reveal",
     label: "Reveal the OPFOR plan",
     group: "Exercise control",
@@ -1585,6 +1595,15 @@ const GOVERNED_ACTIONS = [
     machineActor: "white cell",
     defaultAutonomy: "human-required",
     detail: "Showing the players what RED was playing before the run has ended. It cannot be undone.",
+  },
+  {
+    id: "run.adversary.truth",
+    label: "Read the white-cell copy of the OPFOR plan",
+    group: "Exercise control",
+    actorField: "viewedBy",
+    machineActor: "white cell",
+    defaultAutonomy: "human-required",
+    detail: "Handing over the adversary's whole scheme of manoeuvre while the run is still live. The same act as revealing it, minus the ceremony.",
   },
   {
     id: "run.intervene",
@@ -1893,7 +1912,8 @@ function handleCueCollect(id, body) {
     throw httpError(400, `Field 'optionIndex' must be between 0 and ${options.length - 1}.`);
   }
   const option = options[index];
-  const requestedBy = gateAction("intel.collection.request", body.requestedBy).actor;
+  const requestGate = gateAction("intel.collection.request", body.requestedBy);
+  const requestedBy = requestGate.actor;
   const task = {
     id: nextId("tsk"),
     taskingId: `${(Date.now() % 900000) + 100000}-RRN`,
@@ -1921,8 +1941,10 @@ function handleCueCollect(id, body) {
   if (cue.state === "new") cue.state = "reviewing";
   const handoff = recordHandoff(cue, {
     actor: requestedBy,
-    kind: "human",
-    actionId: "intel.collection.request",
+    // Never hardcoded. Under an auto policy nobody named this step, so a record
+    // that claims a human did it is a lie in the one place that must not lie.
+    kind: requestGate.kind,
+    actionId: requestGate.actionId,
     action: "Requested collection",
     detail: `Tasking ${task.taskingId}, ${task.asset} ${task.mode} at ${task.resolutionM} m, ETA ${task.etaMinutes} min, ${task.priority}. Held for named approval.`,
   });
@@ -2012,15 +2034,16 @@ function handleCueApproveCollection(id, taskId, body) {
       `Tasking ${task.taskingId} was already released by ${task.approvedBy} at ${task.approvedAt}. It is out, waiting on its product.`
     );
   }
-  const approver = gateAction("intel.collection.approve", body.approver).actor;
+  const approveGate = gateAction("intel.collection.approve", body.approver);
+  const approver = approveGate.actor;
   task.status = "approved";
   task.approvedBy = approver;
   task.approvedAt = nowIso();
   if (cue.state === "new") cue.state = "reviewing";
   const handoff = recordHandoff(cue, {
     actor: approver,
-    kind: "human",
-    actionId: "intel.collection.approve",
+    kind: approveGate.kind,
+    actionId: approveGate.actionId,
     action: "Approved collection",
     detail: `${approver} released tasking ${task.taskingId} to ${task.asset} (${task.mode}, ${task.priority}). Nothing has been collected yet.`,
   });
@@ -2158,13 +2181,14 @@ function handleCueConfirm(id, body) {
       `Every collection on cue "${cue.id}" came back inconclusive. Task an asset that can resolve the discriminator before a named human confirms it.`
     );
   }
-  const by = gateAction("intel.confirm", body.by).actor;
+  const confirmGate = gateAction("intel.confirm", body.by);
+  const by = confirmGate.actor;
   cue.state = "confirmed";
   const evidence = resolving.length === 1 ? "a resolving collection" : `${resolving.length} resolving collections`;
   const handoff = recordHandoff(cue, {
     actor: by,
-    kind: "human",
-    actionId: "intel.confirm",
+    kind: confirmGate.kind,
+    actionId: confirmGate.actionId,
     action: "Confirmed cue",
     detail: `${by} moved the cue from possible to confirmed at ${cue.confidence}% confidence on ${evidence}, releasing it for course of action generation.`,
   });
@@ -2181,14 +2205,15 @@ function handleCueDismiss(id, body) {
   if (cue.state === "dismissed") {
     throw httpError(409, `Cue "${cue.id}" was already dismissed. The dismissal on file stands.`);
   }
-  const by = gateAction("intel.dismiss", body.by).actor;
+  const dismissGate = gateAction("intel.dismiss", body.by);
+  const by = dismissGate.actor;
   const reason = typeof body.reason === "string" && body.reason.trim() ? body.reason.trim().slice(0, 300) : "No reason recorded.";
   const from = cue.state;
   cue.state = "dismissed";
   const handoff = recordHandoff(cue, {
     actor: by,
-    kind: "human",
-    actionId: "intel.dismiss",
+    kind: dismissGate.kind,
+    actionId: dismissGate.actionId,
     action: "Dismissed cue",
     detail: `${by} dismissed the cue at the "${from}" step. ${reason}`,
   });
@@ -2217,7 +2242,8 @@ function handleCueScenario(id, body) {
   }
   // The loop closes on a name. Every other gate refuses an unnamed actor, and the step
   // that turns intelligence into a plannable scenario is the last place to invent one.
-  const createdBy = gateAction("intel.scenario.spawn", body.createdBy).actor;
+  const spawnGate = gateAction("intel.scenario.spawn", body.createdBy);
+  const createdBy = spawnGate.actor;
   const parse = cueToParse(cue, state);
   if (!parse || !Array.isArray(parse.sides)) throw httpError(422, `Cue "${cue.id}" could not be projected into a scenario order of battle.`);
   const scenario = materializeScenario(
@@ -2232,8 +2258,8 @@ function handleCueScenario(id, body) {
   cue.state = "spawned";
   const handoff = recordHandoff(cue, {
     actor: createdBy,
-    kind: "human",
-    actionId: "intel.scenario.spawn",
+    kind: spawnGate.kind,
+    actionId: spawnGate.actionId,
     action: "Generated scenario",
     detail: `${createdBy} turned the confirmed cue into scenario "${scenario.name}" (${scenario.units.length} units, ${scenario.objectives.length} objectives), ready for course of action generation.`,
   });
@@ -2515,9 +2541,9 @@ function handleResumeFromBreakpoint(runId, branchId, body) {
     speed,
     label: 'Resumed: ' + branch.name + ' from T+' + round1(snap.simTimeH) + 'h',
     id: nextId('run'),
-    redPlanId: source.redPlanId || DEFAULT_ADVERSARY_PLAN_ID,
+    redPlanId: source._redPlanId || DEFAULT_ADVERSARY_PLAN_ID,
   });
-  run.redPlanId = source.redPlanId || DEFAULT_ADVERSARY_PLAN_ID;
+  run._redPlanId = source._redPlanId || DEFAULT_ADVERSARY_PLAN_ID;
   rewindBranchToSnapshot(run.branches[0], snap, source.label);
   // A fork keeps the crew that flew the original.
   run.seats = Array.isArray(source.seats) && source.seats.length ? JSON.parse(JSON.stringify(source.seats)) : buildSeats();
@@ -2773,7 +2799,10 @@ function handleStartRun(body) {
 
   const run = createRun({ scenario, coas, ruleSet, engine, speed, label, id: nextId("run"), redPlanId });
   run.seats = Array.isArray(body.seats) && body.seats.length ? body.seats : buildSeats(body.crewedBy);
-  run.redPlanId = redPlanId;
+  // Internal on purpose. Serialized alongside a branch.adversary that reports
+  // "Withheld", the plan id would hand the players the mask's own answer key:
+  // GET /api/adversary/plans turns the id into the full intent, risk and phases.
+  run._redPlanId = redPlanId;
   state.runs.push(run);
   scenario.status = "running";
   scenario.updatedAt = nowIso();
@@ -2782,7 +2811,7 @@ function handleStartRun(body) {
     "operator",
     "run-started",
     run.id,
-    `${label}: ${plural(coas.length, "branch", "branches")} on ${scenario.name} via ${ruleSet.name} (${engine}, x${speed}), OPFOR playing ${redPlanId}.`
+    `${label}: ${plural(coas.length, "branch", "branches")} on ${scenario.name} via ${ruleSet.name} (${engine}, x${speed}). OPFOR is playing a white-cell plan.`
   );
   schedulePersist();
   return serializeRun(run);
@@ -2849,7 +2878,9 @@ function handleDecide(runId, branchId, body) {
   if (!decision.options.some((o) => o.id === optionId)) {
     throw httpError(400, `Option "${optionId}" is not valid for decision "${decision.title}".`);
   }
-  const decidedBy = typeof body.decidedBy === "string" && body.decidedBy.trim() ? body.decidedBy.trim() : "commander";
+  // A decision cuts an order under a name. "commander" is not a name, and an
+  // order signed by nobody is exactly the thing this platform claims not to do.
+  const decidedBy = gateAction("run.decide", body.decidedBy).actor;
   const rationale = typeof body.rationale === "string" ? body.rationale : "";
   const option = decision.options.find((o) => o.id === optionId);
   applyDecision(run, branch.id, decisionId, optionId, decidedBy, rationale, ctxFor(run));
@@ -3108,7 +3139,16 @@ function handleCoaOrders(coaId, query) {
 function handleRunFragos(runId) {
   const run = requireRun(runId);
   const fragos = state.fragos.filter((f) => f.runId === run.id);
-  return { runId: run.id, runLabel: run.label, fragos, text: fragos.map((f) => renderFragoText(f)).join(`${nlLiteral()}${nlLiteral()}`) };
+  // Orders cut before and after a marking change carry different markings, so the
+  // compilation takes the highest of them. Banner the whole file at that level, or
+  // a reader is told RESTRICTED while holding SECRET paragraphs.
+  const compiled = highWater(...fragos.map((f) => f.classification));
+  const marking = markingLine(compiled);
+  const body = fragos.map((f) => renderFragoText(f)).join(`${nlLiteral()}${nlLiteral()}`);
+  const text = fragos.length
+    ? [marking, "", `COMPILATION OF ${plural(fragos.length, "FRAGMENTARY ORDER")} FOR ${run.label.toUpperCase()}`, "", body, "", marking].join(nlLiteral())
+    : "";
+  return { runId: run.id, runLabel: run.label, fragos, marking, text };
 }
 
 /** Cut the order that carries a commander decision, override or not. */
@@ -3144,14 +3184,20 @@ function handleRevealAdversary(id, body) {
   return serializeRun(run);
 }
 
-function handleAdversaryTruth(id) {
+function handleAdversaryTruth(id, query) {
   const run = requireRun(id);
+  // The white-cell view hands over the whole plan, mask or no mask, so it is the
+  // same act as revealing it and carries the same gate. An open endpoint here
+  // would make the reveal ceremony theatre.
+  const viewedBy = gateAction("run.adversary.truth", query && query.get("viewedBy")).actor;
   const branches = run.branches.map((branch) => ({
     branchId: branch.id,
     branchName: branch.name,
     plan: adversaryTruth(branch),
   }));
-  return { runId: run.id, runLabel: run.label, branches };
+  audit(viewedBy, "adversary-truth-read", run.id, `${viewedBy} read the white-cell copy of the OPFOR plan for "${run.label}".`);
+  schedulePersist();
+  return { runId: run.id, runLabel: run.label, viewedBy, branches };
 }
 
 function handleAssessRun(id) {
@@ -3326,7 +3372,7 @@ const routes = [
   {
     method: "GET",
     re: new RegExp(`^/api/runs/${ID}/adversary/truth$`),
-    handler: ({ params }) => handleAdversaryTruth(params[0]),
+    handler: ({ params, query }) => handleAdversaryTruth(params[0], query),
   },
   { method: "POST", re: new RegExp(`^/api/runs/${ID}/assess$`), handler: ({ params }) => handleAssessRun(params[0]) },
   { method: "POST", re: new RegExp("^/api/runs/" + ID + "/report$"), handler: ({ params }) => handleGenerateReport(params[0]) },

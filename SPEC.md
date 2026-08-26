@@ -165,8 +165,9 @@ had recommended. The platform marking sits at the head and the foot of the page.
   until the run completes or an umpire reveals it by name. Never describe the RED plan
   in copy that a player can read before the reveal, and never let SAGE paraphrase it:
   the grounded context tells the model it is withheld.
-- **Branches share one seed.** Two COAs run against the same dice, so the difference
-  between them is the plan. Any UI that compares branches may say so.
+- **Branches share their dice, not just a seed.** Every roll is keyed by the clock and
+  the identity of the shot, so the same engagement draws the same die in every branch.
+  A UI comparing branches may say the difference is the plan, because it is.
 - **Autonomy is enforced, not labelled.** Every governed action passes through the
   policy in `state.governance`. A page must read `GET /api/governance/policy` rather
   than hard-coding which buttons demand a name, because an administrator can change it.
