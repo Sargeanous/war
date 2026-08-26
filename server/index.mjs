@@ -447,15 +447,13 @@ function runHistoricalDeduction() {
     for (const branch of run.branches) {
       for (const decision of branch.decisions) {
         if (decision.status !== "open") continue;
-        applyDecision(
-          run,
-          branch.id,
-          decision.id,
-          decision.aiRecommendationId,
-          "SAGE auto-umpire",
-          "Rehearsal policy: commander accepted the AI recommendation.",
-          ctx
-        );
+        const rationale = "Rehearsal policy: commander accepted the AI recommendation.";
+        applyDecision(run, branch.id, decision.id, decision.aiRecommendationId, "SAGE auto-umpire", rationale, ctx);
+        // The rehearsal is a real exercise record, so its decisions carry orders
+        // like any other. Every one of them followed the machine, and the
+        // fragmentary orders say so rather than leaving the record empty.
+        const option = decision.options.find((o) => o.id === decision.aiRecommendationId);
+        if (option) recordFrago(run, branch, decision, option, "SAGE auto-umpire", rationale);
       }
     }
     const result = tickRun(run, ctx);
