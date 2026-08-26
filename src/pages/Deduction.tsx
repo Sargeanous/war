@@ -12,6 +12,7 @@ import {
   Radar,
   Rocket,
   ScrollText,
+  ShieldAlert,
   SkipForward,
   Swords,
   Trophy,
@@ -26,6 +27,7 @@ import {
   controlRun,
   decideBranch,
   explainBranch,
+  fetchAdversaryPlans,
   fetchAgents,
   fetchBootstrap,
   fetchCoas,
@@ -33,6 +35,7 @@ import {
   fetchRuns,
   fetchRuleSets,
   intervene,
+  revealAdversaryPlan,
   startRun,
   updateSeat,
 } from "../api";
@@ -54,6 +57,7 @@ import {
   Tag,
   simClock,
   timeAgo,
+  plural,
 } from "../components";
 import { eventTones, sideColors, statusTone } from "../data";
 import { affiliationOf, frameColor } from "../milsym";
@@ -74,12 +78,14 @@ import type {
   SimRun,
   Unit,
   AgentDef,
+  AdversaryPlanSummary,
+  AdversaryView,
 } from "../types";
 
 const errMsg = (error: unknown) => (error instanceof ApiError ? error.message : "Backend unreachable");
 
 type ViewSide = "all" | "blue" | "red";
-type DrawerId = "score" | "events" | "adjudication" | "decisions" | "sage" | "seats";
+type DrawerId = "score" | "events" | "adjudication" | "decisions" | "sage" | "seats" | "opfor";
 
 export default function Deduction({ notify, goTo, profile }: PageProps) {
   const [boot, setBoot] = useState<Bootstrap | null>(null);
@@ -120,6 +126,11 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
   const [engine, setEngine] = useState<EngineKind>("realtime");
   const [speed, setSpeed] = useState<"1" | "2" | "4">("2");
   const [label, setLabel] = useState("");
+  // The adversary plan is a white-cell choice made at launch. Players are told a
+  // plan exists; they are not told which one until the reveal.
+  const [adversaryPlans, setAdversaryPlans] = useState<AdversaryPlanSummary[]>([]);
+  const [redPlanId, setRedPlanId] = useState("");
+  const [revealBusy, setRevealBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -154,6 +165,21 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
     let alive = true;
     fetchAgents()
       .then((list) => alive && setAgents(list))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Adversary plan catalogue for the launcher.
+  useEffect(() => {
+    let alive = true;
+    fetchAdversaryPlans()
+      .then((list) => {
+        if (!alive) return;
+        setAdversaryPlans(list);
+        setRedPlanId((current) => current || list[0]?.id || "");
+      })
       .catch(() => undefined);
     return () => {
       alive = false;
@@ -290,13 +316,34 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
         engine,
         speed: Number(speed),
         label: label.trim() || undefined,
+        redPlanId: redPlanId || undefined,
       });
       trailsRef.current = {};
       applyRun(next);
       setActiveRunId(next.id);
-      notify(`Deduction started, ${next.branches.length} branch(es) in parallel`);
+      notify(
+        next.branches.length === 1
+          ? "Deduction started, one branch against the OPFOR plan"
+          : `Deduction started, ${next.branches.length} branches in parallel on one seed`
+      );
     } catch (error) {
       notify(errMsg(error));
+    }
+  }
+
+  // Showing the players what RED was trying to do is an umpire call, and the
+  // backend signs it with a name rather than accepting an anonymous reveal.
+  async function doRevealAdversary() {
+    if (!run) return;
+    if (!window.confirm("Reveal the OPFOR plan to the players? Once shown it cannot be hidden again for this run.")) return;
+    setRevealBusy(true);
+    try {
+      applyRun(await revealAdversaryPlan(run.id, profile.name));
+      notify("OPFOR plan revealed to the players");
+    } catch (error) {
+      notify(errMsg(error));
+    } finally {
+      setRevealBusy(false);
     }
   }
 
@@ -362,6 +409,9 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
         setPickedCoaIds={setPickedCoaIds}
         ruleSets={ruleSets}
         ruleSetId={ruleSetId}
+        adversaryPlans={adversaryPlans}
+        redPlanId={redPlanId}
+        setRedPlanId={setRedPlanId}
         setRuleSetId={setRuleSetId}
         engine={engine}
         setEngine={setEngine}
@@ -760,6 +810,16 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
                     )}
                   </div>
                 ) : null}
+                {drawer === "opfor" ? (
+                  <div className="ded-drawer-body">
+                    <AdversaryPanel
+                      adversary={branch?.adversary ?? null}
+                      canReveal={canIntervene && run.status !== "completed" && run.status !== "aborted"}
+                      busy={revealBusy}
+                      onReveal={doRevealAdversary}
+                    />
+                  </div>
+                ) : null}
                 {drawer === "seats" ? (
                   <div className="ded-drawer-body">
                     {(run.seats ?? []).length ? (
@@ -890,6 +950,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
                   { id: "adjudication" as const, label: "Adjudication", icon: Swords },
                   { id: "decisions" as const, label: "Decisions", icon: ListChecks },
                   { id: "sage" as const, label: "SAGE", icon: BrainCircuit },
+                  { id: "opfor" as const, label: "OPFOR", icon: ShieldAlert },
                   { id: "seats" as const, label: "Seats", icon: Users },
                 ] as Array<{ id: DrawerId; label: string; icon: typeof Trophy }>
               ).map((tab) => (
@@ -923,6 +984,117 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+// What RED is playing. Masked while the run is live, so the panel shows the
+// indicators BLUE could legitimately have read rather than the plan itself.
+function AdversaryPanel({
+  adversary,
+  canReveal,
+  busy,
+  onReveal,
+}: {
+  adversary: AdversaryView | null | undefined;
+  canReveal: boolean;
+  busy: boolean;
+  onReveal: () => void;
+}) {
+  if (!adversary) {
+    return (
+      <EmptyState
+        icon={ShieldAlert}
+        title="No OPFOR plan on this branch"
+        hint="Runs adjudicated before the adversary planner shipped have RED reacting to contact. Start a new deduction to give RED a scheme of manoeuvre."
+      />
+    );
+  }
+  return (
+    <div className="ded-opfor">
+      <div className="ded-opfor-head">
+        <div>
+          <strong>{adversary.codename}</strong>
+          <small>{adversary.name}</small>
+        </div>
+        <div className="ded-opfor-tags">
+          <StatusPill label={adversary.revealed ? "revealed" : "masked"} tone={adversary.revealed ? "info" : "warn"} />
+          <StatusPill
+            label={adversary.firesReleased ? `fires released T+${adversary.firesReleasedAtH}h` : "fires held"}
+            tone={adversary.firesReleased ? "danger" : "neutral"}
+          />
+        </div>
+      </div>
+      <p className="ded-opfor-summary">{adversary.summary}</p>
+
+      {adversary.revealed ? (
+        <>
+          <DetailGrid>
+            <Detail label="Posture" value={adversary.posture === "defensive-ambush" ? "Defensive ambush" : "Offensive screen"} />
+            <Detail label="Fires policy" value={adversary.firesNote ?? "not recorded"} />
+          </DetailGrid>
+          <div className="ded-opfor-block">
+            <p className="ded-opfor-label">Intent</p>
+            <p>{adversary.intent}</p>
+          </div>
+          <div className="ded-opfor-block">
+            <p className="ded-opfor-label">Risk RED accepted</p>
+            <p>{adversary.risk}</p>
+          </div>
+          <div className="ded-opfor-block">
+            <p className="ded-opfor-label">What would have broken it</p>
+            <p>{adversary.counter}</p>
+          </div>
+          <div className="ded-opfor-phases">
+            {adversary.phases.map((phase) => (
+              <div key={phase.id} className={`ded-opfor-phase${adversary.currentPhase?.id === phase.id ? " current" : ""}`}>
+                <div className="ded-opfor-phase-head">
+                  <strong>{phase.name}</strong>
+                  <small>
+                    T+{phase.startH}h to T+{phase.endH}h
+                  </small>
+                </div>
+                <p>{phase.intent}</p>
+                <div className="ded-opfor-tasks">
+                  {phase.tasks.map((task) => (
+                    <div key={task.role} className="ded-opfor-task">
+                      <span>{task.roleLabel}</span>
+                      <em>{task.taskLabel}</em>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="ded-opfor-block">
+            <p className="ded-opfor-label">Indicators BLUE can read</p>
+            {adversary.indicators.length ? (
+              <ul className="ded-opfor-indicators">
+                {[...adversary.indicators].reverse().map((indicator, i) => (
+                  <li key={`${indicator.atH}-${i}`}>
+                    <span>T+{indicator.atH}h</span>
+                    {indicator.text}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="ded-opfor-quiet">
+                RED has given nothing away yet. Against a coastal force that is itself worth noticing.
+              </p>
+            )}
+          </div>
+          {canReveal ? (
+            <ActionRow>
+              <Button icon={ShieldAlert} variant="secondary" onClick={onReveal} disabled={busy}>
+                {busy ? "Revealing" : "Reveal to players"}
+              </Button>
+            </ActionRow>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }
@@ -1005,6 +1177,9 @@ function Launcher({
   ruleSets,
   ruleSetId,
   setRuleSetId,
+  adversaryPlans,
+  redPlanId,
+  setRedPlanId,
   engine,
   setEngine,
   speed,
@@ -1025,6 +1200,9 @@ function Launcher({
   ruleSets: RuleSet[];
   ruleSetId: string;
   setRuleSetId: (v: string) => void;
+  adversaryPlans: AdversaryPlanSummary[];
+  redPlanId: string;
+  setRedPlanId: (v: string) => void;
   engine: EngineKind;
   setEngine: (v: EngineKind) => void;
   speed: "1" | "2" | "4";
@@ -1038,6 +1216,7 @@ function Launcher({
   const scenarios = (boot?.scenarios ?? []).filter((s) => s.status === "ready" || s.status === "running");
   const openRuns = runs.filter((r) => r.status !== "completed" && r.status !== "aborted");
   const doneRuns = runs.filter((r) => r.status === "completed" || r.status === "aborted");
+  const activePlan = adversaryPlans.find((p) => p.id === redPlanId) ?? null;
 
   return (
     <div className="page-body">
@@ -1096,6 +1275,30 @@ function Launcher({
                 )}
               </div>
             </Field>
+            <Field label="OPFOR plan (white cell)">
+              <div className="ded-advplan">
+                <select value={redPlanId} onChange={(e) => setRedPlanId(e.target.value)}>
+                  {adversaryPlans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.codename}, {plan.name}
+                    </option>
+                  ))}
+                </select>
+                {activePlan ? (
+                  <div className="ded-advplan-brief">
+                    <p>{activePlan.summary}</p>
+                    <DetailGrid>
+                      <Detail label="Fires" value={activePlan.firesNote} />
+                      <Detail label="Risk RED accepts" value={activePlan.risk} />
+                    </DetailGrid>
+                    <small>
+                      Every branch faces this same plan on the same seed, so what separates them is the friendly plan. The players are
+                      told an OPFOR plan exists and nothing more until it is revealed.
+                    </small>
+                  </div>
+                ) : null}
+              </div>
+            </Field>
             <FormGrid columns={3}>
               <Field label="Engine">
                 <select value={engine} onChange={(e) => setEngine(e.target.value as EngineKind)}>
@@ -1129,7 +1332,7 @@ function Launcher({
                 rows={openRuns.map((r) => ({
                   id: r.id,
                   title: r.label,
-                  meta: `${r.scenarioName} | ${r.branchCount} branch(es) | T+${Math.round(r.simTimeH)}h`,
+                  meta: `${r.scenarioName} | ${plural(r.branchCount, "branch", "branches")} | T+${Math.round(r.simTimeH)}h`,
                   tone: statusTone(r.status),
                   status: r.status,
                 }))}

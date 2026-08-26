@@ -62,6 +62,7 @@ import {
   StatusPill,
   Tag,
   timeAgo,
+  plural,
 } from "../components";
 import { domainLabels, sideColors, sideLabels, statusTone } from "../data";
 import TheaterMap from "../map";
@@ -375,7 +376,7 @@ function OpordWizardModal({
     return (
       <div key={sideId} className="sd-opord-sidecard">
         <p className={`sd-opord-sidehead ${sideId}`}>
-          {sideId === "blue" ? "BLUE FORCES" : "RED FORCES"} | {entities.length} group(s)
+          {sideId === "blue" ? "BLUE FORCES" : "RED FORCES"} | {plural(entities.length, "group")}
         </p>
         {entities.length ? (
           <CompactTable
@@ -456,7 +457,7 @@ function OpordWizardModal({
             ) : null}
             {parse.unparsed.length ? (
               <p className="sd-opord-warn">
-                <AlertTriangle size={13} style={{ verticalAlign: "-2px" }} /> {parse.unparsed.length} line(s) could not be
+                <AlertTriangle size={13} style={{ verticalAlign: "-2px" }} /> {plural(parse.unparsed.length, "line")} could not be
                 matched to the ontology and were skipped.
               </p>
             ) : null}

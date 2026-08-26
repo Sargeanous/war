@@ -7,6 +7,14 @@
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
 const round2 = (n) => Math.round(n * 100) / 100;
 
+// House style for text that came back from a reasoning service: plain punctuation,
+// no em or en dashes and no decorative middot.
+const houseStyle = (text) =>
+  typeof text === "string" ? text.replace(/\s*[—–]\s*/g, ", ").replace(/\s*·\s*/g, " | ").replace(/,\s*,/g, ",").replace(/,\s*\./g, ".") : text;
+
+/** A count with a real plural. */
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many || `${one}s`}`;
+
 // ---------------------------------------------------------------------------
 // Class matching
 // ---------------------------------------------------------------------------
@@ -141,7 +149,7 @@ export function parseOpordOffline(text, classes) {
   return {
     source: "offline",
     title,
-    summary: `${sides.blue.length} BLUE and ${sides.red.length} RED entity group(s) extracted, ${objectives.length} objective(s), ${constraints.length} constraint(s).`,
+    summary: `${sides.blue.length} BLUE and ${plural(sides.red.length, "RED entity group")} extracted, ${plural(objectives.length, "objective")}, ${plural(constraints.length, "constraint")}.`,
     sides: [
       { side: "blue", entities: sides.blue },
       { side: "red", entities: sides.red },
@@ -219,17 +227,17 @@ export async function parseOpordAnthropic(text, classes, apiKey, model) {
     if (!sides[0].entities.length && !sides[1].entities.length) return null;
     return {
       source: "anthropic",
-      title: String(parsed.title || "Operational order").slice(0, 120),
-      summary: String(parsed.summary || "").slice(0, 240),
+      title: houseStyle(String(parsed.title || "Operational order").slice(0, 120)),
+      summary: houseStyle(String(parsed.summary || "").slice(0, 240)),
       sides,
       objectives: (parsed.objectives || [])
         .filter((o) => o && (o.side === "blue" || o.side === "red") && o.title)
         .map((o) => ({
           side: o.side,
-          title: String(o.title).slice(0, 140),
+          title: houseStyle(String(o.title).slice(0, 140)),
           kind: ["control-area", "destroy", "protect", "deliver", "deny"].includes(o.kind) ? o.kind : objectiveKind(String(o.title)),
         })),
-      constraints: (parsed.constraints || []).map((c) => String(c).slice(0, 160)).slice(0, 8),
+      constraints: (parsed.constraints || []).map((c) => houseStyle(String(c).slice(0, 160))).slice(0, 8),
       unparsed: [],
     };
   } catch {

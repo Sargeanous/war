@@ -12,7 +12,8 @@
     "preview": "vite preview --host 0.0.0.0 --port 4188 --strictPort",
     "typecheck": "tsc --noEmit",
     "e2e": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e/full-chain.ps1",
-    "e2e:intel": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e/intel-chain.ps1"
+    "e2e:intel": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e/intel-chain.ps1",
+    "check:engine": "node scripts/engine-check.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react-swc": "^3.11.0",

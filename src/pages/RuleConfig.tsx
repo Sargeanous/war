@@ -32,6 +32,7 @@ import {
   StatusPill,
   Tag,
   timeAgo,
+  plural,
 } from "../components";
 import { statusTone } from "../data";
 import type { PageProps } from "../shell";
@@ -206,7 +207,7 @@ export default function RuleConfig({ notify }: PageProps) {
     try {
       const result = await testRuleSet(selected.id, situation);
       setTestResult(result);
-      notify(`${result.trace.filter((t) => t.fired).length} rule(s) fired`);
+      notify(`${plural(result.trace.filter((t) => t.fired).length, "rule")} fired`);
     } catch (error) {
       notify(errMsg(error));
     }

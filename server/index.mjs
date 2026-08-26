@@ -28,7 +28,10 @@ import {
   applyIntervention,
   buildAssessments,
   buildReplay,
+  revealAdversary,
+  adversaryTruth,
 } from "./engine.mjs";
+import { adversaryPlanCatalogue, findAdversaryPlan, DEFAULT_ADVERSARY_PLAN_ID } from "./adversary.mjs";
 import { decomposeMission, generateCoas, agentActivityFor, buildCoaAnalysis, COA_STRATEGIES } from "./agents.mjs";
 import { parseOpordOffline, parseOpordAnthropic, materializeScenario } from "./opord.mjs";
 import {
@@ -96,6 +99,24 @@ let idSeq = 0;
 const nextId = (prefix) => `${prefix}-${Date.now().toString(36)}${(idSeq++).toString(36).padStart(3, "0")}`;
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
+
+/** Count with a real plural, because "1 unit(s)" is not something a staff officer writes. */
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many || `${one}s`}`;
+
+/**
+ * House style for text that came back from a reasoning service. The platform
+ * writes in plain punctuation: no em or en dashes, no decorative middot. Model
+ * output is not under our control, so it is normalised on the way in rather
+ * than hoped about in the prompt.
+ */
+function houseStyle(text) {
+  if (typeof text !== "string") return text;
+  return text
+    .replace(/\s*[—–]\s*/g, ", ")
+    .replace(/\s*·\s*/g, " | ")
+    .replace(/,\s*,/g, ",")
+    .replace(/,\s*\./g, ".");
+}
 
 /** Deep-clone a value while dropping every key that starts with "_". */
 function stripInternal(value) {
@@ -249,7 +270,7 @@ function finishRun(run) {
     "engine",
     run.status === "aborted" ? "run-aborted" : "run-completed",
     run.id,
-    `${run.label} finished at T+${round1(run.clock.simTimeH)}h with ${run.branches.length} branch(es).`
+    `${run.label} finished at T+${round1(run.clock.simTimeH)}h with ${plural(run.branches.length, "branch", "branches")}.`
   );
   schedulePersist();
 }
@@ -379,7 +400,9 @@ function runHistoricalDeduction() {
     speed: 4,
     label: "Historical: AZURE HORIZON rehearsal",
     id: "run-historical-001",
+    redPlanId: DEFAULT_ADVERSARY_PLAN_ID,
   });
+  run.redPlanId = DEFAULT_ADVERSARY_PLAN_ID;
   const ctx = { scenario, ruleSet };
 
   let iterations = 0;
@@ -439,7 +462,7 @@ function runHistoricalDeduction() {
     "SAGE auto-umpire",
     "assessment-generated",
     run.id,
-    `${assessments.length} branch assessment(s) computed for ${run.label}.`,
+    `${plural(assessments.length, "branch assessment")} computed for ${run.label}.`,
     completedAt
   );
 }
@@ -889,8 +912,8 @@ function testRuleSet(ruleSet, situationText) {
   if (totals.damage > 0) parts.push(`${round1(totals.damage)} damage applied`);
   if (totals.supply > 0) parts.push(`${round1(totals.supply)} supply consumed`);
   if (totals.points > 0) parts.push(`+${totals.points} victory points`);
-  if (totals.reveals > 0) parts.push(`${totals.reveals} unit reveal(s)`);
-  if (spawned.length) parts.push(`event(s): ${spawned.join(", ")}`);
+  if (totals.reveals > 0) parts.push(plural(totals.reveals, "unit reveal"));
+  if (spawned.length) parts.push(`${spawned.length === 1 ? "event" : "events"}: ${spawned.join(", ")}`);
   if (decisionsRequested.length) parts.push(`decision requested: ${decisionsRequested.join(", ")}`);
 
   const outcome =
@@ -974,7 +997,7 @@ function answerRunStatus() {
       return (
         `"${run.label}" (${run.engine}) is ${run.status} at T+${round1(run.clock.simTimeH)}h of ${scenario ? scenario.durationHours : 72}h. ` +
         `${branchText}.` +
-        (open ? ` ${open} decision point(s) are awaiting the commander.` : "")
+        (open ? ` ${plural(open, "decision point")} ${open === 1 ? "is" : "are"} awaiting the commander.` : "")
       );
     });
     return pieces.join(" ");
@@ -1009,7 +1032,7 @@ function answerDecisions() {
   if (!open.length) {
     return "No decision points are open right now. They surface at COA phase boundaries and on emergent triggers such as first contact or a branch dropping below 70% strength; the branch pauses until the commander decides.";
   }
-  return `${open.length} decision point(s) are open: ${open.join("; ")}. The commander can follow the AI recommendation or override it with a rationale, both are retained for the assessment.`;
+  return `${plural(open.length, "decision point")} ${open.length === 1 ? "is" : "are"} open: ${open.join("; ")}. The commander can follow the AI recommendation or override it with a rationale, both are retained for the assessment.`;
 }
 
 function answerCoaComparison() {
@@ -1025,7 +1048,7 @@ function answerCoaComparison() {
   if (safest && safest.id !== best.id) {
     advice += ` If risk tolerance is low, ${safest.name} carries the lowest risk score (${safest.scores.risk}).`;
   }
-  return `Comparing ${coas.length} COA(s): ${top.join("; ")}. ${advice}`;
+  return `Comparing ${plural(coas.length, "COA")}: ${top.join("; ")}. ${advice}`;
 }
 
 function answerRules() {
@@ -1092,9 +1115,9 @@ function answerOverview() {
     0
   );
   return (
-    `Exercise AZURE HORIZON overview: ${state.scenarios.filter((s) => s.status === "ready").length} scenario(s) ready of ${state.scenarios.length}, ` +
-    `${state.coas.length} COA(s) on file, ${state.agents.filter((a) => a.status === "ready").length}/${state.agents.length} agents ready, ` +
-    `${act.length} active run(s) and ${open} open decision(s), ${state.assessments.length} assessment(s) archived. ` +
+    `Exercise AZURE HORIZON overview: ${plural(state.scenarios.filter((s) => s.status === "ready").length, "scenario")} ready of ${state.scenarios.length}, ` +
+    `${plural(state.coas.length, "COA")} on file, ${state.agents.filter((a) => a.status === "ready").length}/${state.agents.length} agents ready, ` +
+    `${plural(act.length, "active run")} and ${plural(open, "open decision")}, ${plural(state.assessments.length, "assessment")} archived. ` +
     "Ask me about run status, COA comparison, decision points, adjudication rules, the agent library, assessments or the platform architecture."
   );
 }
@@ -1167,7 +1190,7 @@ async function askAnthropic(question, pageContext, startedMs, apiKey) {
           .trim()
       : "";
     if (!answer) return offlineAnswer(question, "anthropic_empty", startedMs);
-    return { answer, source: "anthropic", model, latencyMs: Date.now() - startedMs };
+    return { answer: houseStyle(answer), source: "anthropic", model, latencyMs: Date.now() - startedMs };
   } catch (err) {
     clearTimeout(timer);
     return offlineAnswer(question, err && err.name === "AbortError" ? "anthropic_timeout" : "anthropic_error", startedMs);
@@ -1213,7 +1236,7 @@ async function handleAsk(body) {
         ? String(data.choices[0].message.content).trim()
         : "";
     if (!answer) return offlineAnswer(question, "openai_empty", startedMs);
-    return { answer, source: "openai", model, latencyMs: Date.now() - startedMs };
+    return { answer: houseStyle(answer), source: "openai", model, latencyMs: Date.now() - startedMs };
   } catch (err) {
     clearTimeout(timer);
     return offlineAnswer(question, err && err.name === "AbortError" ? "openai_timeout" : "openai_error", startedMs);
@@ -1415,7 +1438,7 @@ async function handleParseOpord(body) {
   if (!parse) parse = parseOpordOffline(text, classes);
   const total = parse.sides.reduce((s, side) => s + side.entities.length, 0);
   if (!total) throw httpError(422, "No force entities could be extracted, check the document follows an OPORD structure with BLUE/RED force sections.");
-  audit("planner", "opord-parsed", parse.title, `Intelligent Documents extracted ${total} entity group(s) via ${parse.source}.`);
+  audit("planner", "opord-parsed", parse.title, `Intelligent Documents extracted ${plural(total, "entity group")} via ${parse.source}.`);
   return parse;
 }
 
@@ -2115,7 +2138,7 @@ function handleGenerateCoas(body) {
   const generated = generateCoas(scenario, mission, count, existingCount, strategy);
   for (const coa of generated) state.coas.push(coa);
   const analysis = buildCoaAnalysis(scenario, mission, strategy, generated);
-  audit("SAGE", "coas-generated", mission.id, `${generated.length} COA candidate(s) generated for "${mission.title}" under the ${COA_STRATEGIES[strategy].label} strategy.`);
+  audit("SAGE", "coas-generated", mission.id, `${plural(generated.length, "COA candidate")} generated for "${mission.title}" under the ${COA_STRATEGIES[strategy].label} strategy.`);
   schedulePersist();
   return { coas: generated, analysis, strategy };
 }
@@ -2137,6 +2160,7 @@ function handleSilentEval(coaId) {
     speed: 4,
     label: `Silent eval, ${coa.name}`,
     id: `run-silent-${Date.now().toString(36)}`,
+    redPlanId: DEFAULT_ADVERSARY_PLAN_ID,
   });
   const ctx = { scenario, ruleSet };
   let iterations = 0;
@@ -2258,7 +2282,9 @@ function handleResumeFromBreakpoint(runId, branchId, body) {
     speed,
     label: 'Resumed: ' + branch.name + ' from T+' + round1(snap.simTimeH) + 'h',
     id: nextId('run'),
+    redPlanId: source.redPlanId || DEFAULT_ADVERSARY_PLAN_ID,
   });
+  run.redPlanId = source.redPlanId || DEFAULT_ADVERSARY_PLAN_ID;
   rewindBranchToSnapshot(run.branches[0], snap, source.label);
   // A fork keeps the crew that flew the original.
   run.seats = Array.isArray(source.seats) && source.seats.length ? JSON.parse(JSON.stringify(source.seats)) : buildSeats();
@@ -2331,7 +2357,7 @@ function offlineReportSections(run, figures) {
     heading: 'Summary',
     body:
       'Exercise ' + (figures.scenario ? figures.scenario.codename : run.scenarioName) + ' ran ' + branches.length +
-      ' branch(es) to T+' + round1(run.clock.simTimeH) + 'h under ' + run.engine + ' adjudication. ' +
+      (run.branches.length === 1 ? ' branch to T+' : ' branches to T+') + round1(run.clock.simTimeH) + 'h under ' + run.engine + ' adjudication. ' +
       (best ? '"' + best.name + '" produced the strongest outcome (' + best.verdict + ', ' + best.overall + '/100), closing ' + best.objectiveScore + '% of the objective picture with BLUE at ' + Math.round(best.blueStrength) + '% aggregate strength.' : ''),
   });
   if (branches.length > 1 && best && worst && best.name !== worst.name) {
@@ -2354,7 +2380,7 @@ function offlineReportSections(run, figures) {
         : followed + ' of ' + totalDec + ' decision points followed the SAGE recommendation. ' +
           (followed === totalDec
             ? 'The commander accepted AI advice throughout; the outcome reflects the recommended path rather than an independent one.'
-            : totalDec - followed + ' override(s) were recorded, and the divergence between branches is partly attributable to them.'),
+            : plural(totalDec - followed, 'override') + (totalDec - followed === 1 ? ' was' : ' were') + ' recorded, and the divergence between branches is partly attributable to them.'),
   });
   sections.push({
     heading: 'Observations and optimisation',
@@ -2508,13 +2534,23 @@ function handleStartRun(body) {
       ? body.label.trim()
       : `${scenario.codename} deduction ${state.runs.length + 1}`;
 
-  const run = createRun({ scenario, coas, ruleSet, engine, speed, label, id: nextId("run") });
+  // Which adversary plan RED is playing. The white cell picks it at launch; the
+  // players are told a plan exists and nothing more.
+  const redPlanId = typeof body.redPlanId === "string" && findAdversaryPlan(body.redPlanId) ? body.redPlanId : DEFAULT_ADVERSARY_PLAN_ID;
+
+  const run = createRun({ scenario, coas, ruleSet, engine, speed, label, id: nextId("run"), redPlanId });
   run.seats = Array.isArray(body.seats) && body.seats.length ? body.seats : buildSeats(body.crewedBy);
+  run.redPlanId = redPlanId;
   state.runs.push(run);
   scenario.status = "running";
   scenario.updatedAt = nowIso();
   startLoop(run);
-  audit("operator", "run-started", run.id, `${label}: ${coas.length} branch(es) on ${scenario.name} via ${ruleSet.name} (${engine}, x${speed}).`);
+  audit(
+    "operator",
+    "run-started",
+    run.id,
+    `${label}: ${plural(coas.length, "branch", "branches")} on ${scenario.name} via ${ruleSet.name} (${engine}, x${speed}), OPFOR playing ${redPlanId}.`
+  );
   schedulePersist();
   return serializeRun(run);
 }
@@ -2625,6 +2661,24 @@ function branchExplainContext(run, branch, scenario) {
   }
   const recent = branch.recentEvents.slice(0, 5).map((e) => `[${e.type}] ${e.title}`);
   if (recent.length) lines.push(`Recent events: ${recent.join(" | ")}`);
+  // What may be said about RED. Before the reveal the adversary plan belongs to
+  // the white cell, so the model is handed indicators and an explicit refusal
+  // rather than the plan it would otherwise happily paraphrase.
+  const adversary = branch.adversary;
+  if (adversary && adversary.revealed) {
+    lines.push(
+      `RED plan (revealed, may be described): ${adversary.codename}, ${adversary.name}. ${adversary.summary} Fires ${
+        adversary.firesReleased ? `released at T+${adversary.firesReleasedAtH}h` : "still held"
+      }.`
+    );
+    if (adversary.currentPhase) lines.push(`RED current phase: "${adversary.currentPhase.name}", ${adversary.currentPhase.intent}`);
+  } else if (adversary) {
+    lines.push(
+      "RED plan: WITHHELD by the white cell. You do not have it and must not invent it. Speak only about observed RED behaviour, and say plainly that the plan is masked."
+    );
+    lines.push(`RED fires: ${adversary.firesReleased ? `released at T+${adversary.firesReleasedAtH}h` : "not one RED shot fired so far"}.`);
+    for (const ind of adversary.indicators.slice(-3)) lines.push(`Observed indicator at T+${ind.atH}h: ${ind.text}`);
+  }
   return lines.join("\n");
 }
 
@@ -2666,10 +2720,33 @@ function offlineExplain(topic, run, branch, scenario) {
   // enemy
   const redEvents = branch.recentEvents.filter((e) => e.actorId && redAlive.some((u) => u.id === e.actorId)).slice(0, 3);
   const acting = redEvents.map((e) => e.title).join("; ");
+  const held = redAlive.filter((u) => u.detectedByEnemy).length;
+  const adversary = branch.adversary;
+  const opening =
+    `RED retains ${plural(redAlive.length, "piece")} at ${m.redStrength}% aggregate strength (${m.redLosses} lost), of which BLUE holds ${held} on sensors. ` +
+    (acting ? `Latest RED activity: ${acting}. ` : "RED has initiated no engagements recently. ");
+  if (!adversary) {
+    return `${opening}This run was adjudicated before the adversary planner shipped, so RED here is reacting to contact rather than executing a scheme of manoeuvre.`;
+  }
+  if (adversary.revealed) {
+    const phase = adversary.currentPhase;
+    return (
+      `${opening}RED is executing ${adversary.codename}, ${adversary.name.toLowerCase()}. ${adversary.summary}` +
+      (phase ? ` Current phase "${phase.name}": ${phase.intent}` : "") +
+      (adversary.firesReleased
+        ? ` RED fires were released at T+${adversary.firesReleasedAtH}h.`
+        : ` RED fires are still held, so the quiet is a decision and not an absence.`)
+    );
+  }
+  // The plan itself belongs to the white cell. SAGE answers the player from the
+  // BLUE picture, so it reports indicators and refuses to read RED's mind.
+  const indicator = adversary.indicators.length ? adversary.indicators[adversary.indicators.length - 1].text : null;
   return (
-    `RED retains ${redAlive.length} piece(s) at ${m.redStrength}% aggregate strength (${m.redLosses} lost). ` +
-    (acting ? `Latest RED activity: ${acting}. ` : "RED has initiated no engagements recently. ") +
-    `Doctrine template: hold the coastal battery umbrella, keep corvettes and the submarine on the strait flanks, and force BLUE to trade attrition for tempo. Expect a reaction the moment a BLUE capital unit enters missile range.`
+    `${opening}The adversary plan is held by the white cell and is not mine to read out, so this is inference from the BLUE picture only. ` +
+    (adversary.firesReleased
+      ? `RED released fires at T+${adversary.firesReleasedAtH}h, so it is now fighting rather than hiding.`
+      : `RED has not fired a shot yet. Against a coastal force that is usually a decision rather than an absence, and it points at a battery envelope BLUE has not entered.`) +
+    (indicator ? ` Latest indicator: ${indicator}` : "")
   );
 }
 
@@ -2707,6 +2784,33 @@ function handleIntervene(runId, branchId, body) {
   return serializeRun(run);
 }
 
+// --- Adversary plan ----------------------------------------------------------------
+// The RED scheme of manoeuvre is white-cell property. Players see a masked view on
+// the branch until the run completes or an umpire reveals it by name.
+
+function handleRevealAdversary(id, body) {
+  const run = requireRun(id);
+  const revealedBy = typeof body.revealedBy === "string" && body.revealedBy.trim() ? body.revealedBy.trim().slice(0, 60) : "";
+  if (!revealedBy) {
+    throw httpError(400, "Field 'revealedBy' is required: showing the players the adversary plan mid-run is an umpire call and it is signed.");
+  }
+  const revealed = run.branches.map((branch) => revealAdversary(branch)).filter(Boolean);
+  if (!revealed.length) throw httpError(409, "No branch in this run carries an adversary plan to reveal.");
+  audit(revealedBy, "adversary-revealed", run.id, `${revealedBy} revealed the OPFOR plan to the players on ${plural(revealed.length, "branch", "branches")} of "${run.label}".`);
+  schedulePersist();
+  return serializeRun(run);
+}
+
+function handleAdversaryTruth(id) {
+  const run = requireRun(id);
+  const branches = run.branches.map((branch) => ({
+    branchId: branch.id,
+    branchName: branch.name,
+    plan: adversaryTruth(branch),
+  }));
+  return { runId: run.id, runLabel: run.label, branches };
+}
+
 function handleAssessRun(id) {
   const run = requireRun(id);
   if (run.status !== "completed") {
@@ -2715,7 +2819,7 @@ function handleAssessRun(id) {
   const assessments = buildAssessments(run, ctxFor(run));
   state.assessments = state.assessments.filter((a) => a.runId !== run.id);
   for (const assessment of assessments) state.assessments.push(assessment);
-  audit("SAGE", "assessment-generated", run.id, `${assessments.length} branch assessment(s) computed for ${run.label}.`);
+  audit("SAGE", "assessment-generated", run.id, `${plural(assessments.length, "branch assessment")} computed for ${run.label}.`);
   schedulePersist();
   return stripInternal(assessments);
 }
@@ -2790,7 +2894,7 @@ const routes = [
     handler: ({ params }) => {
       const scenario = requireScenario(params[0]);
       const report = validateScenario(scenario);
-      audit("operator", "scenario-validated", scenario.id, `Validation ${report.ok ? "passed" : "failed"} with ${report.issues.length} finding(s).`);
+      audit("operator", "scenario-validated", scenario.id, `Validation ${report.ok ? "passed" : "failed"} with ${plural(report.issues.length, "finding")}.`);
       return report;
     },
   },
@@ -2828,7 +2932,7 @@ const routes = [
       const ruleSet = findRuleSet(params[0]);
       if (!ruleSet) throw httpError(404, `Unknown rule set "${params[0]}".`);
       const result = testRuleSet(ruleSet, String(body.situation || ""));
-      audit("operator", "ruleset-tested", ruleSet.id, `Test "${result.situation}", ${result.trace.filter((t) => t.fired).length} rule(s) fired.`);
+      audit("operator", "ruleset-tested", ruleSet.id, `Test "${result.situation}", ${plural(result.trace.filter((t) => t.fired).length, "rule")} fired.`);
       return result;
     },
   },
@@ -2857,6 +2961,17 @@ const routes = [
     method: "POST",
     re: new RegExp(`^/api/runs/${ID}/branches/${ID}/explain$`),
     handler: ({ params, body }) => handleExplain(params[0], params[1], body),
+  },
+  { method: "GET", re: /^\/api\/adversary\/plans$/, handler: () => adversaryPlanCatalogue() },
+  {
+    method: "POST",
+    re: new RegExp(`^/api/runs/${ID}/adversary/reveal$`),
+    handler: ({ params, body }) => handleRevealAdversary(params[0], body),
+  },
+  {
+    method: "GET",
+    re: new RegExp(`^/api/runs/${ID}/adversary/truth$`),
+    handler: ({ params }) => handleAdversaryTruth(params[0]),
   },
   { method: "POST", re: new RegExp(`^/api/runs/${ID}/assess$`), handler: ({ params }) => handleAssessRun(params[0]) },
   { method: "POST", re: new RegExp("^/api/runs/" + ID + "/report$"), handler: ({ params }) => handleGenerateReport(params[0]) },
@@ -3042,7 +3157,7 @@ process.on("exit", () => {
 server.listen(PORT, () => {
   console.log(`[sandtable] backend listening on http://localhost:${PORT}`);
   console.log(
-    `[sandtable] ${state.scenarios.length} scenarios, ${state.coas.length} COAs, ${state.agents.length} agents, ${state.runs.length} run(s), ${state.assessments.length} assessment(s); copilot: ${
+    `[sandtable] ${state.scenarios.length} scenarios, ${state.coas.length} COAs, ${state.agents.length} agents, ${plural(state.runs.length, "run")}, ${plural(state.assessments.length, "assessment")}; copilot: ${
       process.env.ANTHROPIC_API_KEY
         ? `anthropic (${process.env.ANTHROPIC_MODEL || "claude-opus-5"})`
         : process.env.OPENAI_API_KEY

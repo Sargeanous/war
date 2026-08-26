@@ -4,6 +4,15 @@
 // "_" are internal (stripped from API responses by index.mjs, kept in state.json).
 
 import { recommendDecision, commentaryFor, recommendationsFor } from "./agents.mjs";
+import {
+  resolveAdversaryPlan,
+  adversaryPhaseAt,
+  taskForUnit,
+  stationFor,
+  firesReleaseCheck,
+  projectAdversary,
+  roleLabel,
+} from "./adversary.mjs";
 
 const HOURS_PER_TICK = 0.25;
 const KM_PER_DEG_LAT = 111;
@@ -22,6 +31,8 @@ const round2 = (n) => Math.round(n * 100) / 100;
 const round4 = (n) => Math.round(n * 10000) / 10000;
 const nowIso = () => new Date().toISOString();
 const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
+/** A count with a real plural. */
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many || `${one}s`}`;
 
 // Mulberry32 step over a persisted numeric state, deterministic across save/load.
 function roll(branch) {
@@ -145,7 +156,7 @@ function factorProduct(effects, type) {
 // Run creation
 // ---------------------------------------------------------------------------
 
-export function createRun({ scenario, coas, ruleSet, engine, speed, label, id }) {
+export function createRun({ scenario, coas, ruleSet, engine, speed, label, id, redPlanId }) {
   const branches = coas.map((coa, index) => {
     const units = deepClone(scenario.units).map((unit) => ({
       ...unit,
@@ -172,7 +183,10 @@ export function createRun({ scenario, coas, ruleSet, engine, speed, label, id })
       metricsHistory: [],
       _full: { events: [], snapshots: [] },
       _coa: deepClone(coa),
-      _rngState: (ruleSet.adjudication.seed + index * 7919) >>> 0,
+      // Common random numbers: every branch draws from the same stream, so the
+      // gap between two COAs is the plan and never the dice. A branch seeded
+      // differently would make the comparison the whole product rests on unfair.
+      _rngState: ruleSet.adjudication.seed >>> 0,
       _tick: 0,
       _simTimeH: 0,
       _evSeq: 0,
@@ -183,7 +197,28 @@ export function createRun({ scenario, coas, ruleSet, engine, speed, label, id })
       _objHalfTick: null,
       _initialBlue: 0,
       _initialAmmo: 0,
+      // Common seed, published on the branch so the comparison can prove itself.
+      seed: ruleSet.adjudication.seed >>> 0,
+      dieModel: ruleSet.adjudication.dieModel,
+      adversary: null,
+      _red: null,
+      _redPhaseId: null,
     };
+    branch._red = resolveAdversaryPlan({ scenario, planId: redPlanId, durationHours: scenario.durationHours });
+    if (branch._red) {
+      branch._redPhaseId = branch._red.currentPhaseId;
+      const seen = {};
+      for (const unit of branch.units) {
+        if (unit.side !== "red") continue;
+        const role = branch._red.roles[unit.id] || null;
+        unit._redRole = role;
+        // Stable index inside the role group, so a task that fans units out puts
+        // the same boat on the same flank every replay.
+        seen[role] = (seen[role] || 0) + 1;
+        unit._redIdx = seen[role] - 1;
+      }
+    }
+    branch.adversary = projectAdversary(branch._red);
     branch._initialBlue = sideStrength(branch.units, "blue");
     branch._initialAmmo = totalAmmo(branch.units, "blue");
     branch.metrics = computeMetrics(branch, scenario);
@@ -193,8 +228,16 @@ export function createRun({ scenario, coas, ruleSet, engine, speed, label, id })
       type: "info",
       severity: "info",
       title: "Branch initialized",
-      detail: `${coa.name}: ${units.length} pieces loaded, adjudicating under "${ruleSet.name}".`,
+      detail: `${coa.name}: ${units.length} pieces loaded, adjudicating under "${ruleSet.name}" on common seed ${branch.seed}.`,
     });
+    if (branch._red) {
+      pushEvent(branch, {
+        type: "adversary",
+        severity: "info",
+        title: "OPFOR is playing a plan",
+        detail: `The white cell holds an adversary scheme of manoeuvre for this branch. Its content stays masked until the run completes or the umpire reveals it. Opening fires policy: ${branch._red.fires.mode === "weapons-free" ? "weapons free" : "held"}.`,
+      });
+    }
     return branch;
   });
 
@@ -386,6 +429,34 @@ function assignmentFor(phase, unitId) {
   return phase.assignments.find((a) => a.unitIds.includes(unitId)) || null;
 }
 
+/** Nearest detected BLUE unit inside reach, without breaking the home leash. */
+function interceptTarget(branch, unit) {
+  if (unit.domain !== "sea" && unit.domain !== "air") return null;
+  const reach = unit.domain === "air" ? 220 : 150;
+  const targets = branch.units.filter(
+    (t) => t.side === "blue" && alive(t) && t._detBy.red && distanceKm(unit.position, t.position) <= reach
+  );
+  if (!targets.length) return null;
+  targets.sort((a, b) => distanceKm(unit.position, a.position) - distanceKm(unit.position, b.position));
+  const leashKm = 110;
+  return distanceKm(unit._home, targets[0].position) <= leashKm + reach ? targets[0].position : null;
+}
+
+/** Who on the RED side of the roster owns this decision. */
+function redCommander(run) {
+  const seats = Array.isArray(run.seats) ? run.seats : [];
+  const seat = seats.find((s) => s.side === "red");
+  if (!seat) return "The OPFOR commander";
+  const holder = seat.mode === "ai" ? seat.agentName || "an agent" : seat.participant || "a participant";
+  return `${seat.name} (${holder})`;
+}
+
+/** Something BLUE could legitimately have observed, kept for the masked view. */
+function pushIndicator(redPlan, simTimeH, text) {
+  redPlan.indicators.push({ atH: round2(simTimeH), text });
+  if (redPlan.indicators.length > 40) redPlan.indicators.splice(0, redPlan.indicators.length - 40);
+}
+
 function tickBranch(run, branch, ctx) {
   const { scenario, ruleSet } = ctx;
   const env = scenario.environment;
@@ -415,6 +486,48 @@ function tickBranch(run, branch, ctx) {
   const modActive = branch._tick <= branch._mod.expiresAtTick;
   const holding = branch._tick <= branch._holdUntilTick;
 
+  // --- Adversary plan ---------------------------------------------------------
+  // RED is not reacting to contact, it is executing a scheme of manoeuvre the
+  // white cell holds. Phase changes and the fires release are attributed to the
+  // crewed OPFOR seat, which is how the roster on the run becomes something the
+  // engine reads rather than a picture of one.
+  const redPlan = branch._red;
+  if (redPlan) {
+    const redPhase = adversaryPhaseAt(redPlan, branch._simTimeH);
+    if (redPhase && redPlan.currentPhaseId !== redPhase.id) {
+      redPlan.currentPhaseId = redPhase.id;
+      branch._redPhaseId = redPhase.id;
+      pushEvent(branch, {
+        type: "adversary",
+        severity: "info",
+        title: "OPFOR shifted posture",
+        detail: `${redCommander(run)} moved RED into a new phase of its plan. ${
+          redPlan.revealed ? `"${redPhase.name}": ${redPhase.intent}` : "The content stays masked; only the change in RED behaviour is observable."
+        }`,
+      });
+      pushIndicator(redPlan, branch._simTimeH, "Several RED roles changed station in the same window, which reads as a phase change rather than a reaction to contact.");
+    }
+    if (!redPlan.fires.released) {
+      const reason = firesReleaseCheck(redPlan, branch.units, branch._simTimeH);
+      if (reason) {
+        redPlan.fires.released = true;
+        redPlan.fires.releasedAtH = round2(branch._simTimeH);
+        redPlan.fires.releaseReason = reason;
+        pushEvent(branch, {
+          type: "adversary",
+          severity: "danger",
+          title: "OPFOR released fires",
+          detail: `${redCommander(run)} lifted the hold on RED weapons. ${reason}`,
+        });
+        pushIndicator(redPlan, branch._simTimeH, "RED launchers and emitters came up together after a long silence, which is an ambush being sprung and not a chance meeting.");
+      }
+    }
+  }
+  // While the gate holds, RED is not shooting and not radiating, which is the
+  // whole point of the ambush: it is harder to find as well as quiet.
+  const redFiresHeld = Boolean(redPlan && !redPlan.fires.released);
+  const redEmconSilent = redFiresHeld && redPlan.fires.emconWhileHeld === "silent";
+
   // --- Movement ---------------------------------------------------------------
   if (!holding) {
     for (const unit of branch.units) {
@@ -438,18 +551,15 @@ function tickBranch(run, branch, ctx) {
           }
           destination = assignment.waypoints[Math.min(unit._wpIdx, assignment.waypoints.length - 1)];
         }
+      } else if (unit.side === "red" && redPlan) {
+        // RED moves to the station its role holds in the current plan phase. The
+        // old chase behaviour survives as one task inside that plan.
+        const task = taskForUnit(redPlan, unit, branch._simTimeH);
+        destination = task === "sortie-intercept" ? interceptTarget(branch, unit) : stationFor(redPlan, unit, task, unit._redIdx || 0);
       } else if (unit.side === "red" && (unit.domain === "sea" || unit.domain === "air")) {
-        // RED reactive AI: intercept the nearest detected BLUE unit within reach,
-        // staying within a leash of the home station.
-        const reach = unit.domain === "air" ? 220 : 150;
-        const targets = branch.units.filter((t) => t.side === "blue" && alive(t) && t._detBy.red && distanceKm(unit.position, t.position) <= reach);
-        if (targets.length) {
-          targets.sort((a, b) => distanceKm(unit.position, a.position) - distanceKm(unit.position, b.position));
-          const leashKm = 110;
-          if (distanceKm(unit._home, targets[0].position) <= leashKm + reach) {
-            destination = targets[0].position;
-          }
-        }
+        // Runs recorded before the adversary planner shipped keep the reactive
+        // behaviour they were adjudicated under.
+        destination = interceptTarget(branch, unit);
       }
 
       if (!destination) continue;
@@ -487,6 +597,9 @@ function tickBranch(run, branch, ctx) {
       const reveal = effects.some(({ effect }) => effect.type === "reveal-unit");
       let p = (0.38 * (1 - rangeKm / sensorRange) + 0.08) * factorProduct(effects, "modify-detection");
       if (observer.side === "blue" && modActive) p *= branch._mod.detectFactor;
+      // RED under a held-fire plan is running silent, so BLUE is hunting a force
+      // that is deliberately not radiating.
+      if (redEmconSilent && target.side === "red") p *= 0.45;
       if (reveal || die(branch, ruleSet) < clamp(p, 0.02, 0.95)) {
         target._detBy[observer.side] = true;
         target.detectedByEnemy = true;
@@ -512,6 +625,10 @@ function tickBranch(run, branch, ctx) {
   for (const actor of branch.units) {
     if (salvos >= MAX_SALVOS_PER_TICK) break;
     if (!alive(actor) || actor.supply <= 5 || branch._tick < actor._cdUntil) continue;
+    // The hold-fire gate. A RED unit with a firing solution stays silent because
+    // the plan says the salvo is worth more later, which is the difference
+    // between an ambush and a movement model with weapons bolted on.
+    if (actor.side === "red" && redFiresHeld) continue;
     const weapons = (actor.weapons || []).filter((w) => w.ammo > 0);
     if (!weapons.length) continue;
 
@@ -674,6 +791,7 @@ function tickBranch(run, branch, ctx) {
   // --- Metrics, snapshots ---------------------------------------------------------------------
   branch.metrics = computeMetrics(branch, scenario);
   branch.score = computeScore(branch, scenario);
+  if (redPlan) branch.adversary = projectAdversary(redPlan);
   if (branch.metrics.objectiveScore >= 50 && branch._objHalfTick === null) branch._objHalfTick = branch._tick;
   if (branch._tick % SNAPSHOT_EVERY === 0) {
     branch.metricsHistory.push({ tick: branch._tick, simTimeH: round2(branch._simTimeH), ...branch.metrics });
@@ -752,6 +870,63 @@ function completeBranch(branch, scenario, duration) {
   });
   branch.metricsHistory.push({ tick: branch._tick, simTimeH: round2(branch._simTimeH), ...branch.metrics });
   snapshot(branch);
+  // The run is over, so what RED was actually trying to do stops being a secret.
+  if (branch._red) {
+    branch._red.revealed = true;
+    branch.adversary = projectAdversary(branch._red);
+    pushEvent(branch, {
+      type: "adversary",
+      severity: "info",
+      title: `OPFOR plan revealed: ${branch._red.codename}`,
+      detail: `${branch._red.name}. ${branch._red.summary} ${
+        branch._red.fires.releasedAtH === null
+          ? "RED never released fires inside the exercise window."
+          : `Fires released at T+${branch._red.fires.releasedAtH}h: ${branch._red.fires.releaseReason}`
+      }`,
+    });
+  }
+}
+
+/** Umpire reveal, before the run has finished. Returns the public projection. */
+export function revealAdversary(branch) {
+  if (!branch._red) return null;
+  branch._red.revealed = true;
+  branch.adversary = projectAdversary(branch._red);
+  pushEvent(branch, {
+    type: "adversary",
+    severity: "info",
+    title: `Umpire revealed the OPFOR plan: ${branch._red.codename}`,
+    detail: `${branch._red.name}. ${branch._red.summary}`,
+  });
+  return branch.adversary;
+}
+
+/** Full adversary scheme for the white cell, whatever the mask says. */
+export function adversaryTruth(branch) {
+  if (!branch._red) return null;
+  const plan = branch._red;
+  return {
+    planId: plan.planId,
+    codename: plan.codename,
+    name: plan.name,
+    posture: plan.posture,
+    summary: plan.summary,
+    intent: plan.intent,
+    risk: plan.risk,
+    counter: plan.counter,
+    fires: { ...plan.fires },
+    currentPhaseId: plan.currentPhaseId,
+    phases: plan.phases.map((p) => ({
+      id: p.id,
+      name: p.name,
+      intent: p.intent,
+      startH: p.startH,
+      endH: p.endH,
+      tasks: Object.entries(p.tasks).map(([role, task]) => ({ role, roleLabel: roleLabel(role), task })),
+    })),
+    roles: { ...plan.roles },
+    revealed: Boolean(plan.revealed),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -891,7 +1066,7 @@ function attritionDecisionSpec(branch) {
   const damaged = branch.units.filter((u) => u.side === "blue" && u.status === "damaged").length;
   return {
     title: "Force falling below 70%, continue?",
-    situation: `Aggregate BLUE strength has dropped to ${branch.metrics.blueStrength}% with ${damaged} unit(s) damaged. The commander must decide whether the mission still justifies the attrition curve.`,
+    situation: `Aggregate BLUE strength has dropped to ${branch.metrics.blueStrength}% with ${plural(damaged, "unit")} damaged. The commander must decide whether the mission still justifies the attrition curve.`,
     options: [
       opt(
         "o1",
@@ -1131,7 +1306,7 @@ export function buildAssessments(run, ctx) {
 
     const dimensions = [
       { name: "Mission accomplishment", score: Math.round(accomplishment), weight: 0.35, detail: `Objectives closed at ${m.objectiveScore}% with ${Math.round(branch._victoryPoints)} victory points accumulated.` },
-      { name: "Force preservation", score: Math.round(preservation), weight: 0.25, detail: `BLUE ended at ${m.blueStrength}% aggregate strength against ${branch._initialBlue.toFixed(0)}% at start; ${m.blueLosses} unit(s) lost.` },
+      { name: "Force preservation", score: Math.round(preservation), weight: 0.25, detail: `BLUE ended at ${m.blueStrength}% aggregate strength against ${branch._initialBlue.toFixed(0)}% at start; ${plural(m.blueLosses, "unit")} lost.` },
       { name: "Tempo", score: tempo, weight: 0.15, detail: branch._objHalfTick !== null ? `Objective picture crossed 50% at T+${round1(halfH)}h of ${duration}h.` : `The objective picture never crossed 50% inside the window.` },
       { name: "Resource efficiency", score: efficiency, weight: 0.15, detail: `Force supply closed at ${m.supplyLevel}% with ${Math.round(ammoLeft * 100)}% of magazines remaining.` },
       { name: "Decision quality", score: 0, weight: 0.1, detail: "" },
@@ -1141,7 +1316,7 @@ export function buildAssessments(run, ctx) {
     if (overall >= 65 && overridden > 0) decisionQuality = clamp(decisionQuality + 6, 30, 97);
     dimensions[4].score = Math.round(decisionQuality);
     dimensions[4].detail = decided.length
-      ? `${decided.length} decision(s): ${followed} followed SAGE, ${overridden} commander override(s).`
+      ? `${plural(decided.length, "decision")}: ${followed} followed SAGE, ${plural(overridden, "commander override")}.`
       : "No commander decision points were triggered.";
     overall = Math.round(dimensions.reduce((s, d) => s + d.score * d.weight, 0));
 

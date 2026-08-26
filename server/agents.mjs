@@ -2,6 +2,9 @@
 // recommendation and agent-activity synthesis. Pure functions over state owned
 // by index.mjs / engine.mjs. Deterministic: seeded mulberry32 only.
 
+/** A count with a real plural. */
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many || `${one}s`}`;
+
 // ---------------------------------------------------------------------------
 // Seeded randomness
 // ---------------------------------------------------------------------------
@@ -368,7 +371,7 @@ export function buildCoaAnalysis(scenario, mission, strategyKey, generated) {
     { step: "Force & capability analysis", detail: `${own.length} own pieces, strike ${cap.strike.length}, air ${cap.fighters.length}, ISR ${cap.isr.length}, amphibious ${cap.amphib.length}, sustainment ${cap.sustain.length}.`, ms: 1.4 },
     { step: "Terrain & axis analysis", detail: "North, south and enveloping approach axes evaluated against the objective anchor and strait chokepoints.", ms: 1.1 },
     { step: "Constraints & weighting", detail: `Strategy "${w.label}", effect ${Math.round(w.effect * 100)}%, risk aversion ${Math.round(w.safety * 100)}%, tempo ${Math.round(w.tempo * 100)}%, feasibility ${Math.round(w.feasibility * 100)}%.`, ms: 0.8 },
-    { step: "Candidate construction", detail: `${generated.length} doctrinal archetype(s) instantiated with four-phase skeletons and axis waypoints.`, ms: 1.6 },
+    { step: "Candidate construction", detail: `${plural(generated.length, "doctrinal archetype")} instantiated with four-phase skeletons and axis waypoints.`, ms: 1.6 },
     { step: "Plan grading", detail: `Composites ${ranked.map((c) => c.scores.composite).join(" / ")} | "${ranked[0].name}" graded RECOMMENDED under ${w.label}.`, ms: 0.9 },
   ];
 }

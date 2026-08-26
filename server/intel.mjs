@@ -622,7 +622,7 @@ function affiliationOf(raw) {
 }
 
 function plural(n, one, many) {
-  return `${n} ${Math.abs(Number(n)) === 1 ? one : many}`;
+  return `${n} ${Math.abs(Number(n)) === 1 ? one : many || `${one}s`}`;
 }
 
 const asArray = (value) => (Array.isArray(value) ? value : []);
@@ -1406,7 +1406,7 @@ export function offlineInterrogate(cue, question) {
       );
     case "recommend":
       return (
-        `With ${confidence}% confidence and ${mix.total} reported entit(ies), the next step is collection rather than action: task a sensor against the ${radiusKm} km circle and hold the response package outside it. ` +
+        `With ${confidence}% confidence and ${plural(mix.total, "reported entity", "reported entities")}, the next step is collection rather than action: task a sensor against the ${radiusKm} km circle and hold the response package outside it. ` +
         (collected.length
           ? `Collection is already in, so the decision in front of you is whether to raise the track to Confirmed and release it for course-of-action generation. That signature is yours, not SAGE's.`
           : `Two tasking options are available against this cue, and approval needs a named collection manager before any asset moves.`) +
@@ -1430,7 +1430,7 @@ export function offlineInterrogate(cue, question) {
     case "location":
       return (
         `The reported centre is ${Number(geo.lat).toFixed(2)}N ${Number(geo.lng).toFixed(2)}E with a ${radiusKm} km circle of uncertainty, in the Meridian Archipelago. ` +
-        `${mix.total} entit(ies) sit inside it: ${composition || "none resolved"}. ` +
+        `${plural(mix.total, "entity", "entities")} ${mix.total === 1 ? "sits" : "sit"} inside it: ${composition || "none resolved"}. ` +
         `The response package stages west of the circle, so the geometry reads as a force approaching rather than one already committed.`
       );
     case "identity":

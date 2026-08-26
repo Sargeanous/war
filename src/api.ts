@@ -25,6 +25,7 @@ import type {
   ExplainResult,
   RunReport,
   CommandSeat,
+  AdversaryPlanSummary,
   ExplainTopic,
   CoaStrategy,
   OntologyClass,
@@ -179,7 +180,14 @@ export const startRun = (payload: {
   engine: EngineKind;
   speed?: number;
   label?: string;
+  redPlanId?: string;
 }) => post<SimRun>("/api/runs", payload);
+
+// --- Adversary plan ------------------------------------------------------------
+
+export const fetchAdversaryPlans = () => get<AdversaryPlanSummary[]>("/api/adversary/plans");
+export const revealAdversaryPlan = (runId: string, revealedBy: string) =>
+  post<SimRun>(`/api/runs/${runId}/adversary/reveal`, { revealedBy });
 export const controlRun = (id: string, action: "pause" | "resume" | "speed" | "abort" | "step", value?: number) =>
   post<SimRun>(`/api/runs/${id}/control`, { action, value });
 export const decideBranch = (

@@ -685,12 +685,85 @@ export interface BranchScore {
   net: number; // BLUE total minus RED total
 }
 
+// --- Adversary plan ------------------------------------------------------------
+// RED plays an authored scheme of manoeuvre. Players see the masked projection on
+// the branch; the white cell holds the rest until the reveal.
+
+export type AdversaryPosture = "defensive-ambush" | "offensive-screen";
+export type AdversaryFiresMode = "hold-until-trigger" | "weapons-free";
+
+export interface AdversaryIndicator {
+  atH: number;
+  text: string; // something BLUE could legitimately have observed
+}
+
+export interface AdversaryPhaseTask {
+  role: string;
+  roleLabel: string;
+  task: string;
+  taskLabel: string;
+}
+
+export interface AdversaryPhaseView {
+  id: string;
+  name: string;
+  intent: string;
+  startH: number;
+  endH: number;
+  tasks: AdversaryPhaseTask[];
+}
+
+export interface AdversaryLaydown {
+  role: string;
+  roleLabel: string;
+  unitIds: string[];
+}
+
+export interface AdversaryView {
+  revealed: boolean;
+  firesReleased: boolean;
+  firesReleasedAtH: number | null;
+  indicators: AdversaryIndicator[];
+  planId: string | null;
+  codename: string; // "Withheld" until revealed
+  name: string;
+  posture: AdversaryPosture | null;
+  summary: string;
+  intent: string | null;
+  risk: string | null;
+  counter: string | null; // what BLUE would have had to do to break it
+  firesMode: AdversaryFiresMode | null;
+  firesNote: string | null;
+  currentPhase: { id: string; name: string; intent: string; startH: number; endH: number } | null;
+  phases: AdversaryPhaseView[];
+  laydown: AdversaryLaydown[];
+}
+
+// Catalogue entry offered to the white cell when a run is launched.
+export interface AdversaryPlanSummary {
+  id: string;
+  codename: string;
+  name: string;
+  posture: AdversaryPosture;
+  summary: string;
+  intent: string;
+  risk: string;
+  counter: string;
+  firesMode: AdversaryFiresMode;
+  firesNote: string;
+  phases: Array<{ id: string; name: string; intent: string }>;
+}
+
 export interface Branch {
   id: string;
   coaId: string;
   name: string;
   color: string;
   status: BranchStatus;
+  // Absent on runs adjudicated before the adversary planner shipped.
+  adversary?: AdversaryView | null;
+  seed?: number; // common across branches, so a comparison is plan against plan
+  dieModel?: AdjudicationConfig["dieModel"];
   currentPhaseId: string | null;
   currentPhaseName?: string | null; // absent on runs recorded before phase names shipped
   score?: BranchScore; // absent on runs recorded before the scoreboard shipped

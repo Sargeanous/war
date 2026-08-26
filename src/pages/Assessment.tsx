@@ -43,6 +43,7 @@ import {
   Tag,
   simClock,
   timeAgo,
+  plural,
 } from "../components";
 import { eventTones, sideColors, statusTone } from "../data";
 import TheaterMap, { type MapUnit } from "../map";
@@ -196,7 +197,7 @@ export default function Assessment({ notify, goTo }: PageProps) {
       const data = await assessRun(runId);
       setAssessments((list) => [...list.filter((a) => a.runId !== runId), ...data]);
       if (data.length) setBranchId(data[0].branchId);
-      notify(`${data.length} branch assessment(s) generated`);
+      notify(`${plural(data.length, "branch assessment")} generated`);
     } catch (error) {
       notify(errMsg(error));
     }
@@ -297,7 +298,7 @@ export default function Assessment({ notify, goTo }: PageProps) {
             <Metric
               label="Decisions"
               value={`${assessment.decisionStats.followedAi}/${assessment.decisionStats.total} with AI`}
-              helper={`${assessment.decisionStats.overridden} commander override(s)`}
+              helper={plural(assessment.decisionStats.overridden, "commander override")}
               tone="info"
             />
           </MetricGrid>

@@ -374,6 +374,11 @@ export function TimelineBar({
 
 // --- Formatting helpers --------------------------------------------------------
 
+/** A count with a real plural. "1 branch(es)" is not something a staff officer writes. */
+export function plural(n: number, one: string, many?: string): string {
+  return `${n} ${n === 1 ? one : (many ?? `${one}s`)}`;
+}
+
 export function simClock(simTimeH: number): string {
   const day = Math.floor(simTimeH / 24) + 1;
   const h = Math.floor(simTimeH % 24);
