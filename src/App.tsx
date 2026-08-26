@@ -19,6 +19,7 @@ import {
   Swords,
   SlidersHorizontal,
   ShieldCheck,
+  ScrollText,
   Split,
   Sun,
   UserRound,
@@ -26,7 +27,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { askCopilot } from "./api";
+import { askCopilot, fetchClassification } from "./api";
 import BrandMark from "./BrandMark";
 import { Toast } from "./components";
 import type { PageId, PageProps, Profile } from "./shell";
@@ -36,6 +37,7 @@ import ScenarioDesign from "./pages/ScenarioDesign";
 import CoaGeneration from "./pages/CoaGeneration";
 import RuleConfig from "./pages/RuleConfig";
 import Deduction from "./pages/Deduction";
+import Orders from "./pages/Orders";
 import Assessment from "./pages/Assessment";
 import AiLayer from "./pages/AiLayer";
 import Foundation from "./pages/Foundation";
@@ -58,35 +60,35 @@ const profiles: Profile[] = [
     name: "Joint Force Commander",
     role: "Command decision authority",
     organization: "Exercise AZURE HORIZON",
-    pages: ["dashboard", "intel", "deduction", "assessment", "ailayer"],
+    pages: ["dashboard", "intel", "deduction", "orders", "assessment", "ailayer"],
   },
   {
     id: "planner",
     name: "Plans Cell (J5)",
     role: "Scenario & COA planner",
     organization: "Exercise AZURE HORIZON",
-    pages: ["dashboard", "intel", "scenario", "coa", "rules"],
+    pages: ["dashboard", "intel", "scenario", "coa", "orders", "rules"],
   },
   {
     id: "operator",
     name: "Simulation Control",
     role: "Exercise control / umpire",
     organization: "Wargame Center",
-    pages: ["dashboard", "deduction", "rules", "foundation"],
+    pages: ["dashboard", "deduction", "orders", "rules", "foundation"],
   },
   {
     id: "analyst",
     name: "Analysis Cell (J8)",
     role: "Assessment analyst",
     organization: "Wargame Center",
-    pages: ["dashboard", "intel", "assessment", "ailayer", "foundation"],
+    pages: ["dashboard", "intel", "assessment", "orders", "ailayer", "foundation"],
   },
   {
     id: "admin",
     name: "Platform Admin",
     role: "Platform governance",
     organization: "Wargame Center",
-    pages: ["dashboard", "intel", "scenario", "coa", "rules", "deduction", "assessment", "ailayer", "foundation", "admin"],
+    pages: ["dashboard", "intel", "scenario", "coa", "orders", "rules", "deduction", "assessment", "ailayer", "foundation", "admin"],
   },
 ];
 
@@ -105,6 +107,7 @@ const navItems: Record<PageId, NavItem> = {
   intel: { id: "intel", label: "Intelligence Feed", icon: Satellite },
   scenario: { id: "scenario", label: "Scenario Design", icon: MapIcon },
   coa: { id: "coa", label: "Data & COA Generation", icon: Split },
+  orders: { id: "orders", label: "Orders & Staff Products", icon: ScrollText },
   rules: { id: "rules", label: "Simulation Rules", icon: Scale },
   deduction: { id: "deduction", label: "Full-Process Deduction", icon: Radar },
   assessment: { id: "assessment", label: "Assessment & Replay", icon: BarChart3 },
@@ -116,7 +119,7 @@ const navItems: Record<PageId, NavItem> = {
 const navGroups: NavGroup[] = [
   { label: "Command", pages: ["dashboard"] },
   { label: "Intelligence", pages: ["intel", "ailayer"] },
-  { label: "Planning & Simulation", pages: ["scenario", "coa", "rules", "deduction", "assessment"] },
+  { label: "Planning & Simulation", pages: ["scenario", "coa", "rules", "deduction", "orders", "assessment"] },
   { label: "Platform", pages: ["foundation", "admin"] },
 ];
 
@@ -125,6 +128,7 @@ const pageComponents: Record<PageId, (props: PageProps) => JSX.Element> = {
   intel: Intel,
   scenario: ScenarioDesign,
   coa: CoaGeneration,
+  orders: Orders,
   rules: RuleConfig,
   deduction: Deduction,
   assessment: Assessment,
@@ -148,6 +152,9 @@ export default function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [page, setPage] = useState<PageId>("dashboard");
   const [toast, setToast] = useState("");
+  // The platform marking. Read once at entry and carried at the head and foot of
+  // every workspace, because a headquarters reads the marking before the page.
+  const [marking, setMarking] = useState("");
   const [theme, setTheme] = useState<Theme>(() => (window.localStorage.getItem("sandtable-theme") === "light" ? "light" : "dark"));
   const toastTimer = useRef<number | undefined>(undefined);
 
@@ -155,6 +162,16 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem("sandtable-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    let alive = true;
+    fetchClassification()
+      .then((result) => alive && setMarking(result.marking))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [profile]);
 
   const toggleTheme = useCallback(() => setTheme((current) => (current === "dark" ? "light" : "dark")), []);
 
@@ -190,13 +207,23 @@ export default function App() {
     <div className="app">
       <Sidebar profile={profile} page={page} goTo={goTo} onSwitch={() => setProfile(null)} />
       <main className="workspace">
+        <ClassificationBanner marking={marking} where="top" />
         <Topbar profile={profile} page={page} theme={theme} onToggleTheme={toggleTheme} />
         <Page notify={notify} goTo={goTo} profile={profile} />
+        <ClassificationBanner marking={marking} where="bottom" />
       </main>
       <Copilot />
       {toast ? <Toast>{toast}</Toast> : null}
     </div>
   );
+}
+
+// The platform marking, carried at the head and the foot of every workspace.
+// A headquarters reads the marking before it reads the page, so the banner is
+// part of the shell rather than something each page remembers to render.
+function ClassificationBanner({ marking, where }: { marking: string; where: "top" | "bottom" }) {
+  if (!marking) return null;
+  return <div className={`classification-banner ${where}`}>{marking}</div>;
 }
 
 function LoginScreen({

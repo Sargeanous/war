@@ -32,6 +32,15 @@ import {
   adversaryTruth,
 } from "./engine.mjs";
 import { adversaryPlanCatalogue, findAdversaryPlan, DEFAULT_ADVERSARY_PLAN_ID } from "./adversary.mjs";
+import {
+  defaultClassification,
+  normalizeClassification,
+  classificationCatalogue,
+  markingLine,
+  CLASSIFICATION_LEVELS,
+} from "./classification.mjs";
+import { buildOpord, renderOpordText, buildFrago, renderFragoText, buildSyncMatrix, buildDecisionSupport } from "./orders.mjs";
+import { buildRequirements, buildNamedAreas, requirementsBoard, matchCue } from "./requirements.mjs";
 import { decomposeMission, generateCoas, agentActivityFor, buildCoaAnalysis, COA_STRATEGIES } from "./agents.mjs";
 import { parseOpordOffline, parseOpordAnthropic, materializeScenario } from "./opord.mjs";
 import {
@@ -324,6 +333,14 @@ function migrateState(loaded) {
       changed = true;
     }
   }
+  if (!loaded.classification || typeof loaded.classification !== "object") {
+    loaded.classification = defaultClassification();
+    changed = true;
+  }
+  if (!Array.isArray(loaded.fragos)) {
+    loaded.fragos = [];
+    changed = true;
+  }
   if (normalizeCueRecords(loaded.intelCues)) changed = true;
   return changed;
 }
@@ -384,6 +401,8 @@ function buildSeedState() {
     auditLogs: buildAuditSeed(),
     platform: buildPlatform(),
     governance: defaultGovernance(),
+    classification: defaultClassification(),
+    fragos: [],
     intelCues: buildIntelCues(),
     intelFeed: { cursor: 0 },
   };
@@ -2834,13 +2853,23 @@ function handleDecide(runId, branchId, body) {
   }
   const decidedBy = typeof body.decidedBy === "string" && body.decidedBy.trim() ? body.decidedBy.trim() : "commander";
   const rationale = typeof body.rationale === "string" ? body.rationale : "";
+  const option = decision.options.find((o) => o.id === optionId);
   applyDecision(run, branch.id, decisionId, optionId, decidedBy, rationale, ctxFor(run));
+  // Orders out. A decision that changes the plan is an order, so the platform cuts
+  // one under the name of the commander who directed it instead of leaving the
+  // change to live only inside the event log.
+  const frago = recordFrago(run, branch, decision, option, decidedBy, rationale);
   reconcileRunStatus(run);
   if (run.engine === "realtime" && !loops.has(run.id) && !TERMINAL_RUN_STATUSES.includes(run.status) && run.status !== "paused") {
     startLoop(run);
   }
   const followed = optionId === decision.aiRecommendationId;
-  audit(decidedBy, "decision-made", `${run.id}/${branch.id}`, `"${decision.title}" resolved with option ${optionId} (${followed ? "followed AI" : "overrode AI"}).`);
+  audit(
+    decidedBy,
+    "decision-made",
+    `${run.id}/${branch.id}`,
+    `"${decision.title}" resolved with option ${optionId} (${followed ? "followed AI" : "overrode AI"}). FRAGO ${frago.number} cut under ${decidedBy}.`
+  );
   schedulePersist();
   return serializeRun(run);
 }
@@ -2998,6 +3027,109 @@ function handleIntervene(runId, branchId, body) {
   audit(request.requestedBy, "intervention", `${run.id}/${branch.id}`, `${request.type} applied to branch ${branch.name} of ${run.label}.`);
   schedulePersist();
   return serializeRun(run);
+}
+
+// --- Commander's requirements ---------------------------------------------------------
+// A cue on its own is an alert. A cue anchored to the priority requirement it
+// answers, the indicator it satisfies and the named area it sits in is
+// intelligence. The requirements are authored, the matching is derived on read,
+// so every cue that has ever landed gets anchored without a migration.
+
+const REQUIREMENTS = buildRequirements();
+const NAMED_AREAS = buildNamedAreas();
+
+function handleRequirements() {
+  return requirementsBoard(state.intelCues, REQUIREMENTS, NAMED_AREAS);
+}
+
+/** What one cue answers, with the evidence spelled out. */
+function handleCueRequirements(id) {
+  const cue = requireCue(id);
+  return { cueId: cue.id, matches: matchCue(cue, REQUIREMENTS, NAMED_AREAS) };
+}
+
+// --- Classification -----------------------------------------------------------------
+// One platform marking, carried by every document the platform emits. The data is
+// fictional, so the EXERCISE and FICTIONAL DATA caveats are locked on.
+
+function handleGetClassification() {
+  const current = normalizeClassification(state.classification);
+  return { current, marking: markingLine(current), catalogue: classificationCatalogue() };
+}
+
+function handleSetClassification(body) {
+  const changedBy = typeof body.changedBy === "string" && body.changedBy.trim() ? body.changedBy.trim().slice(0, 60) : "";
+  if (!changedBy) throw httpError(400, "Field 'changedBy' is required: a classification decision belongs to a person.");
+  const level = String(body.level || "");
+  if (!CLASSIFICATION_LEVELS.some((l) => l.id === level)) {
+    throw httpError(400, `Field 'level' must be one of: ${CLASSIFICATION_LEVELS.map((l) => l.id).join(", ")}.`);
+  }
+  const before = markingLine(state.classification);
+  state.classification = normalizeClassification({
+    level,
+    caveats: Array.isArray(body.caveats) ? body.caveats : state.classification.caveats,
+    releasableTo: typeof body.releasableTo === "string" ? body.releasableTo : state.classification.releasableTo,
+    updatedAt: nowIso(),
+    updatedBy: changedBy,
+  });
+  const after = markingLine(state.classification);
+  audit(changedBy, "classification-changed", "platform", `Platform marking moved from "${before}" to "${after}" by ${changedBy}.`);
+  schedulePersist();
+  return handleGetClassification();
+}
+
+// --- Staff products -----------------------------------------------------------------
+// The platform could read an operational order and could not write one. It can now
+// emit the order, its synchronisation matrix, its decision support matrix, and the
+// fragmentary orders cut when a commander changes the plan mid-run.
+
+function handleCoaOrders(coaId, query) {
+  const coa = findCoa(coaId);
+  if (!coa) throw httpError(404, `Unknown COA "${coaId}".`);
+  const scenario = requireScenario(coa.scenarioId);
+  const mission = state.missions.find((m) => m.id === coa.missionId) || null;
+  const ruleSet = state.ruleSets.find((r) => r.status === "active") || state.ruleSets[0] || null;
+  const opord = buildOpord({
+    scenario,
+    coa,
+    mission,
+    ruleSet,
+    classification: state.classification,
+    issuedBy: (query && query.get("issuedBy")) || "Joint Force Headquarters",
+    orderNumber: coa.id.replace(/[^0-9]/g, "").slice(-3) || "001",
+    nowIso,
+  });
+  return {
+    opord,
+    text: renderOpordText(opord),
+    sync: buildSyncMatrix(scenario, coa, mission),
+    dsm: buildDecisionSupport(scenario, coa, ruleSet, mission),
+  };
+}
+
+function handleRunFragos(runId) {
+  const run = requireRun(runId);
+  const fragos = state.fragos.filter((f) => f.runId === run.id);
+  return { runId: run.id, runLabel: run.label, fragos, text: fragos.map((f) => renderFragoText(f)).join(`${nlLiteral()}${nlLiteral()}`) };
+}
+
+/** Cut the order that carries a commander decision, override or not. */
+function recordFrago(run, branch, decision, option, decidedBy, rationale) {
+  const sequence = state.fragos.filter((f) => f.runId === run.id).length + 1;
+  const frago = buildFrago({
+    run,
+    branch,
+    decision,
+    option,
+    decidedBy,
+    rationale,
+    sequence,
+    classification: state.classification,
+    nowIso,
+  });
+  state.fragos.push(frago);
+  if (state.fragos.length > 400) state.fragos.splice(0, state.fragos.length - 400);
+  return frago;
 }
 
 // --- Adversary plan ----------------------------------------------------------------
@@ -3178,6 +3310,16 @@ const routes = [
   { method: "GET", re: /^\/api\/adversary\/plans$/, handler: () => adversaryPlanCatalogue() },
   { method: "GET", re: /^\/api\/governance\/policy$/, handler: () => handleGetGovernance() },
   { method: "PUT", re: /^\/api\/governance\/policy$/, handler: ({ body }) => handleSetGovernance(body) },
+  { method: "GET", re: /^\/api\/intel\/requirements$/, handler: () => handleRequirements() },
+  {
+    method: "GET",
+    re: new RegExp(`^/api/intel/cues/${ID}/requirements$`),
+    handler: ({ params }) => handleCueRequirements(params[0]),
+  },
+  { method: "GET", re: /^\/api\/classification$/, handler: () => handleGetClassification() },
+  { method: "PUT", re: /^\/api\/classification$/, handler: ({ body }) => handleSetClassification(body) },
+  { method: "GET", re: new RegExp(`^/api/coas/${ID}/orders$`), handler: ({ params, query }) => handleCoaOrders(params[0], query) },
+  { method: "GET", re: new RegExp(`^/api/runs/${ID}/fragos$`), handler: ({ params }) => handleRunFragos(params[0]) },
   {
     method: "POST",
     re: new RegExp(`^/api/runs/${ID}/adversary/reveal$`),

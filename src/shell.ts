@@ -5,6 +5,7 @@ export type PageId =
   | "intel"
   | "scenario"
   | "coa"
+  | "orders"
   | "rules"
   | "deduction"
   | "assessment"

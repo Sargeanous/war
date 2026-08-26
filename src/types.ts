@@ -166,6 +166,79 @@ export interface GovernancePolicy {
   actions: GovernedAction[];
 }
 
+// --- Commander's intelligence requirements ----------------------------------------
+// A cue on its own is an alert. A cue anchored to the priority requirement it
+// answers, the indicator it satisfies and the named area it sits in is intelligence.
+
+export type IndicatorStatus = "open" | "indicated" | "answered";
+
+export interface NamedArea {
+  id: string;
+  name: string; // short call sign, e.g. "NORTH CHANNEL"
+  title: string;
+  centre: LatLng;
+  radiusKm: number;
+  why: string;
+}
+
+export interface IndicatorCue {
+  cueId: string;
+  title: string;
+  state: IntelCueState;
+  confidence: number;
+  severity: IntelCue["severity"];
+  naiName: string;
+  rangeKm: number;
+  because: string[]; // the evidence, spelled out so a J2 can disagree with it
+}
+
+export interface RequirementIndicator {
+  id: string;
+  letter: string;
+  text: string;
+  naiId: string;
+  naiName: string;
+  naiTitle: string | null;
+  status: IndicatorStatus;
+  cues: IndicatorCue[];
+}
+
+export interface PriorityRequirement {
+  id: string;
+  number: number;
+  question: string;
+  decision: string; // the decision this answer feeds
+  priority: "critical" | "high";
+  indicators: RequirementIndicator[];
+  answered: number;
+  indicated: number;
+  total: number;
+  status: "open" | "developing" | "answered";
+}
+
+export interface RequirementsBoard {
+  pirs: PriorityRequirement[];
+  namedAreas: NamedArea[];
+  outstanding: Array<{ pirNumber: number; letter: string; text: string; naiName: string }>;
+}
+
+export interface CueRequirementMatch {
+  pirId: string;
+  pirNumber: number;
+  indicatorId: string;
+  letter: string;
+  indicator: string;
+  naiId: string;
+  naiName: string;
+  rangeKm: number;
+  because: string[];
+}
+
+export interface CueRequirements {
+  cueId: string;
+  matches: CueRequirementMatch[];
+}
+
 export interface IntelCue {
   id: string; // "cue-<slug>"
   origin: IntelOrigin;
@@ -778,6 +851,168 @@ export interface AdversaryPlanSummary {
   firesMode: AdversaryFiresMode;
   firesNote: string;
   phases: Array<{ id: string; name: string; intent: string }>;
+}
+
+// --- Classification --------------------------------------------------------------
+// One platform marking, carried by every document the platform emits. EXERCISE and
+// FICTIONAL DATA are locked on: nothing here is a real classified product.
+
+export type ClassificationLevelId = "unclassified" | "restricted" | "confidential" | "secret";
+
+export interface Classification {
+  level: ClassificationLevelId;
+  caveats: string[];
+  releasableTo: string;
+  updatedAt: string | null;
+  updatedBy: string;
+}
+
+export interface ClassificationCatalogue {
+  levels: Array<{ id: ClassificationLevelId; label: string; portion: string; rank: number }>;
+  caveats: Array<{ id: string; label: string; locked: boolean; detail: string }>;
+}
+
+export interface ClassificationState {
+  current: Classification;
+  marking: string; // the banner line, e.g. "RESTRICTED // EXERCISE // ..."
+  catalogue: ClassificationCatalogue;
+}
+
+// --- Staff products ---------------------------------------------------------------
+
+export interface SyncTask {
+  action: string;
+  subTaskId: string;
+  subTaskTitle: string | null;
+  subTaskDomain: Domain | null;
+  unitIds: string[];
+  unitNames: string[];
+  legs: number; // waypoints in the assignment
+}
+
+export interface SyncCell {
+  phaseId: string;
+  tasks: SyncTask[];
+  summary: string;
+}
+
+export interface SyncRow {
+  groupId: string;
+  group: string;
+  units: Array<{ id: string; name: string; classId: string; domain: Domain }>;
+  taskForce?: string | null;
+  cells: SyncCell[];
+}
+
+export interface SyncPhase {
+  id: string;
+  name: string;
+  startH: number;
+  endH: number;
+  window: string;
+  intent: string;
+}
+
+export interface SyncMatrix {
+  phases: SyncPhase[];
+  rows: SyncRow[]; // by task organisation
+  unitRows: SyncRow[]; // by unit
+  idle: string[]; // groups tasked in no phase at all
+  idleUnits: string[];
+}
+
+export interface DecisionSupportRow {
+  id: string;
+  trigger: string;
+  decision: string;
+  watch: string;
+  ltiov: string; // latest time the decision is still useful
+  criteria: string[];
+  options: string[];
+  decider: string;
+  source: "phase boundary" | "contact" | "attrition" | "rule set";
+}
+
+export interface DecisionSupport {
+  rows: DecisionSupportRow[];
+  namedAreas: Array<{ id: string; title: string; centre: LatLng; radiusKm: number; why: string }>;
+  missionTitle: string | null;
+}
+
+export interface OpordParagraph {
+  id: string;
+  title: string;
+  mark: string; // portion mark, e.g. "(R//EX)"
+  text?: string;
+  sub?: OpordParagraph[];
+}
+
+export interface OpordAnnex {
+  id: string;
+  title: string;
+  mark: string;
+  kind: "task-organisation" | "sync-matrix" | "decision-support";
+  groups?: Array<{ id: string; name: string; units: SyncRow["units"] }>;
+  sync?: SyncMatrix;
+  dsm?: DecisionSupport;
+}
+
+export interface OpordDocument {
+  kind: "opord";
+  number: string;
+  title: string;
+  classification: Classification;
+  marking: string;
+  portion: string;
+  issuedAt: string;
+  dtg: string; // date-time group, e.g. "261430ZAUG26"
+  issuedBy: string;
+  references: string[];
+  scenarioId: string;
+  coaId: string;
+  missionId: string | null;
+  paragraphs: OpordParagraph[];
+  annexes: OpordAnnex[];
+}
+
+export interface OrdersResult {
+  opord: OpordDocument;
+  text: string; // the order as paper
+  sync: SyncMatrix;
+  dsm: DecisionSupport;
+}
+
+// The order cut when a commander changes the plan mid-run.
+export interface Frago {
+  kind: "frago";
+  id: string;
+  number: string;
+  title: string;
+  classification: Classification;
+  marking: string;
+  portion: string;
+  runId: string;
+  runLabel: string;
+  branchId: string;
+  branchName: string;
+  decisionId: string;
+  issuedAt: string;
+  dtg: string;
+  issuedBy: string;
+  simTimeH: number;
+  followedMachine: boolean;
+  situation: string;
+  change: string;
+  unchanged: string;
+  rationale: string;
+  machineLine: string;
+}
+
+export interface FragoResult {
+  runId: string;
+  runLabel: string;
+  fragos: Frago[];
+  text: string;
 }
 
 export interface Branch {

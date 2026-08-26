@@ -178,3 +178,87 @@ never `Math.random()` for engine outcomes.
   seats, each `mode: "human" | "ai"`. AI seats resolve an agent by specialty from the
   ready pool. BLUE's Joint Force Commander is human by default; everything else is
   machine-crewed.
+
+## Addendum, the adversary plays a plan (2026-08-26)
+
+- `server/adversary.mjs` authors the RED scheme of manoeuvre and resolves it against
+  any scenario. `ADVERSARY_PLANS` holds two templates: `adv-tidewall` TIDEWALL
+  (coastal denial, fires held until a BLUE capital ship crosses inside the battery
+  envelope) and `adv-sealance` SEA LANCE (forward contest, weapons free from the
+  opening tick). `resolveAdversaryPlan({scenario, planId, durationHours})` classifies
+  every RED unit into a role, derives station geometry from the scenario's own
+  objectives and laydown, and returns phases in sim hours plus a fires gate.
+- The engine reads it. `branch._red` holds the resolved plan; RED movement comes from
+  `taskForUnit()` and `stationFor()` rather than from a chase leash, the old reactive
+  behaviour survives as the `sortie-intercept` task. While the gate holds, RED units
+  cannot fire at all and are 55 percent harder to detect, so the ambush costs BLUE
+  time as well as position. `firesReleaseCheck()` opens the gate on a capital ship
+  inside the trigger range, on the loss of any RED unit, on damage to a unit in a
+  firing role, or on the plan's own patience running out.
+- The plan is white-cell property. `branch.adversary` is a masked projection: no
+  codename, no intent, no phases, only the indicators RED's own behaviour gave away.
+  `POST /api/runs/:id/adversary/reveal` {revealedBy} -> SimRun reveals it mid-run and
+  refuses an unnamed caller; completion reveals it automatically with the counter that
+  would have broken it. `GET /api/runs/:id/adversary/truth` is the white-cell view.
+  `GET /api/adversary/plans` is the launch catalogue; `POST /api/runs` accepts
+  `redPlanId`.
+- SAGE answers the "enemy" topic from the BLUE picture only. Before the reveal the
+  grounded context tells the model the plan is withheld and must not be invented.
+- Branches now share one RNG seed (`ruleSet.adjudication.seed`), published as
+  `branch.seed`, so the gap between two COAs is the plan and never the dice.
+- `node scripts/engine-check.mjs` (`npm run check:engine`) runs the engine headlessly
+  with no server and no state.json and asserts all of the above in 38 checks.
+
+## Addendum, autonomy is enforced (2026-08-26)
+
+- `GOVERNED_ACTIONS` in `index.mjs` is the single catalogue of actions the platform
+  gates: the eight intel-bridge steps plus the adversary reveal and umpire injects.
+  `state.governance.policy` maps each action id to `auto` or `human-required`.
+- `gateAction(actionId, rawActor)` is the gate. Under `human-required` it refuses an
+  unnamed actor with 403 and a machine-readable body (`code`, `actionId`,
+  `actorField`), counts the refusal in `state.governance.refusals` and audits it.
+  Under `auto` the machine acts and the record says so. There are no invented
+  fallback names anywhere in the bridge.
+- `recordHandoff()` reads `autonomy` from the policy for `fields.actionId` instead of
+  taking a literal, so the audit trail and the gate cannot disagree. Work the machine
+  performs under a human-required policy keeps the machine as `actor` and records the
+  person in `signedBy`.
+- `GET /api/governance/policy` -> `{updatedAt, updatedBy, actions[]}` with the
+  autonomy in force and the refusal count per action. `PUT /api/governance/policy`
+  {actionId, autonomy, changedBy} -> the same shape; the change itself is signed and
+  audited. Flipping an entry changes what the API executes.
+
+## Addendum, classification and staff products (2026-08-26)
+
+- `server/classification.mjs` owns the marking. `state.classification` is one level
+  (`unclassified | restricted | confidential | secret`) plus caveats, with EXERCISE
+  and FICTIONAL DATA locked on. `markingLine()` builds the banner, `portionMark()` the
+  paragraph mark, `highWater()` the rule that a document assembled from several
+  sources takes the highest of them. `GET/PUT /api/classification` (the PUT is signed).
+- `server/orders.mjs` writes the documents. `buildSyncMatrix(scenario, coa, mission)`
+  renders the phase to assignment to sub-task join at both task-organisation and unit
+  granularity and names any element tasked in no phase at all.
+  `buildDecisionSupport(scenario, coa, ruleSet, mission)` derives the decisions the
+  plan will force from the same four families the engine raises at execution.
+  `buildOpord(...)` is the five-paragraph order with Annexes A, B and C, every
+  paragraph portion-marked; `renderOpordText()` renders it as paper.
+- `GET /api/coas/:id/orders` -> `{opord, text, sync, dsm}`.
+- `buildFrago(...)` cuts a fragmentary order on every commander decision, marked as an
+  override when the commander went against the machine, carrying the rationale and
+  what the machine had recommended. Stored in `state.fragos`, read by
+  `GET /api/runs/:id/fragos` -> `{runId, runLabel, fragos, text}`.
+
+## Addendum, commander's requirements (2026-08-26)
+
+- `server/requirements.mjs` authors three priority intelligence requirements, each
+  broken into indicators tied to one of five named areas of interest.
+- `matchCue(cue, requirements, namedAreas)` anchors a cue to an indicator only when
+  its centre falls inside the named area AND it carries an entity of the right kind
+  AND its reporting mentions one of the indicator's terms. Geography alone is a
+  coincidence. Every match returns its own reasoning so a J2 can disagree with it.
+- `GET /api/intel/requirements` -> `{pirs, namedAreas, outstanding}`. An indicator is
+  `answered` only by a confirmed or spawned cue; an unconfirmed one leaves it
+  `indicated`. `outstanding` is the collection task list.
+  `GET /api/intel/cues/:id/requirements` -> what one cue answers, with the evidence.
+- Matching is derived on read, so every cue that has ever landed is anchored without
+  a state migration.

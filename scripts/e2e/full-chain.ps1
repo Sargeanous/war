@@ -10,7 +10,33 @@ function PostJ($url, $obj) {
   Invoke-RestMethod -Method Post "$base$url" -ContentType "application/json" -Body $body -TimeoutSec 120
 }
 function PutJ($url, $obj) { Invoke-RestMethod -Method Put "$base$url" -ContentType "application/json" -Body ($obj | ConvertTo-Json -Depth 12) -TimeoutSec 60 }
+function PutRaw($url, $obj) {
+  # Returns the error body instead of throwing, so negative gates can be asserted.
+  try {
+    $r = Invoke-WebRequest -Method Put "$base$url" -ContentType "application/json" -Body ($obj | ConvertTo-Json -Depth 12) -TimeoutSec 60
+    return @{ code = $r.StatusCode; body = $r.Content }
+  } catch {
+    $resp = $_.Exception.Response
+    $code = if ($resp) { [int]$resp.StatusCode } else { 0 }
+    $txt = ""
+    if ($resp) { $sr = New-Object System.IO.StreamReader($resp.GetResponseStream()); $txt = $sr.ReadToEnd() }
+    return @{ code = $code; body = $txt }
+  }
+}
 function GetJ($url) { Invoke-RestMethod "$base$url" -TimeoutSec 60 }
+function PostRaw($url, $obj) {
+  $body = if ($null -eq $obj) { "{}" } else { $obj | ConvertTo-Json -Depth 12 }
+  try {
+    $r = Invoke-WebRequest -Method Post "$base$url" -ContentType "application/json" -Body $body -TimeoutSec 60
+    return @{ code = $r.StatusCode; body = $r.Content }
+  } catch {
+    $resp = $_.Exception.Response
+    $code = if ($resp) { [int]$resp.StatusCode } else { 0 }
+    $txt = ""
+    if ($resp) { $sr = New-Object System.IO.StreamReader($resp.GetResponseStream()); $txt = $sr.ReadToEnd() }
+    return @{ code = $code; body = $txt }
+  }
+}
 
 # 0 - pristine start
 Step "0 Reset demo data" { $r = PostJ "/api/admin/reset" $null; if (-not $r.ok) { throw "reset not ok" } }
@@ -203,5 +229,118 @@ Step "15 Command seats crew + toggle" {
   PostJ "/api/runs/$($run.id)/control" @{ action = "abort" } | Out-Null
 }
 
-$results | Select-Object -Last 3 | ForEach-Object { $_ }
+# 16 - The adversary is playing a plan, and it is masked until the reveal
+Step "16 OPFOR plan is played and masked" {
+  $plans = GetJ "/api/adversary/plans"
+  if ($plans.Count -lt 2) { throw "expected 2 adversary plans, got $($plans.Count)" }
+  $coas = (GetJ "/api/coas") | Where-Object { $_.scenarioId -eq "scn-azure-horizon" } | Select-Object -First 2
+  $rs = (GetJ "/api/rulesets") | Where-Object { $_.status -eq "active" } | Select-Object -First 1
+  $run = PostJ "/api/runs" @{ scenarioId = "scn-azure-horizon"; coaIds = @($coas | ForEach-Object { $_.id }); ruleSetId = $rs.id; engine = "realtime"; speed = 4; label = "E2E adversary"; redPlanId = "adv-tidewall" }
+  $seeds = $run.branches | ForEach-Object { $_.seed } | Select-Object -Unique
+  if ($seeds.Count -ne 1) { throw "branches drew different seeds: $($seeds -join ',')" }
+  $adv = $run.branches[0].adversary
+  if ($adv.revealed) { throw "plan revealed before the umpire said so" }
+  if ($adv.codename -ne "Withheld") { throw "masked codename leaked as $($adv.codename)" }
+  if ($adv.phases.Count -ne 0) { throw "masked view leaked $($adv.phases.Count) phases" }
+  $bad = PostRaw "/api/runs/$($run.id)/adversary/reveal" @{}
+  if ($bad.code -eq 200) { throw "unsigned reveal accepted" }
+  $revealed = PostJ "/api/runs/$($run.id)/adversary/reveal" @{ revealedBy = "E2E Umpire" }
+  $adv2 = $revealed.branches[0].adversary
+  if (-not $adv2.revealed) { throw "reveal did not take" }
+  if ($adv2.codename -ne "TIDEWALL") { throw "codename $($adv2.codename)" }
+  if ($adv2.phases.Count -lt 3) { throw "only $($adv2.phases.Count) phases revealed" }
+  if (-not $adv2.counter) { throw "no counter recorded" }
+  $truth = GetJ "/api/runs/$($run.id)/adversary/truth"
+  if ($truth.branches.Count -lt 2) { throw "white cell view missing a branch" }
+  $script:advRunId = $run.id
+  PostJ "/api/runs/$($run.id)/control" @{ action = "abort" } | Out-Null
+}
+
+# 17 - Orders out: the platform can write an order, not only read one
+Step "17 Orders, sync matrix and decision support" {
+  $coa = (GetJ "/api/coas") | Where-Object { $_.scenarioId -eq "scn-azure-horizon" } | Select-Object -First 1
+  $o = GetJ "/api/coas/$($coa.id)/orders"
+  if ($o.opord.paragraphs.Count -ne 5) { throw "$($o.opord.paragraphs.Count) paragraphs, expected the five-paragraph order" }
+  if ($o.opord.annexes.Count -lt 3) { throw "only $($o.opord.annexes.Count) annexes" }
+  if (-not $o.opord.marking) { throw "order carries no marking" }
+  foreach ($p in $o.opord.paragraphs) { if (-not $p.mark) { throw "paragraph $($p.id) carries no portion mark" } }
+  if ($o.text.Length -lt 3000) { throw "rendered order is only $($o.text.Length) characters" }
+  if ($o.text -match "[$([char]0x2014)$([char]0x2013)$([char]0x00b7)]") { throw "rendered order carries banned punctuation" }
+  if ($o.sync.phases.Count -lt 2) { throw "sync matrix has $($o.sync.phases.Count) phases" }
+  if ($o.sync.rows.Count -lt 1) { throw "sync matrix has no task organisation rows" }
+  if ($o.sync.unitRows.Count -lt 5) { throw "sync matrix has no unit rows" }
+  $joined = $false
+  foreach ($row in $o.sync.rows) { foreach ($cell in $row.cells) { foreach ($t in $cell.tasks) { if ($t.subTaskTitle) { $joined = $true } } } }
+  if (-not $joined) { throw "no cell joins a tasking to its mission sub-task" }
+  if ($o.dsm.rows.Count -lt 3) { throw "decision support matrix has $($o.dsm.rows.Count) rows" }
+  foreach ($r in $o.dsm.rows) {
+    if (-not $r.ltiov) { throw "decision $($r.id) carries no latest time to decide" }
+    if ($r.criteria.Count -lt 2) { throw "decision $($r.id) carries no criteria" }
+  }
+}
+
+# 18 - A commander decision cuts a fragmentary order under their name.
+# Self-contained: the run from step 6 was wiped by the reset in step 12.
+Step "18 Fragmentary orders are cut on decisions" {
+  $coa = (GetJ "/api/coas") | Where-Object { $_.scenarioId -eq "scn-azure-horizon" } | Select-Object -First 1
+  $rs = (GetJ "/api/rulesets") | Where-Object { $_.status -eq "active" } | Select-Object -First 1
+  $run = PostJ "/api/runs" @{ scenarioId = "scn-azure-horizon"; coaIds = @($coa.id); ruleSetId = $rs.id; engine = "realtime"; speed = 8; label = "E2E frago" }
+  $open = $null
+  for ($i = 0; $i -lt 90 -and -not $open; $i++) {
+    Start-Sleep -Milliseconds 700
+    $run = GetJ "/api/runs/$($run.id)"
+    $open = $run.branches[0].decisions | Where-Object { $_.status -eq "open" } | Select-Object -First 1
+  }
+  if (-not $open) { throw "no decision point opened inside the window" }
+  $alt = ($open.options | Where-Object { $_.id -ne $open.aiRecommendationId } | Select-Object -First 1).id
+  if (-not $alt) { $alt = $open.options[0].id }
+  PostJ "/api/runs/$($run.id)/branches/$($run.branches[0].id)/decide" @{ decisionId = $open.id; optionId = $alt; rationale = "E2E override for the order"; decidedBy = "E2E Commander" } | Out-Null
+  $f = GetJ "/api/runs/$($run.id)/fragos"
+  if ($f.fragos.Count -lt 1) { throw "no fragmentary order cut for a resolved decision" }
+  $override = $f.fragos | Where-Object { -not $_.followedMachine } | Select-Object -First 1
+  if (-not $override) { throw "the override decision cut no fragmentary order marked as one" }
+  if ($override.issuedBy -ne "E2E Commander") { throw "frago issued by $($override.issuedBy)" }
+  if (-not $override.marking) { throw "frago carries no marking" }
+  if (-not $override.machineLine) { throw "frago does not record what the machine recommended" }
+  if ($override.rationale -notmatch "E2E override") { throw "frago lost the commander rationale" }
+  if ($f.text.Length -lt 200) { throw "frago text renders empty" }
+  PostJ "/api/runs/$($run.id)/control" @{ action = "abort" } | Out-Null
+}
+
+# 19 - Classification is one marking, signed, and inherited by documents
+Step "19 Classification marking" {
+  $c = GetJ "/api/classification"
+  if ($c.current.caveats -notcontains "exercise") { throw "EXERCISE caveat is not locked on" }
+  $unsigned = PutRaw "/api/classification" @{ level = "secret" }
+  if ($unsigned.code -eq 200) { throw "marking changed without a signature" }
+  $up = PutJ "/api/classification" @{ level = "secret"; changedBy = "E2E Admin" }
+  if ($up.marking -notmatch "^SECRET") { throw "marking is $($up.marking)" }
+  $coa = (GetJ "/api/coas") | Where-Object { $_.scenarioId -eq "scn-azure-horizon" } | Select-Object -First 1
+  $o = GetJ "/api/coas/$($coa.id)/orders"
+  if ($o.opord.marking -notmatch "^SECRET") { throw "the order did not inherit the new marking" }
+  if ($o.opord.paragraphs[0].mark -notmatch "S") { throw "portion marks did not follow the level" }
+  $back = PutJ "/api/classification" @{ level = "restricted"; changedBy = "E2E Admin" }
+  if ($back.marking -notmatch "^RESTRICTED") { throw "marking did not restore" }
+  $log = GetJ "/api/audit"
+  if (-not ($log | Where-Object { $_.action -eq "classification-changed" })) { throw "marking change not audited" }
+}
+
+# 20 - Cues are anchored to the requirements they answer
+Step "20 Requirements board anchors cues" {
+  $b = GetJ "/api/intel/requirements"
+  if ($b.pirs.Count -lt 3) { throw "only $($b.pirs.Count) priority requirements" }
+  if ($b.namedAreas.Count -lt 4) { throw "only $($b.namedAreas.Count) named areas" }
+  $anchored = 0
+  foreach ($p in $b.pirs) { foreach ($i in $p.indicators) { $anchored += $i.cues.Count } }
+  if ($anchored -lt 1) { throw "no cue is anchored to any indicator" }
+  if ($b.outstanding.Count -lt 1) { throw "every indicator is answered, which means the matching is too loose" }
+  $cues = GetJ "/api/intel/cues"
+  $m = GetJ "/api/intel/cues/$($cues[0].id)/requirements"
+  foreach ($match in $m.matches) {
+    if ($match.because.Count -lt 3) { throw "match on $($match.indicatorId) does not show its reasoning" }
+    if (-not $match.naiName) { throw "match on $($match.indicatorId) names no area" }
+  }
+}
+
+$results | Select-Object -Last 8 | ForEach-Object { $_ }
 "report source: $($script:reportSource)"

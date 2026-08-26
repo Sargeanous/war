@@ -28,6 +28,12 @@ import type {
   AdversaryPlanSummary,
   GovernancePolicy,
   HandoffAutonomy,
+  ClassificationState,
+  ClassificationLevelId,
+  OrdersResult,
+  FragoResult,
+  RequirementsBoard,
+  CueRequirements,
   ExplainTopic,
   CoaStrategy,
   OntologyClass,
@@ -125,6 +131,9 @@ export const dismissCue = (id: string, by: string, reason: string) =>
 export const spawnScenarioFromCue = (id: string, createdBy: string) =>
   post<CueScenarioResult>(`/api/intel/cues/${id}/scenario`, { createdBy });
 export const syncIntelFeed = () => post<IntelSyncResult>("/api/intel/feed/sync");
+// The commander's standing questions, and what has answered them so far.
+export const fetchRequirements = () => get<RequirementsBoard>("/api/intel/requirements");
+export const fetchCueRequirements = (id: string) => get<CueRequirements>(`/api/intel/cues/${id}/requirements`);
 
 // --- Scenarios ---------------------------------------------------------------
 
@@ -193,6 +202,19 @@ export const fetchAdversaryPlans = () => get<AdversaryPlanSummary[]>("/api/adver
 // --- Autonomy policy -----------------------------------------------------------
 
 export const fetchGovernance = () => get<GovernancePolicy>("/api/governance/policy");
+
+// --- Classification and staff products -------------------------------------------
+
+export const fetchClassification = () => get<ClassificationState>("/api/classification");
+export const setClassification = (payload: {
+  level: ClassificationLevelId;
+  caveats?: string[];
+  releasableTo?: string;
+  changedBy: string;
+}) => put<ClassificationState>("/api/classification", payload);
+export const fetchCoaOrders = (coaId: string, issuedBy?: string) =>
+  get<OrdersResult>(`/api/coas/${coaId}/orders${issuedBy ? `?issuedBy=${encodeURIComponent(issuedBy)}` : ""}`);
+export const fetchRunFragos = (runId: string) => get<FragoResult>(`/api/runs/${runId}/fragos`);
 export const setGovernanceAutonomy = (actionId: string, autonomy: HandoffAutonomy, changedBy: string) =>
   put<GovernancePolicy>("/api/governance/policy", { actionId, autonomy, changedBy });
 export const revealAdversaryPlan = (runId: string, revealedBy: string) =>

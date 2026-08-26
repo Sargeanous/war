@@ -49,7 +49,8 @@ lat 34.0, lng -40.0), sides are BLUE "Coalition Task Force" and RED "Opposing Fo
 - A page MAY add page-specific styles in `src/pages/<name>.css` (imported at top of the
   page file). Every class in that file MUST carry the page prefix to avoid collisions:
   dashboard `cmd-`, scenario `sd-`, coa `coa-`, rules `rc-`, deduction `ded-`,
-  assessment `asm-`, ailayer `ail-`, foundation `fnd-`, admin `adm-`.
+  assessment `asm-`, ailayer `ail-`, foundation `fnd-`, admin `adm-`, intel `intel-`,
+  orders `ord-`.
 - English only. Dates via `timeAgo`, sim time via `simClock`.
 - Keep everything demo-plausible: metrics, latencies, versions.
 
@@ -143,3 +144,35 @@ Users table (role, org, last active, status, permissions as Tags; suspend/activa
 `updateUser`). Permission matrix (users × pages, read-only checkmarks). Audit log table
 (`fetchAudit`, newest first). System parameters panel (static demo values: session
 policy, data retention, engine limits).
+
+### Orders (`orders`)
+Where a plan leaves the machine as paper. Scenario and COA pickers, then four tabs.
+"Operation order": the five-paragraph order rendered as a document, every paragraph
+carrying its portion mark, with copy, download and print. "Synchronisation matrix":
+phases across the top, the force down the side, each cell naming the tasking and the
+mission sub-task it serves, toggled between task-organisation and unit granularity;
+any element tasked in no phase is called out as a planning gap rather than hidden.
+"Decision support": the decisions this plan will force before it is run, each with its
+trigger, latest time to decide, criteria and options, plus the named areas of interest.
+"Fragmentary orders": the orders cut when a commander ruled on a decision point, an
+override marked as one and carrying both the commander's rationale and what the machine
+had recommended. The platform marking sits at the head and the foot of the page.
+
+## Cross-cutting layers added after the first release
+
+- **The adversary plays a plan.** RED executes an authored scheme of manoeuvre chosen by
+  the white cell at launch, not a chase leash. Its content is masked from the players
+  until the run completes or an umpire reveals it by name. Never describe the RED plan
+  in copy that a player can read before the reveal, and never let SAGE paraphrase it:
+  the grounded context tells the model it is withheld.
+- **Branches share one seed.** Two COAs run against the same dice, so the difference
+  between them is the plan. Any UI that compares branches may say so.
+- **Autonomy is enforced, not labelled.** Every governed action passes through the
+  policy in `state.governance`. A page must read `GET /api/governance/policy` rather
+  than hard-coding which buttons demand a name, because an administrator can change it.
+- **One classification marking.** It sits at the head and the foot of every workspace
+  and is inherited by every document the platform emits. EXERCISE and FICTIONAL DATA are
+  locked on.
+- **Cues answer requirements.** The intel console shows the commander's priority
+  intelligence requirements above the feed, and every cue is anchored to the indicator
+  and named area it answers, with the reasoning shown.

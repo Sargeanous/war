@@ -45,6 +45,9 @@ export interface TheaterMapProps {
   units: MapUnit[];
   theater: TheaterFeature[];
   objectives?: Objective[];
+  // Named areas of interest: the ground the commander has asked to be watched.
+  // Drawn dashed and unowned, because an area of interest belongs to nobody.
+  namedAreas?: MapNamedArea[];
   selectedUnitId?: string | null;
   onSelectUnit?: (id: string) => void;
   onMapClick?: (pos: LatLng) => void;
@@ -65,6 +68,13 @@ export interface TheaterMapProps {
   worldKey?: string;
   glideSpeed?: "normal" | "fast"; // fast suits sub-second replay stepping
   height?: number;
+}
+
+export interface MapNamedArea {
+  id: string;
+  name: string; // short call sign, e.g. "NORTH CHANNEL"
+  centre: LatLng;
+  radiusKm: number;
 }
 
 export interface MapFocus {
@@ -251,6 +261,7 @@ export default function TheaterMap({
   units,
   theater,
   objectives,
+  namedAreas,
   selectedUnitId,
   onSelectUnit,
   onMapClick,
@@ -291,6 +302,7 @@ export default function TheaterMap({
       units={units}
       theater={theater}
       objectives={objectives}
+      namedAreas={namedAreas}
       selectedUnitId={selectedUnitId}
       onSelectUnit={onSelectUnit}
       onMapClick={onMapClick}
@@ -318,6 +330,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     units,
     theater,
     objectives,
+    namedAreas,
     selectedUnitId,
     onSelectUnit,
     onMapClick,
@@ -547,6 +560,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
       mapZoom, // objective label deconfliction is solved in screen space
       theater.map((f) => f.name),
       objectives?.map((o) => [o.id, o.side, o.title, o.area?.center.lat, o.area?.center.lng, o.area?.radiusKm]),
+      namedAreas?.map((a) => [a.id, a.centre.lat, a.centre.lng, a.radiusKm]),
       visibleUnits.map((u) => [u.id, u.position.lat, u.position.lng, u.headingDeg, u.status, u.strength, u.classId, u.affiliation]),
       trails ? Object.entries(trails).map(([id, p]) => [id, p.length, p[p.length - 1]?.lat, p[p.length - 1]?.lng]) : null,
       events?.map((e) => e.id),
@@ -574,6 +588,25 @@ function LeafletTheaterMap(props: TheaterMapProps) {
       L.polygon(latlngs, { ...style, pane: "theaterPane" })
         .bindTooltip(feature.name, { direction: "center", className: "map-feature-label" })
         .addTo(overlay);
+    }
+
+    if (namedAreas) {
+      for (const area of namedAreas) {
+        L.circle([area.centre.lat, area.centre.lng], {
+          radius: area.radiusKm * 1000,
+          color: "#c9a227",
+          weight: 1.2,
+          opacity: 0.75,
+          dashArray: "6 6",
+          fill: false,
+          interactive: false,
+        }).addTo(overlay);
+        L.marker([area.centre.lat + area.radiusKm / 111, area.centre.lng], {
+          icon: L.divIcon({ className: "map-nai-label", html: `NAI ${area.name}`, iconSize: [0, 0] }),
+          interactive: false,
+          keyboard: false,
+        }).addTo(overlay);
+      }
     }
 
     if (objectives) {
@@ -687,7 +720,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
         if (el && el.style) el.style.animationDelay = `-${Date.now() % 1600}ms`;
       }
     }
-  }, [visibleUnits, fogSide, theater, objectives, selectedUnitId, trails, events, sensorRingsFor, sensorRanges, showLabels, mapZoom]);
+  }, [visibleUnits, fogSide, theater, objectives, namedAreas, selectedUnitId, trails, events, sensorRingsFor, sensorRanges, showLabels, mapZoom]);
 
   // Persistent unit counters: diffed against a registry instead of rebuilt, so
   // position changes tween via the CSS transition on .map-unit-icon and the

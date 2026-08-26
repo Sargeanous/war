@@ -37,6 +37,7 @@ import {
   fetchIntelCues,
   handOffScenario,
   fetchGovernance,
+  fetchRequirements,
   identifyCue,
   interrogateCue,
   reportCollection,
@@ -70,6 +71,7 @@ import type {
   TheaterFeature,
   Tone,
   GovernancePolicy,
+  RequirementsBoard,
 } from "../types";
 
 const errMsg = (error: unknown) => (error instanceof ApiError ? error.message : "Backend unreachable");
@@ -228,6 +230,92 @@ function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
+const indicatorTones: Record<string, Tone> = {
+  open: "neutral",
+  indicated: "warn",
+  answered: "good",
+};
+
+// The commander's standing questions, above the feed rather than beside it. A cue
+// that answers indicator 2A inside NORTH CHANNEL is intelligence; the same cue with
+// nothing to anchor it to is a notification.
+function RequirementsBanner({
+  board,
+  open,
+  onToggle,
+  onFocus,
+}: {
+  board: RequirementsBoard | null;
+  open: boolean;
+  onToggle: () => void;
+  onFocus: (focus: MapFocus) => void;
+}) {
+  if (!board) return null;
+  const answered = board.pirs.reduce((sum, p) => sum + p.answered, 0);
+  const total = board.pirs.reduce((sum, p) => sum + p.total, 0);
+  return (
+    <section className="intel-pir">
+      <header className="intel-pir-head">
+        <button type="button" className="intel-pir-toggle" onClick={onToggle}>
+          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <span>Commander's priority intelligence requirements</span>
+        </button>
+        <div className="intel-pir-summary">
+          <StatusPill label={`${answered} of ${total} indicators answered`} tone={answered === total ? "good" : "warn"} />
+          {board.outstanding.length ? (
+            <StatusPill label={`${plural(board.outstanding.length, "indicator")} still open`} tone="neutral" />
+          ) : null}
+        </div>
+      </header>
+      {open ? (
+        <div className="intel-pir-body">
+          {board.pirs.map((pir) => (
+            <article key={pir.id} className={`intel-pir-card ${pir.status}`}>
+              <div className="intel-pir-question">
+                <span className="intel-pir-number">PIR {pir.number}</span>
+                <strong>{pir.question}</strong>
+              </div>
+              <p className="intel-pir-decision">Feeds the decision: {pir.decision}</p>
+              <div className="intel-pir-indicators">
+                {pir.indicators.map((indicator) => {
+                  const area = board.namedAreas.find((a) => a.id === indicator.naiId);
+                  return (
+                    <div key={indicator.id} className={`intel-pir-ind ${indicator.status}`}>
+                      <div className="intel-pir-ind-head">
+                        <span className="intel-pir-letter">{indicator.letter}</span>
+                        <StatusPill label={indicator.status} tone={indicatorTones[indicator.status] ?? "neutral"} />
+                        <button
+                          type="button"
+                          className="intel-pir-nai"
+                          onClick={() => (area ? onFocus({ ...area.centre, zoom: zoomForRadius(area.radiusKm), token: Date.now() }) : undefined)}
+                          title={area ? area.why : undefined}
+                        >
+                          NAI {indicator.naiName}
+                        </button>
+                      </div>
+                      <p>{indicator.text}</p>
+                      {indicator.cues.length ? (
+                        indicator.cues.map((hit) => (
+                          <p key={hit.cueId} className="intel-pir-hit">
+                            <span>{hit.title}</span>
+                            {hit.because.join(" ")}
+                          </p>
+                        ))
+                      ) : (
+                        <p className="intel-pir-hit open">Nothing has answered this. It is what collection should be pointed at.</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export default function Intel({ notify, goTo, profile }: PageProps) {
   const [cues, setCues] = useState<IntelCue[]>([]);
   const [cueId, setCueId] = useState<string | null>(null);
@@ -255,6 +343,10 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
   // their own and which refuse without a name, so the page reads it rather than
   // hard-coding the answer it was written with.
   const [governance, setGovernance] = useState<GovernancePolicy | null>(null);
+  // The commander's standing questions. Every cue is anchored to the indicator it
+  // answers, so an alert arrives as intelligence rather than as a notification.
+  const [board, setBoard] = useState<RequirementsBoard | null>(null);
+  const [boardOpen, setBoardOpen] = useState(true);
   const [mapFocus, setMapFocus] = useState<MapFocus | null>(null);
   // Cue ids already seen by this page. Seeded on the first pass so entering the
   // page never announces the backlog, only a cue that lands while watching.
@@ -311,11 +403,12 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([loadList(false), fetchBootstrap(), fetchGovernance()])
-      .then(([, boot, policy]) => {
+    Promise.all([loadList(false), fetchBootstrap(), fetchGovernance(), fetchRequirements()])
+      .then(([, boot, policy, requirements]) => {
         if (!alive) return;
         setTheater(boot.theater);
         setGovernance(policy);
+        setBoard(requirements);
         setLoading(false);
       })
       .catch((error) => {
@@ -683,12 +776,29 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
     );
   }
 
+  // What standing requirement this cue speaks to, read off the board rather than
+  // fetched again: the board already carries the anchor and the reasoning.
+  const cueAnchors = !cue || !board
+    ? []
+    : board.pirs.flatMap((pir) =>
+        pir.indicators
+          .filter((indicator) => indicator.cues.some((hit) => hit.cueId === cue.id))
+          .map((indicator) => ({
+            key: `${pir.id}-${indicator.id}`,
+            pirNumber: pir.number,
+            letter: indicator.letter,
+            naiName: indicator.naiName,
+            text: indicator.text,
+          }))
+      );
+
   const reached = cue ? reachedSteps(cue) : new Set<LadderStep>();
   const cueTurns = cue ? turns[cue.id] ?? [] : [];
   const dismissRecord = cue ? dismissalRecord(cue) : null;
 
   return (
     <div className="page-body">
+      <RequirementsBanner board={board} open={boardOpen} onToggle={() => setBoardOpen((v) => !v)} onFocus={setMapFocus} />
       <div className="intel-console">
         <aside className="intel-inbox">
           <div className="intel-inbox-head">
@@ -762,6 +872,20 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
                 >
                   <strong className="intel-card-title">{cue.title}</strong>
                   <p className="intel-narrative">{cue.narrative}</p>
+                  {cueAnchors.length ? (
+                    <p className="intel-anchor">
+                      {cueAnchors.map((anchor) => (
+                        <span key={anchor.key}>
+                          Answers PIR {anchor.pirNumber}, indicator {anchor.letter}, inside NAI {anchor.naiName}: {anchor.text}
+                        </span>
+                      ))}
+                    </p>
+                  ) : (
+                    <p className="intel-anchor none">
+                      This cue answers no standing requirement. It is worth working anyway, and it is worth asking whether the
+                      requirements are missing something.
+                    </p>
+                  )}
                   <DetailGrid>
                     <Detail label="Severity" value={cue.severity} />
                     <Detail label="Cue confidence" value={`${cue.confidence}%`} />
@@ -1074,6 +1198,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
             units={mapUnits}
             theater={theater}
             objectives={cueArea}
+            namedAreas={board?.namedAreas.map((a) => ({ id: a.id, name: a.name, centre: a.centre, radiusKm: a.radiusKm }))}
             selectedUnitId={entityId}
             onSelectUnit={focusEntity}
             showLabels
@@ -1085,6 +1210,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
             {cue
               ? `Cue area ${cue.geo.radiusKm} km, ${plural(cue.entities.length, "track")} read from BASEER. An unidentified track plots on the yellow unknown frame, never the hostile diamond, and only a declared neutral plots neutral. Click a counter to inspect it.`
               : "Meridian Archipelago theater. Select a cue to plot its tracks."}
+            {board ? " Dashed amber rings are the named areas of interest the commander asked to be watched." : ""}
           </div>
         </div>
       </div>

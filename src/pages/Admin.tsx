@@ -1,7 +1,18 @@
-import { BotMessageSquare, FileText, LockKeyhole, RotateCcw, ShieldCheck, UserCog, Users } from "lucide-react";
+import { BotMessageSquare, FileText, LockKeyhole, RotateCcw, ShieldCheck, Stamp, UserCog, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import "./admin.css";
-import { ApiError, appendAudit, fetchAudit, fetchGovernance, fetchUsers, resetDemoData, setGovernanceAutonomy, updateUser } from "../api";
+import {
+  ApiError,
+  appendAudit,
+  fetchAudit,
+  fetchClassification,
+  fetchGovernance,
+  fetchUsers,
+  resetDemoData,
+  setClassification,
+  setGovernanceAutonomy,
+  updateUser,
+} from "../api";
 import {
   Button,
   CompactTable,
@@ -11,6 +22,7 @@ import {
   Field,
   Metric,
   MetricGrid,
+  FormGrid,
   Panel,
   Segmented,
   StatusPill,
@@ -20,7 +32,7 @@ import {
 } from "../components";
 import { statusTone } from "../data";
 import type { PageProps } from "../shell";
-import type { AuditLogEntry, GovernancePolicy, HandoffAutonomy, User } from "../types";
+import type { AuditLogEntry, ClassificationLevelId, ClassificationState, GovernancePolicy, HandoffAutonomy, User } from "../types";
 
 const errMsg = (error: unknown) => (error instanceof ApiError ? error.message : "Backend unreachable");
 
@@ -47,15 +59,19 @@ export default function Admin({ notify, profile }: PageProps) {
   // API will execute, not what a badge reports.
   const [governance, setGovernance] = useState<GovernancePolicy | null>(null);
   const [policyBusy, setPolicyBusy] = useState<string | null>(null);
+  // The platform marking every document inherits from.
+  const [marking, setMarking] = useState<ClassificationState | null>(null);
+  const [markingBusy, setMarkingBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    Promise.all([fetchUsers(), fetchAudit(), fetchGovernance()])
-      .then(([u, a, g]) => {
+    Promise.all([fetchUsers(), fetchAudit(), fetchGovernance(), fetchClassification()])
+      .then(([u, a, g, c]) => {
         if (!alive) return;
         setUsers(u);
         setAudit(a);
         setGovernance(g);
+        setMarking(c);
         setLoading(false);
       })
       .catch((error) => {
@@ -97,6 +113,26 @@ export default function Admin({ notify, profile }: PageProps) {
     }
   }
 
+  async function applyMarking(next: Partial<{ level: ClassificationLevelId; caveats: string[]; releasableTo: string }>) {
+    if (!marking) return;
+    setMarkingBusy(true);
+    try {
+      const result = await setClassification({
+        level: next.level ?? marking.current.level,
+        caveats: next.caveats ?? marking.current.caveats,
+        releasableTo: next.releasableTo ?? marking.current.releasableTo,
+        changedBy: profile.name,
+      });
+      setMarking(result);
+      notify(`Platform marking is now ${result.marking}`);
+      setAudit(await fetchAudit());
+    } catch (error) {
+      notify(errMsg(error));
+    } finally {
+      setMarkingBusy(false);
+    }
+  }
+
   async function toggleUser(user: User) {
     const status = user.status === "active" ? "suspended" : "active";
     try {
@@ -133,6 +169,83 @@ export default function Admin({ notify, profile }: PageProps) {
         <Metric label="Audit entries" value={String(audit.length)} helper="Retained 400 days" tone="neutral" />
         <Metric label="Session policy" value="MFA | 12h" helper="Hardware token + revalidation" tone="good" />
       </MetricGrid>
+
+      <Panel icon={Stamp} title="Classification">
+        <div className="detail-stack">
+          <p className="adm-policy-lead">
+            One marking for the platform. Every order, fragmentary order and after-action report inherits it, paragraphs carry their own
+            portion marks, and a document assembled from several sources takes the highest of them. The EXERCISE and FICTIONAL DATA
+            caveats are locked on: nothing this platform produces is a real classified product.
+          </p>
+          {marking ? (
+            <>
+              <div className="adm-marking-preview">{marking.marking}</div>
+              <FormGrid columns={2}>
+                <Field label="Level">
+                  <select
+                    value={marking.current.level}
+                    disabled={markingBusy}
+                    onChange={(e) => applyMarking({ level: e.target.value as ClassificationLevelId })}
+                  >
+                    {marking.catalogue.levels.map((level) => (
+                      <option key={level.id} value={level.id}>
+                        {level.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Releasable to">
+                  <select
+                    value={marking.current.releasableTo}
+                    disabled={markingBusy || marking.current.caveats.includes("noforn")}
+                    onChange={(e) => applyMarking({ releasableTo: e.target.value })}
+                  >
+                    {["COALITION TASK FORCE", "EXERCISE PARTICIPANTS", "JOINT STAFF ONLY"].map((who) => (
+                      <option key={who} value={who}>
+                        {who}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </FormGrid>
+              <Field label="Caveats">
+                <div className="adm-caveats">
+                  {marking.catalogue.caveats.map((caveat) => {
+                    const on = marking.current.caveats.includes(caveat.id);
+                    return (
+                      <label key={caveat.id} className={`adm-caveat${on ? " on" : ""}${caveat.locked ? " locked" : ""}`}>
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          disabled={caveat.locked || markingBusy}
+                          onChange={() =>
+                            applyMarking({
+                              caveats: on
+                                ? marking.current.caveats.filter((c) => c !== caveat.id)
+                                : [...marking.current.caveats, caveat.id],
+                            })
+                          }
+                        />
+                        <span>
+                          <strong>{caveat.label}</strong>
+                          <small>{caveat.detail}</small>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </Field>
+              <small className="adm-policy-foot">
+                {marking.current.updatedAt
+                  ? `Last changed ${timeAgo(marking.current.updatedAt)} by ${marking.current.updatedBy}.`
+                  : "Platform default, never changed."}
+              </small>
+            </>
+          ) : (
+            <EmptyState icon={Stamp} title="Marking unavailable" hint="The platform marking could not be read. Refresh to try again." />
+          )}
+        </div>
+      </Panel>
 
       <Panel icon={BotMessageSquare} title="Autonomy policy">
         <div className="detail-stack">
