@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { askCopilot } from "./api";
+import BrandMark from "./BrandMark";
 import { Toast } from "./components";
 import type { PageId, PageProps, Profile } from "./shell";
 import CommandDashboard from "./pages/CommandDashboard";
@@ -213,7 +214,9 @@ function LoginScreen({
     <main className="login-screen">
       <section className="login-panel">
         <div className="login-brand">
-          <div className="brand-mark">O</div>
+          <div className="brand-mark">
+            <BrandMark size={46} />
+          </div>
           <div className="login-brand-text">
             <h1>Access profile</h1>
             <p>SANDTABLE · Scenario simulation and strategic planning</p>
@@ -270,7 +273,9 @@ function Sidebar({
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <div className="brand-mark">O</div>
+        <div className="brand-mark">
+          <BrandMark size={34} />
+        </div>
         <div>
           <strong>SANDTABLE</strong>
           <span>Wargame Platform</span>

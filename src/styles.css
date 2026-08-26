@@ -137,13 +137,15 @@ button:disabled {
 .brand-mark {
   width: 44px;
   height: 44px;
-  border-radius: 50%;
+  flex: none;
   display: grid;
   place-items: center;
-  background: #d90f2f;
-  color: #fff;
-  font-weight: 900;
-  letter-spacing: -0.04em;
+  color: var(--ink);
+}
+
+.brand-glyph {
+  display: block;
+  overflow: visible;
 }
 
 .login-brand p,
@@ -1965,7 +1967,6 @@ th {
 .brand-mark {
   width: 34px;
   height: 34px;
-  font-size: 13px;
 }
 
 .current-profile {
@@ -2316,7 +2317,6 @@ th {
 .login-brand .brand-mark {
   width: 46px;
   height: 46px;
-  font-size: 17px;
 }
 
 .login-brand-text {
