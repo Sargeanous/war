@@ -309,6 +309,21 @@ function migrateState(loaded) {
     loaded.intelFeed = { cursor: 0 };
     changed = true;
   }
+  if (!loaded.governance || typeof loaded.governance !== "object" || !loaded.governance.policy) {
+    loaded.governance = defaultGovernance();
+    changed = true;
+  }
+  if (!loaded.governance.refusals || typeof loaded.governance.refusals !== "object") {
+    loaded.governance.refusals = {};
+    changed = true;
+  }
+  // A catalogue entry added after this file was written defaults to its own policy.
+  for (const action of GOVERNED_ACTIONS) {
+    if (!AUTONOMY_VALUES.includes(loaded.governance.policy[action.id])) {
+      loaded.governance.policy[action.id] = action.defaultAutonomy;
+      changed = true;
+    }
+  }
   if (normalizeCueRecords(loaded.intelCues)) changed = true;
   return changed;
 }
@@ -368,6 +383,7 @@ function buildSeedState() {
     users: buildUsers(),
     auditLogs: buildAuditSeed(),
     platform: buildPlatform(),
+    governance: defaultGovernance(),
     intelCues: buildIntelCues(),
     intelFeed: { cursor: 0 },
   };
@@ -1463,6 +1479,203 @@ function handleScenarioFromOpord(body) {
   return scenario;
 }
 
+// --- Autonomy policy ----------------------------------------------------------------
+// Every hand-off record carried an "autonomy" field written as a literal at the call
+// site, which made it a label rather than a control: nothing read it back and nothing
+// could change it. The policy below is the single source of truth. Each governed
+// action resolves its autonomy here, a "human-required" action refuses to execute
+// without a named human, and flipping an entry in the Admin console changes what the
+// API will actually do rather than what a badge says it does.
+
+const GOVERNED_ACTIONS = [
+  {
+    id: "intel.interrogate",
+    label: "Interrogate a cue",
+    group: "Intel bridge",
+    actorField: "askedBy",
+    machineActor: "SAGE",
+    defaultAutonomy: "auto",
+    detail: "Answering an analyst question from the cue's own provenance. Reads the cue, changes nothing.",
+  },
+  {
+    id: "intel.identify",
+    label: "Identify a track",
+    group: "Intel bridge",
+    actorField: "identifiedBy",
+    machineActor: "SAGE",
+    defaultAutonomy: "auto",
+    detail: "Turning tracks into a named unit type with a confidence. Writes an assessment onto the cue.",
+  },
+  {
+    id: "intel.collection.request",
+    label: "Draft a collection tasking",
+    group: "Intel bridge",
+    actorField: "requestedBy",
+    machineActor: "SAGE",
+    defaultAutonomy: "human-required",
+    detail: "Drafting a tasking against a chosen asset. Commits nobody yet, but it puts a named request on the record.",
+  },
+  {
+    id: "intel.collection.approve",
+    label: "Release a collection tasking",
+    group: "Intel bridge",
+    actorField: "approver",
+    machineActor: "SAGE",
+    defaultAutonomy: "human-required",
+    detail: "Sending a real asset against a real place. This is the step that spends something.",
+  },
+  {
+    id: "intel.collection.report",
+    label: "Land a collection product",
+    group: "Intel bridge",
+    actorField: "by",
+    machineActor: "SAGE",
+    defaultAutonomy: "auto",
+    detail: "Reporting what the pass actually resolved, including when it resolved nothing.",
+  },
+  {
+    id: "intel.confirm",
+    label: "Confirm a track",
+    group: "Intel bridge",
+    actorField: "by",
+    machineActor: "SAGE",
+    defaultAutonomy: "human-required",
+    detail: "Moving a cue from possible to confirmed. Everything downstream treats it as fact.",
+  },
+  {
+    id: "intel.dismiss",
+    label: "Dismiss a cue",
+    group: "Intel bridge",
+    actorField: "by",
+    machineActor: "SAGE",
+    defaultAutonomy: "human-required",
+    detail: "Closing a cue out. A dismissed cue stops being worked, so the decision is signed.",
+  },
+  {
+    id: "intel.scenario.spawn",
+    label: "Turn a cue into a scenario",
+    group: "Intel bridge",
+    actorField: "createdBy",
+    machineActor: "SAGE",
+    defaultAutonomy: "human-required",
+    detail: "The step where intelligence becomes a plannable operation. The last place to invent a name.",
+  },
+  {
+    id: "run.adversary.reveal",
+    label: "Reveal the OPFOR plan",
+    group: "Exercise control",
+    actorField: "revealedBy",
+    machineActor: "white cell",
+    defaultAutonomy: "human-required",
+    detail: "Showing the players what RED was playing before the run has ended. It cannot be undone.",
+  },
+  {
+    id: "run.intervene",
+    label: "Inject into a live run",
+    group: "Exercise control",
+    actorField: "requestedBy",
+    machineActor: "umpire",
+    defaultAutonomy: "human-required",
+    detail: "Changing the world state under the players: weather, positions, resupply, injects.",
+  },
+];
+
+const GOVERNED_BY_ID = new Map(GOVERNED_ACTIONS.map((a) => [a.id, a]));
+const AUTONOMY_VALUES = ["auto", "human-required"];
+
+function defaultGovernance() {
+  const policy = {};
+  for (const action of GOVERNED_ACTIONS) policy[action.id] = action.defaultAutonomy;
+  return { policy, refusals: {}, updatedAt: nowIso(), updatedBy: "platform default" };
+}
+
+/** The autonomy actually in force for an action, policy first, catalogue as fallback. */
+function autonomyFor(actionId) {
+  const configured = state.governance && state.governance.policy ? state.governance.policy[actionId] : null;
+  if (AUTONOMY_VALUES.includes(configured)) return configured;
+  const action = GOVERNED_BY_ID.get(actionId);
+  return action ? action.defaultAutonomy : "auto";
+}
+
+/**
+ * The gate every governed action passes through. Under "human-required" it refuses
+ * an unnamed actor and records the refusal, so the policy is visibly load-bearing.
+ * Under "auto" the machine acts and the record says so.
+ */
+function gateAction(actionId, rawActor) {
+  const action = GOVERNED_BY_ID.get(actionId);
+  if (!action) throw httpError(500, `Unknown governed action "${actionId}".`);
+  const autonomy = autonomyFor(actionId);
+  const named = typeof rawActor === "string" ? rawActor.trim().slice(0, 60) : "";
+  if (autonomy === "human-required" && !named) {
+    state.governance.refusals[actionId] = (state.governance.refusals[actionId] || 0) + 1;
+    audit(
+      "governance",
+      "autonomy-refused",
+      actionId,
+      `"${action.label}" is set to human-required and was called without a named human. The action did not run.`
+    );
+    schedulePersist();
+    throw Object.assign(
+      httpError(
+        403,
+        `"${action.label}" is governed as human-required, so field '${action.actorField}' must name the person accountable for it. ${action.detail}`
+      ),
+      { actionId, autonomy, actorField: action.actorField, code: "autonomy_requires_human" }
+    );
+  }
+  return {
+    actionId,
+    autonomy,
+    // Who the record names as the actor when a human owns the step outright.
+    actor: named || action.machineActor,
+    kind: named ? "human" : autonomy === "auto" ? "ai" : "human",
+    // Who signed for a step the machine still performed. An identification is
+    // SAGE's work whoever authorised it, so the record says both.
+    signedBy: named || null,
+  };
+}
+
+function handleGetGovernance() {
+  return {
+    updatedAt: state.governance.updatedAt,
+    updatedBy: state.governance.updatedBy,
+    actions: GOVERNED_ACTIONS.map((action) => ({
+      id: action.id,
+      label: action.label,
+      group: action.group,
+      detail: action.detail,
+      actorField: action.actorField,
+      defaultAutonomy: action.defaultAutonomy,
+      autonomy: autonomyFor(action.id),
+      refusals: state.governance.refusals[action.id] || 0,
+    })),
+  };
+}
+
+function handleSetGovernance(body) {
+  const changedBy = typeof body.changedBy === "string" && body.changedBy.trim() ? body.changedBy.trim().slice(0, 60) : "";
+  if (!changedBy) throw httpError(400, "Field 'changedBy' is required: changing what the machine may do on its own is itself a signed act.");
+  const actionId = String(body.actionId || "");
+  const action = GOVERNED_BY_ID.get(actionId);
+  if (!action) throw httpError(404, `Unknown governed action "${actionId}".`);
+  const autonomy = String(body.autonomy || "");
+  if (!AUTONOMY_VALUES.includes(autonomy)) throw httpError(400, `Field 'autonomy' must be one of: ${AUTONOMY_VALUES.join(", ")}.`);
+  const before = autonomyFor(actionId);
+  if (before === autonomy) return handleGetGovernance();
+  state.governance.policy[actionId] = autonomy;
+  state.governance.updatedAt = nowIso();
+  state.governance.updatedBy = changedBy;
+  audit(
+    changedBy,
+    "autonomy-policy-changed",
+    actionId,
+    `"${action.label}" moved from ${before} to ${autonomy} by ${changedBy}. Every later call is gated on the new setting.`
+  );
+  schedulePersist();
+  return handleGetGovernance();
+}
+
 // --- Intel bridge (BASEER cues to scenarios) -------------------------------------
 // BASEER owns detection, sensor ingest and fusion. SANDTABLE only consumes the
 // normalised cue and walks it from "possible" to a live scenario. Every step writes
@@ -1474,23 +1687,25 @@ function requireCue(id) {
   return cue;
 }
 
-/** Trim a human actor name out of a request body. An empty fallback demands one. */
-function actorName(value, fallback) {
-  const name = typeof value === "string" ? value.trim() : "";
-  return name ? name.slice(0, 60) : fallback;
-}
-
+/**
+ * Write a hand-off record. Autonomy is never passed in as a literal: it is read
+ * from the policy for the action this record belongs to, so the trail and the
+ * gate can never disagree about what was allowed to happen on its own.
+ */
 function recordHandoff(cue, fields) {
   const handoff = {
     id: nextId("hof"),
     at: nowIso(),
     actor: fields.actor,
     kind: fields.kind,
-    autonomy: fields.autonomy,
+    actionId: fields.actionId || null,
+    autonomy: fields.actionId ? autonomyFor(fields.actionId) : fields.autonomy,
     action: fields.action,
     detail: fields.detail,
     source: fields.source || null,
     latencyMs: Number.isFinite(fields.latencyMs) ? Math.round(fields.latencyMs) : null,
+    // Set when the policy made a human sign for work the machine still did.
+    signedBy: fields.signedBy || null,
   };
   if (!Array.isArray(cue.handoffs)) cue.handoffs = [];
   cue.handoffs.push(handoff);
@@ -1528,6 +1743,7 @@ function cueContext(cue) {
 
 async function handleCueInterrogate(id, body) {
   const cue = requireCue(id);
+  const gate = gateAction("intel.interrogate", body.askedBy);
   const question = typeof body.question === "string" ? body.question.trim() : "";
   if (!question) throw httpError(400, "Field 'question' is required.");
   if (question.length > 400) throw httpError(400, "Question too long (400 character cap).");
@@ -1557,7 +1773,8 @@ async function handleCueInterrogate(id, body) {
   const handoff = recordHandoff(cue, {
     actor: "SAGE",
     kind: "ai",
-    autonomy: "auto",
+    actionId: gate.actionId,
+    signedBy: gate.signedBy,
     action: "Answered interrogation",
     detail: `"${question.slice(0, 140)}" answered from cue provenance via ${source}.`,
     source,
@@ -1568,8 +1785,9 @@ async function handleCueInterrogate(id, body) {
   return { answer, source, latencyMs, handoff };
 }
 
-async function handleCueIdentify(id) {
+async function handleCueIdentify(id, body) {
   const cue = requireCue(id);
+  const gate = gateAction("intel.identify", body && body.identifiedBy);
   // Identification is the machine step, and it runs itself. Once a named human has
   // ruled on the cue, an automatic re-identification would rewrite the assessment
   // that ruling was made on, so the machine stops at the human decision.
@@ -1629,7 +1847,8 @@ async function handleCueIdentify(id) {
   const handoff = recordHandoff(cue, {
     actor: "SAGE",
     kind: "ai",
-    autonomy: "auto",
+    actionId: gate.actionId,
+    signedBy: gate.signedBy,
     action: "Identified unit",
     detail: `${assessment.unitType} at ${assessment.confidence}% confidence. ${assessment.intent}`,
     source: assessment.source,
@@ -1657,7 +1876,7 @@ function handleCueCollect(id, body) {
     throw httpError(400, `Field 'optionIndex' must be between 0 and ${options.length - 1}.`);
   }
   const option = options[index];
-  const requestedBy = actorName(body.requestedBy, "collection manager");
+  const requestedBy = gateAction("intel.collection.request", body.requestedBy).actor;
   const task = {
     id: nextId("tsk"),
     taskingId: `${(Date.now() % 900000) + 100000}-RRN`,
@@ -1686,7 +1905,7 @@ function handleCueCollect(id, body) {
   const handoff = recordHandoff(cue, {
     actor: requestedBy,
     kind: "human",
-    autonomy: "human-required",
+    actionId: "intel.collection.request",
     action: "Requested collection",
     detail: `Tasking ${task.taskingId}, ${task.asset} ${task.mode} at ${task.resolutionM} m, ETA ${task.etaMinutes} min, ${task.priority}. Held for named approval.`,
   });
@@ -1776,8 +1995,7 @@ function handleCueApproveCollection(id, taskId, body) {
       `Tasking ${task.taskingId} was already released by ${task.approvedBy} at ${task.approvedAt}. It is out, waiting on its product.`
     );
   }
-  const approver = actorName(body.approver, "");
-  if (!approver) throw httpError(400, "Field 'approver' is required: collection tasking needs a named human approval.");
+  const approver = gateAction("intel.collection.approve", body.approver).actor;
   task.status = "approved";
   task.approvedBy = approver;
   task.approvedAt = nowIso();
@@ -1785,7 +2003,7 @@ function handleCueApproveCollection(id, taskId, body) {
   const handoff = recordHandoff(cue, {
     actor: approver,
     kind: "human",
-    autonomy: "human-required",
+    actionId: "intel.collection.approve",
     action: "Approved collection",
     detail: `${approver} released tasking ${task.taskingId} to ${task.asset} (${task.mode}, ${task.priority}). Nothing has been collected yet.`,
   });
@@ -1805,8 +2023,9 @@ function handleCueApproveCollection(id, taskId, body) {
  * confidence movement is derived from that product, so a coarse pass buys almost
  * nothing and cannot carry the cue to a confirmable picture on its own.
  */
-function handleCueCollectionReport(id, taskId) {
+function handleCueCollectionReport(id, taskId, body) {
   const cue = requireCue(id);
+  const gate = gateAction("intel.collection.report", body && body.by);
   const task = requireCollectionTask(cue, taskId);
   if (task.status === "requested") {
     throw httpError(
@@ -1856,7 +2075,8 @@ function handleCueCollectionReport(id, taskId) {
   const handoff = recordHandoff(cue, {
     actor: task.asset,
     kind: "machine",
-    autonomy: "auto",
+    actionId: gate.actionId,
+    signedBy: gate.signedBy,
     action: outcome.resolves ? "Reported collection" : "Reported inconclusive collection",
     detail: `${timing} ${outcome.text} ${movement}${assessmentNote}`,
     source: "offline",
@@ -1921,14 +2141,13 @@ function handleCueConfirm(id, body) {
       `Every collection on cue "${cue.id}" came back inconclusive. Task an asset that can resolve the discriminator before a named human confirms it.`
     );
   }
-  const by = actorName(body.by, "");
-  if (!by) throw httpError(400, "Field 'by' is required: only a named human can move a cue to confirmed.");
+  const by = gateAction("intel.confirm", body.by).actor;
   cue.state = "confirmed";
   const evidence = resolving.length === 1 ? "a resolving collection" : `${resolving.length} resolving collections`;
   const handoff = recordHandoff(cue, {
     actor: by,
     kind: "human",
-    autonomy: "human-required",
+    actionId: "intel.confirm",
     action: "Confirmed cue",
     detail: `${by} moved the cue from possible to confirmed at ${cue.confidence}% confidence on ${evidence}, releasing it for course of action generation.`,
   });
@@ -1945,15 +2164,14 @@ function handleCueDismiss(id, body) {
   if (cue.state === "dismissed") {
     throw httpError(409, `Cue "${cue.id}" was already dismissed. The dismissal on file stands.`);
   }
-  const by = actorName(body.by, "");
-  if (!by) throw httpError(400, "Field 'by' is required: only a named human can dismiss a cue.");
+  const by = gateAction("intel.dismiss", body.by).actor;
   const reason = typeof body.reason === "string" && body.reason.trim() ? body.reason.trim().slice(0, 300) : "No reason recorded.";
   const from = cue.state;
   cue.state = "dismissed";
   const handoff = recordHandoff(cue, {
     actor: by,
     kind: "human",
-    autonomy: "human-required",
+    actionId: "intel.dismiss",
     action: "Dismissed cue",
     detail: `${by} dismissed the cue at the "${from}" step. ${reason}`,
   });
@@ -1982,10 +2200,7 @@ function handleCueScenario(id, body) {
   }
   // The loop closes on a name. Every other gate refuses an unnamed actor, and the step
   // that turns intelligence into a plannable scenario is the last place to invent one.
-  const createdBy = actorName(body.createdBy, "");
-  if (!createdBy) {
-    throw httpError(400, "Field 'createdBy' is required: only a named human can turn a confirmed cue into a scenario.");
-  }
+  const createdBy = gateAction("intel.scenario.spawn", body.createdBy).actor;
   const parse = cueToParse(cue, state);
   if (!parse || !Array.isArray(parse.sides)) throw httpError(422, `Cue "${cue.id}" could not be projected into a scenario order of battle.`);
   const scenario = materializeScenario(
@@ -2001,7 +2216,7 @@ function handleCueScenario(id, body) {
   const handoff = recordHandoff(cue, {
     actor: createdBy,
     kind: "human",
-    autonomy: "human-required",
+    actionId: "intel.scenario.spawn",
     action: "Generated scenario",
     detail: `${createdBy} turned the confirmed cue into scenario "${scenario.name}" (${scenario.units.length} units, ${scenario.objectives.length} objectives), ready for course of action generation.`,
   });
@@ -2036,6 +2251,7 @@ function recordIngest(cue, channel) {
     actor: "BASEER",
     kind: "machine",
     autonomy: "auto",
+    actionId: null,
     action: "Ingested cue",
     detail: `Normalised the ${channel} push into an intel cue, ${cue.severity} severity at ${cue.confidence}% reported confidence. Nothing is assessed and nothing is tasked yet.`,
     source: "offline",
@@ -2775,7 +2991,7 @@ function handleIntervene(runId, branchId, body) {
   const request = {
     type: body.type,
     params: body.params && typeof body.params === "object" ? body.params : {},
-    requestedBy: typeof body.requestedBy === "string" && body.requestedBy.trim() ? body.requestedBy.trim() : "umpire",
+    requestedBy: gateAction("run.intervene", body.requestedBy).actor,
   };
   applyIntervention(run, branch.id, request, ctxFor(run));
   reconcileRunStatus(run);
@@ -2790,10 +3006,7 @@ function handleIntervene(runId, branchId, body) {
 
 function handleRevealAdversary(id, body) {
   const run = requireRun(id);
-  const revealedBy = typeof body.revealedBy === "string" && body.revealedBy.trim() ? body.revealedBy.trim().slice(0, 60) : "";
-  if (!revealedBy) {
-    throw httpError(400, "Field 'revealedBy' is required: showing the players the adversary plan mid-run is an umpire call and it is signed.");
-  }
+  const revealedBy = gateAction("run.adversary.reveal", body.revealedBy).actor;
   const revealed = run.branches.map((branch) => revealAdversary(branch)).filter(Boolean);
   if (!revealed.length) throw httpError(409, "No branch in this run carries an adversary plan to reveal.");
   audit(revealedBy, "adversary-revealed", run.id, `${revealedBy} revealed the OPFOR plan to the players on ${plural(revealed.length, "branch", "branches")} of "${run.label}".`);
@@ -2963,6 +3176,8 @@ const routes = [
     handler: ({ params, body }) => handleExplain(params[0], params[1], body),
   },
   { method: "GET", re: /^\/api\/adversary\/plans$/, handler: () => adversaryPlanCatalogue() },
+  { method: "GET", re: /^\/api\/governance\/policy$/, handler: () => handleGetGovernance() },
+  { method: "PUT", re: /^\/api\/governance\/policy$/, handler: ({ body }) => handleSetGovernance(body) },
   {
     method: "POST",
     re: new RegExp(`^/api/runs/${ID}/adversary/reveal$`),
@@ -3024,7 +3239,7 @@ const routes = [
     re: new RegExp(`^/api/intel/cues/${ID}/interrogate$`),
     handler: ({ params, body }) => handleCueInterrogate(params[0], body),
   },
-  { method: "POST", re: new RegExp(`^/api/intel/cues/${ID}/identify$`), handler: ({ params }) => handleCueIdentify(params[0]) },
+  { method: "POST", re: new RegExp(`^/api/intel/cues/${ID}/identify$`), handler: ({ params, body }) => handleCueIdentify(params[0], body) },
   { method: "POST", re: new RegExp(`^/api/intel/cues/${ID}/collect/options$`), handler: ({ params }) => handleCueCollectOptions(params[0]) },
   { method: "POST", re: new RegExp(`^/api/intel/cues/${ID}/collect$`), handler: ({ params, body }) => handleCueCollect(params[0], body) },
   {
@@ -3035,7 +3250,7 @@ const routes = [
   {
     method: "POST",
     re: new RegExp(`^/api/intel/cues/${ID}/collect/${ID}/report$`),
-    handler: ({ params }) => handleCueCollectionReport(params[0], params[1]),
+    handler: ({ params, body }) => handleCueCollectionReport(params[0], params[1], body),
   },
   { method: "POST", re: new RegExp(`^/api/intel/cues/${ID}/confirm$`), handler: ({ params, body }) => handleCueConfirm(params[0], body) },
   { method: "POST", re: new RegExp(`^/api/intel/cues/${ID}/dismiss$`), handler: ({ params, body }) => handleCueDismiss(params[0], body) },

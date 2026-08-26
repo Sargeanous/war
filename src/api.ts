@@ -26,6 +26,8 @@ import type {
   RunReport,
   CommandSeat,
   AdversaryPlanSummary,
+  GovernancePolicy,
+  HandoffAutonomy,
   ExplainTopic,
   CoaStrategy,
   OntologyClass,
@@ -103,13 +105,14 @@ export const fetchBootstrap = async (): Promise<Bootstrap> => {
 
 export const fetchIntelCues = () => get<IntelCue[]>("/api/intel/cues");
 export const fetchIntelCue = (id: string) => get<IntelCue>(`/api/intel/cues/${id}`);
-export const interrogateCue = (id: string, question: string) =>
-  post<InterrogateResult>(`/api/intel/cues/${id}/interrogate`, { question });
-export const identifyCue = (id: string) => post<IdentifyResult>(`/api/intel/cues/${id}/identify`);
+export const interrogateCue = (id: string, question: string, askedBy?: string) =>
+  post<InterrogateResult>(`/api/intel/cues/${id}/interrogate`, { question, askedBy });
+export const identifyCue = (id: string, identifiedBy?: string) =>
+  post<IdentifyResult>(`/api/intel/cues/${id}/identify`, identifiedBy ? { identifiedBy } : undefined);
 export const fetchCollectionOptions = (id: string) =>
   post<CollectionOptionsResult>(`/api/intel/cues/${id}/collect/options`);
-export const requestCollection = (id: string, optionIndex: number) =>
-  post<CollectionTaskResult>(`/api/intel/cues/${id}/collect`, { optionIndex });
+export const requestCollection = (id: string, optionIndex: number, requestedBy: string) =>
+  post<CollectionTaskResult>(`/api/intel/cues/${id}/collect`, { optionIndex, requestedBy });
 export const approveCollection = (id: string, taskId: string, approver: string) =>
   post<CollectionTaskResult>(`/api/intel/cues/${id}/collect/${taskId}/approve`, { approver });
 // Landing the product is its own step: release and result are separate events
@@ -186,6 +189,12 @@ export const startRun = (payload: {
 // --- Adversary plan ------------------------------------------------------------
 
 export const fetchAdversaryPlans = () => get<AdversaryPlanSummary[]>("/api/adversary/plans");
+
+// --- Autonomy policy -----------------------------------------------------------
+
+export const fetchGovernance = () => get<GovernancePolicy>("/api/governance/policy");
+export const setGovernanceAutonomy = (actionId: string, autonomy: HandoffAutonomy, changedBy: string) =>
+  put<GovernancePolicy>("/api/governance/policy", { actionId, autonomy, changedBy });
 export const revealAdversaryPlan = (runId: string, revealedBy: string) =>
   post<SimRun>(`/api/runs/${runId}/adversary/reveal`, { revealedBy });
 export const controlRun = (id: string, action: "pause" | "resume" | "speed" | "abort" | "step", value?: number) =>

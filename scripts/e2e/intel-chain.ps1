@@ -10,6 +10,21 @@ function PostJ($url, $obj) {
   Invoke-RestMethod -Method Post "$base$url" -ContentType "application/json" -Body $body -TimeoutSec 180
 }
 function GetJ($url) { Invoke-RestMethod "$base$url" -TimeoutSec 60 }
+function PutJ($url, $obj) {
+  Invoke-RestMethod -Method Put "$base$url" -ContentType "application/json" -Body ($obj | ConvertTo-Json -Depth 12) -TimeoutSec 60
+}
+function PutRaw($url, $obj) {
+  try {
+    $r = Invoke-WebRequest -Method Put "$base$url" -ContentType "application/json" -Body ($obj | ConvertTo-Json -Depth 12) -TimeoutSec 60
+    return @{ code = $r.StatusCode; body = $r.Content }
+  } catch {
+    $resp = $_.Exception.Response
+    $code = if ($resp) { [int]$resp.StatusCode } else { 0 }
+    $txt = ""
+    if ($resp) { $sr = New-Object System.IO.StreamReader($resp.GetResponseStream()); $txt = $sr.ReadToEnd() }
+    return @{ code = $code; body = $txt }
+  }
+}
 function PostRaw($url, $obj) {
   # Returns the error body instead of throwing, so negative gates can be asserted.
   $body = if ($null -eq $obj) { "{}" } else { $obj | ConvertTo-Json -Depth 12 }
@@ -59,11 +74,35 @@ Step "I2 Governance gates refuse the AI" {
   $script:opts = $opts.options
 }
 
+# I2b - autonomy is a control, not a label: flipping the policy changes what the API does
+Step "I2b Autonomy policy is enforced" {
+  $pol = GetJ "/api/governance/policy"
+  $ident = $pol.actions | Where-Object { $_.id -eq "intel.identify" }
+  if ($ident.autonomy -ne "auto") { throw "identify starts at $($ident.autonomy)" }
+  $unsigned = PutRaw "/api/governance/policy" @{ actionId = "intel.identify"; autonomy = "human-required" }
+  if ($unsigned.code -eq 200) { throw "policy changed without a signature" }
+  $flipped = PutJ "/api/governance/policy" @{ actionId = "intel.identify"; autonomy = "human-required"; changedBy = "E2E governance" }
+  if (($flipped.actions | Where-Object { $_.id -eq "intel.identify" }).autonomy -ne "human-required") { throw "flip did not take" }
+  $refused = PostRaw "/api/intel/cues/$($script:cue.id)/identify" @{}
+  if ($refused.code -ne 403) { throw "unnamed identify returned $($refused.code), expected 403" }
+  $named = PostJ "/api/intel/cues/$($script:cue.id)/identify" @{ identifiedBy = "Maj L. Haddad" }
+  if ($named.handoff.autonomy -ne "human-required") { throw "record autonomy $($named.handoff.autonomy) does not follow the policy" }
+  if ($named.handoff.signedBy -ne "Maj L. Haddad") { throw "record did not name the signer" }
+  if ($named.handoff.actor -ne "SAGE") { throw "identification credited to $($named.handoff.actor) rather than the machine that did it" }
+  $after = GetJ "/api/governance/policy"
+  if ((($after.actions | Where-Object { $_.id -eq "intel.identify" }).refusals) -lt 1) { throw "refusal was not counted" }
+  $restored = PutJ "/api/governance/policy" @{ actionId = "intel.identify"; autonomy = "auto"; changedBy = "E2E governance" }
+  if (($restored.actions | Where-Object { $_.id -eq "intel.identify" }).autonomy -ne "auto") { throw "restore did not take" }
+  $log = GetJ "/api/audit"
+  if (-not ($log | Where-Object { $_.action -eq "autonomy-policy-changed" })) { throw "policy change not audited" }
+  if (-not ($log | Where-Object { $_.action -eq "autonomy-refused" })) { throw "refusal not audited" }
+}
+
 # I3 - a sensor too coarse must not unlock confirmation
 Step "I3 Inconclusive collection does not unlock confirm" {
   $coarse = 0
   for ($i = 0; $i -lt $script:opts.Count; $i++) { if ($script:opts[$i].note -match "(will not|cannot|does not) resolve") { $coarse = $i } }
-  $t = PostJ "/api/intel/cues/$($script:cue.id)/collect" @{ optionIndex = $coarse }
+  $t = PostJ "/api/intel/cues/$($script:cue.id)/collect" @{ optionIndex = $coarse; requestedBy = "LTC Amina Faraj" }
   $tid = $t.task.id
   $bad = PostRaw "/api/intel/cues/$($script:cue.id)/collect/$tid/approve" @{}
   if ($bad.code -eq 200) { throw "approve accepted with no approver name" }
@@ -80,7 +119,7 @@ Step "I3 Inconclusive collection does not unlock confirm" {
 Step "I4 Resolving collection, then named human confirms" {
   $fine = 0
   for ($i = 0; $i -lt $script:opts.Count; $i++) { if (-not ($script:opts[$i].note -match "(will not|cannot|does not) resolve")) { $fine = $i; break } }
-  $t = PostJ "/api/intel/cues/$($script:cue.id)/collect" @{ optionIndex = $fine }
+  $t = PostJ "/api/intel/cues/$($script:cue.id)/collect" @{ optionIndex = $fine; requestedBy = "LTC Amina Faraj" }
   $tid = $t.task.id
   PostJ "/api/intel/cues/$($script:cue.id)/collect/$tid/approve" @{ approver = "Col A. Mansour" } | Out-Null
   $rep = PostJ "/api/intel/cues/$($script:cue.id)/collect/$tid/report" $null

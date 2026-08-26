@@ -1,7 +1,7 @@
-import { FileText, LockKeyhole, RotateCcw, ShieldCheck, UserCog, Users } from "lucide-react";
+import { BotMessageSquare, FileText, LockKeyhole, RotateCcw, ShieldCheck, UserCog, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import "./admin.css";
-import { ApiError, appendAudit, fetchAudit, fetchUsers, resetDemoData, updateUser } from "../api";
+import { ApiError, appendAudit, fetchAudit, fetchGovernance, fetchUsers, resetDemoData, setGovernanceAutonomy, updateUser } from "../api";
 import {
   Button,
   CompactTable,
@@ -12,13 +12,15 @@ import {
   Metric,
   MetricGrid,
   Panel,
+  Segmented,
   StatusPill,
   Tag,
+  plural,
   timeAgo,
 } from "../components";
 import { statusTone } from "../data";
 import type { PageProps } from "../shell";
-import type { AuditLogEntry, User } from "../types";
+import type { AuditLogEntry, GovernancePolicy, HandoffAutonomy, User } from "../types";
 
 const errMsg = (error: unknown) => (error instanceof ApiError ? error.message : "Backend unreachable");
 
@@ -41,14 +43,19 @@ export default function Admin({ notify, profile }: PageProps) {
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
+  // What the machine is allowed to do on its own. Editing this changes what the
+  // API will execute, not what a badge reports.
+  const [governance, setGovernance] = useState<GovernancePolicy | null>(null);
+  const [policyBusy, setPolicyBusy] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    Promise.all([fetchUsers(), fetchAudit()])
-      .then(([u, a]) => {
+    Promise.all([fetchUsers(), fetchAudit(), fetchGovernance()])
+      .then(([u, a, g]) => {
         if (!alive) return;
         setUsers(u);
         setAudit(a);
+        setGovernance(g);
         setLoading(false);
       })
       .catch((error) => {
@@ -70,6 +77,25 @@ export default function Admin({ notify, profile }: PageProps) {
       [entry.user, entry.action, entry.target, entry.detail].some((v) => v.toLowerCase().includes(q))
     );
   }, [audit, filter]);
+
+  async function setAutonomy(actionId: string, autonomy: HandoffAutonomy) {
+    setPolicyBusy(actionId);
+    try {
+      const next = await setGovernanceAutonomy(actionId, autonomy, profile.name);
+      setGovernance(next);
+      const action = next.actions.find((a) => a.id === actionId);
+      notify(
+        autonomy === "auto"
+          ? `"${action?.label ?? actionId}" now runs without a named human`
+          : `"${action?.label ?? actionId}" now refuses to run without a named human`
+      );
+      setAudit(await fetchAudit());
+    } catch (error) {
+      notify(errMsg(error));
+    } finally {
+      setPolicyBusy(null);
+    }
+  }
 
   async function toggleUser(user: User) {
     const status = user.status === "active" ? "suspended" : "active";
@@ -107,6 +133,62 @@ export default function Admin({ notify, profile }: PageProps) {
         <Metric label="Audit entries" value={String(audit.length)} helper="Retained 400 days" tone="neutral" />
         <Metric label="Session policy" value="MFA | 12h" helper="Hardware token + revalidation" tone="good" />
       </MetricGrid>
+
+      <Panel icon={BotMessageSquare} title="Autonomy policy">
+        <div className="detail-stack">
+          <p className="adm-policy-lead">
+            What the platform may do on its own, per action. This is the control, not a description of one: an action set to human
+            required refuses to execute unless the request names the person accountable for it, and the hand-off record on every cue
+            reads its autonomy from here rather than from whichever call site wrote it.
+          </p>
+          {governance ? (
+            <>
+              <CompactTable
+                columns={["Action", "What it does", "Autonomy", "Refused", ""]}
+                rows={governance.actions.map((action) => [
+                  <span key="l" className="adm-policy-name">
+                    <strong>{action.label}</strong>
+                    <small>{action.group}</small>
+                  </span>,
+                  <span key="d" className="adm-policy-detail">
+                    {action.detail}
+                  </span>,
+                  <StatusPill
+                    key="a"
+                    label={action.autonomy === "auto" ? "autonomous" : "human required"}
+                    tone={action.autonomy === "auto" ? "info" : "warn"}
+                  />,
+                  <span key="r" className={`adm-policy-refusals${action.refusals ? " hit" : ""}`}>
+                    {action.refusals ? plural(action.refusals, "call") : "none"}
+                  </span>,
+                  <Segmented
+                    key="s"
+                    value={action.autonomy}
+                    onChange={(v) => {
+                      if (policyBusy) return;
+                      setAutonomy(action.id, v as HandoffAutonomy);
+                    }}
+                    items={[
+                      { id: "auto", label: "Auto" },
+                      { id: "human-required", label: "Human" },
+                    ]}
+                  />,
+                ])}
+              />
+              <small className="adm-policy-foot">
+                Last changed {timeAgo(governance.updatedAt)} by {governance.updatedBy}. Every change is signed and lands in the audit
+                log below.
+              </small>
+            </>
+          ) : (
+            <EmptyState
+              icon={BotMessageSquare}
+              title="Policy unavailable"
+              hint="The autonomy policy could not be read from the platform. Refresh to try again."
+            />
+          )}
+        </div>
+      </Panel>
 
       <Panel icon={Users} title="Users">
         <CompactTable

@@ -36,6 +36,7 @@ import {
   fetchIntelCue,
   fetchIntelCues,
   handOffScenario,
+  fetchGovernance,
   identifyCue,
   interrogateCue,
   reportCollection,
@@ -68,6 +69,7 @@ import type {
   Objective,
   TheaterFeature,
   Tone,
+  GovernancePolicy,
 } from "../types";
 
 const errMsg = (error: unknown) => (error instanceof ApiError ? error.message : "Backend unreachable");
@@ -249,6 +251,10 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
   const [reason, setReason] = useState("");
   const [spawnedNames, setSpawnedNames] = useState<Record<string, string>>({});
   const [entityId, setEntityId] = useState<string | null>(null);
+  // The autonomy policy in force. It decides which of these buttons will run on
+  // their own and which refuse without a name, so the page reads it rather than
+  // hard-coding the answer it was written with.
+  const [governance, setGovernance] = useState<GovernancePolicy | null>(null);
   const [mapFocus, setMapFocus] = useState<MapFocus | null>(null);
   // Cue ids already seen by this page. Seeded on the first pass so entering the
   // page never announces the backlog, only a cue that lands while watching.
@@ -265,6 +271,15 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
   const mutationsRef = useRef(0);
   // A counter rather than a clock, so two turns can never share a key.
   const turnSeqRef = useRef(0);
+
+  /** Is this action currently gated on a named human? */
+  const requiresHuman = useCallback(
+    (actionId: string) => {
+      const action = governance?.actions.find((a) => a.id === actionId);
+      return action ? action.autonomy === "human-required" : false;
+    },
+    [governance]
+  );
 
   const applyList = useCallback(
     (list: IntelCue[], announce: boolean) => {
@@ -296,10 +311,11 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([loadList(false), fetchBootstrap()])
-      .then(([, boot]) => {
+    Promise.all([loadList(false), fetchBootstrap(), fetchGovernance()])
+      .then(([, boot, policy]) => {
         if (!alive) return;
         setTheater(boot.theater);
+        setGovernance(policy);
         setLoading(false);
       })
       .catch((error) => {
@@ -408,7 +424,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
     if (!cue) return;
     const id = cue.id;
     runAction("identify", async () => {
-      await identifyCue(id);
+      await identifyCue(id, requiresHuman("intel.identify") ? signer.trim() || profile.name : undefined);
       const fresh = await reload(id);
       notify(
         fresh.assessment
@@ -434,7 +450,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
     if (!cue) return;
     const id = cue.id;
     runAction("request", async () => {
-      await requestCollection(id, optionIndex);
+      await requestCollection(id, optionIndex, signer.trim() || profile.name);
       const fresh = await reload(id);
       setOptionsOpen(false);
       const task = fresh.collection[fresh.collection.length - 1];
@@ -467,7 +483,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
     const taskId = flyingTask.id;
     const asset = flyingTask.asset;
     runAction("report", async () => {
-      await reportCollection(id, taskId, profile.name);
+      await reportCollection(id, taskId, signer.trim() || profile.name);
       const fresh = await reload(id);
       notify(`Product from ${asset} logged against the tasking, confidence now ${fresh.confidence}%`);
     });
@@ -553,7 +569,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
     setQuestion("");
     setAsking(true);
     try {
-      const result = await interrogateCue(id, asked);
+      const result = await interrogateCue(id, asked, requiresHuman("intel.interrogate") ? signer.trim() || profile.name : undefined);
       setTurns((all) => ({
         ...all,
         [id]: (all[id] ?? []).map((turn) =>
@@ -1266,6 +1282,7 @@ function HandoffInspector({ records }: { records: HandoffRecord[] }) {
               <p>{record.detail}</p>
               <DetailGrid>
                 <Detail label="Actor" value={record.actor} />
+                {record.signedBy ? <Detail label="Signed by" value={record.signedBy} /> : null}
                 <Detail label="Recorded" value={stamp(record.at)} />
                 <Detail label="Model" value={modelLabel(record.source)} />
                 <Detail label="Latency" value={record.latencyMs === null ? "not applicable" : `${record.latencyMs} ms`} />

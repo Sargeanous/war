@@ -133,11 +133,37 @@ export interface HandoffRecord {
   at: string;
   actor: string; // "SAGE", a sensor callsign, or a human role name
   kind: "ai" | "human" | "machine";
+  // The governed action this record belongs to. Autonomy is read from the policy
+  // for this id at write time, never written as a literal by the call site.
+  actionId?: string | null;
   autonomy: HandoffAutonomy;
+  // Set when the policy made a human sign for work the machine still performed.
+  signedBy?: string | null;
   action: string; // short verb phrase, e.g. "Identified unit"
   detail: string;
   source: "anthropic" | "offline" | null;
   latencyMs: number | null;
+}
+
+// --- Autonomy policy ------------------------------------------------------------
+// What the machine may do on its own, per action. Editing this is what changes
+// platform behaviour; the badge on a hand-off record only reports it.
+
+export interface GovernedAction {
+  id: string;
+  label: string;
+  group: string;
+  detail: string;
+  actorField: string; // request field that must name the accountable human
+  defaultAutonomy: HandoffAutonomy;
+  autonomy: HandoffAutonomy; // in force right now
+  refusals: number; // calls refused for want of a named human
+}
+
+export interface GovernancePolicy {
+  updatedAt: string;
+  updatedBy: string;
+  actions: GovernedAction[];
 }
 
 export interface IntelCue {
