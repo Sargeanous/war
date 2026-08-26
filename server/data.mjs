@@ -667,13 +667,13 @@ function straitGuardianObjectives() {
 export function buildScenarios() {
   const blueSide = (commander) => ({
     id: "blue",
-    name: "BLUE · Coalition Task Force",
+    name: "BLUE - Coalition Task Force",
     commander,
     color: "#1f5f99",
   });
   const redSide = (commander) => ({
     id: "red",
-    name: "RED · Opposing Force (OPFOR)",
+    name: "RED - Opposing Force (OPFOR)",
     commander,
     color: "#b42318",
   });
@@ -681,7 +681,7 @@ export function buildScenarios() {
   return [
     {
       id: "scn-azure-horizon",
-      name: "AZURE HORIZON · Meridian Strait Seizure",
+      name: "AZURE HORIZON - Meridian Strait Seizure",
       codename: "AZURE HORIZON",
       description:
         "Coalition carrier strike group and amphibious ready group approach the Meridian Archipelago from the west to open the strait, dismantle the RED integrated air defense and land a marine battalion, against a layered OPFOR coastal and air defense.",
@@ -705,7 +705,7 @@ export function buildScenarios() {
     },
     {
       id: "scn-strait-guardian",
-      name: "STRAIT GUARDIAN · Convoy Escort",
+      name: "STRAIT GUARDIAN - Convoy Escort",
       codename: "STRAIT GUARDIAN",
       description:
         "A three-ship sealift convoy with destroyer and frigate escort runs the southwestern approach lane to the Meridian Strait against submarine, missile-boat and air threats.",

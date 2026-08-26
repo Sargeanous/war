@@ -1,4 +1,4 @@
-// CoaGeneration · L3 application 2: mission decomposition, COA candidate
+// CoaGeneration - mission decomposition, COA candidate
 // generation and comparison for Exercise AZURE HORIZON. Data flows only
 // through src/api.ts; layout uses the shared DOOH primitives.
 
@@ -395,7 +395,7 @@ export default function CoaGeneration(props: PageProps) {
             <span>{scenario.theater}</span>
             <span>{scenario.durationHours}h planning horizon</span>
             <span>
-              {scenario.units.length} units · {scenario.objectives.length} objectives
+              {scenario.units.length} units | {scenario.objectives.length} objectives
             </span>
             <span>updated {timeAgo(scenario.updatedAt)}</span>
           </div>
@@ -434,7 +434,7 @@ export default function CoaGeneration(props: PageProps) {
               <div className="coa-mission-title">
                 <strong>{mission.title}</strong>
                 <small>
-                  {sideLabels[mission.side]} · updated {timeAgo(mission.updatedAt)}
+                  {sideLabels[mission.side]} | updated {timeAgo(mission.updatedAt)}
                 </small>
               </div>
               <StatusPill label={mission.status} tone={statusTone(mission.status)} />
@@ -455,7 +455,7 @@ export default function CoaGeneration(props: PageProps) {
                   totalH={subTaskTotalH}
                   items={subTasks.map((t, i) => ({
                     id: t.id,
-                    label: `T${i + 1} · ${t.title}`,
+                    label: `T${i + 1} - ${t.title}`,
                     startH: t.startH,
                     endH: t.endH,
                     color: domainColors[t.domain],
@@ -473,7 +473,7 @@ export default function CoaGeneration(props: PageProps) {
                 <CompactTable
                   columns={["Task", "Domain", "Window", "Assigned agent", "Depends on", "Status"]}
                   rows={subTasks.map((t, i) => [
-                    `T${i + 1} · ${t.title}`,
+                    `T${i + 1} - ${t.title}`,
                     <Tag key="domain" label={domainLabels[t.domain]} color={domainColors[t.domain]} />,
                     `H+${t.startH}-${t.endH}`,
                     renderAgentCell(t),
@@ -617,7 +617,7 @@ export default function CoaGeneration(props: PageProps) {
                     <p className="coa-approach">{coa.approach}</p>
                     <span>
                       {coa.generatedBy === "agent"
-                        ? `Agent · ${generatorAgent?.name ?? "mission agent"}`
+                        ? `Agent - ${generatorAgent?.name ?? "mission agent"}`
                         : "Staff planner"}
                     </span>
                     <span>{timeAgo(coa.createdAt)}</span>
@@ -650,8 +650,8 @@ export default function CoaGeneration(props: PageProps) {
                     <div className="coa-projection">
                       <span>Silent deduction @ T+{coa.silentEval.projected.durationH}h</span>
                       <strong>
-                        OBJ {coa.silentEval.projected.objectiveScore}% · BLUE {Math.round(coa.silentEval.projected.blueStrength)}% · RED{" "}
-                        {Math.round(coa.silentEval.projected.redStrength)}% · net {coa.silentEval.projected.net >= 0 ? "+" : ""}
+                        OBJ {coa.silentEval.projected.objectiveScore}% | BLUE {Math.round(coa.silentEval.projected.blueStrength)}% | RED{" "}
+                        {Math.round(coa.silentEval.projected.redStrength)}% | net {coa.silentEval.projected.net >= 0 ? "+" : ""}
                         {coa.silentEval.projected.net}
                       </strong>
                     </div>
@@ -753,7 +753,7 @@ export default function CoaGeneration(props: PageProps) {
                 {platform.dataDomains.map((d) => (
                   <BarRow
                     key={d.id}
-                    label={`${d.name} · ${d.store}`}
+                    label={`${d.name} | ${d.store}`}
                     value={d.records / 1000}
                     max={maxDomainRecords / 1000}
                     suffix="k"

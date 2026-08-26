@@ -118,7 +118,7 @@ export default function AiLayer({ notify }: PageProps) {
       <div className="ail-columns">
         {/* Column 1, strategic */}
         <div className="ail-col">
-          <Panel icon={Target} title="Strategic · Task decomposition">
+          <Panel icon={Target} title="Strategic - Task decomposition">
             <div className="detail-stack">
               <div className="ail-flow">
                 <span className="ail-flow-chip" style={{ borderColor: "var(--primary)", background: "var(--primary-soft)" }}>
@@ -167,7 +167,7 @@ export default function AiLayer({ notify }: PageProps) {
 
         {/* Column 2, tactical agent library */}
         <div className="ail-col">
-          <Panel icon={Bot} title="Tactical · Agent library by drive mode">
+          <Panel icon={Bot} title="Tactical - Agent library by drive mode">
             <div className="detail-stack">
               {DRIVE_ORDER.map((mode) => {
                 const group = agents.filter((a) => a.driveMode === mode);
@@ -189,7 +189,7 @@ export default function AiLayer({ notify }: PageProps) {
                           <Tag label={agent.specialty} />
                           <ProgressBar label="Win rate" value={agent.metrics.winRate * 100} tone={agent.metrics.winRate >= 0.7 ? "good" : "warn"} />
                           <span className="ail-agent-meta">
-                            {agent.metrics.avgLatencyMs} ms · {formatCount(agent.metrics.trainingEpisodes)} episodes · v{agent.version}
+                            {agent.metrics.avgLatencyMs} ms | {formatCount(agent.metrics.trainingEpisodes)} episodes | v{agent.version}
                           </span>
                         </button>
                       ))}
@@ -227,9 +227,9 @@ export default function AiLayer({ notify }: PageProps) {
                       />
                     </header>
                     <small>
-                      {runLabel} · {branchName} · {simClock(decision.simTimeH)}, chose “
+                      {runLabel} | {branchName} | {simClock(decision.simTimeH)}, chose “
                       {decision.options.find((o) => o.id === decision.decidedOptionId)?.label ?? decision.decidedOptionId}”
-                      {decision.decisionRationale ? ` · “${decision.decisionRationale}”` : ""}
+                      {decision.decisionRationale ? ` | “${decision.decisionRationale}”` : ""}
                     </small>
                   </article>
                 ))
@@ -247,7 +247,7 @@ export default function AiLayer({ notify }: PageProps) {
                 <Detail label="Avg latency" value={platform ? `${platform.apiStats.avgLatencyMs} ms` : "-"} />
               </DetailGrid>
               <p className="ail-note">
-                <Eye size={13} style={{ verticalAlign: "-2px" }} /> Observation API ↑ sense · <Joystick size={13} style={{ verticalAlign: "-2px" }} /> Piece-drive API ↓ execute
+                <Eye size={13} style={{ verticalAlign: "-2px" }} /> Observation API ↑ sense | <Joystick size={13} style={{ verticalAlign: "-2px" }} /> Piece-drive API ↓ execute
               </p>
             </div>
           </Panel>

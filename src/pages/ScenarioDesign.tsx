@@ -1,4 +1,4 @@
-// ScenarioDesign · L3 application 1: build and validate exercise scenarios.
+// ScenarioDesign - build and validate exercise scenarios.
 // Left: scenario library (select / create from template). Main: tabbed workspace
 // (order of battle on the theater chart, weighted objectives, environment) with
 // an explicit local dirty state; Save pushes the whole scenario via updateScenario.
@@ -93,16 +93,16 @@ const OBJECTIVE_KINDS: Array<{ id: Objective["kind"]; label: string }> = [
 ];
 
 const SEA_STATE_LABELS = [
-  "0 · Calm (glassy)",
-  "1 · Calm (rippled)",
-  "2 · Smooth",
-  "3 · Slight",
-  "4 · Moderate",
-  "5 · Rough",
-  "6 · Very rough",
-  "7 · High",
-  "8 · Very high",
-  "9 · Phenomenal",
+  "0 - Calm (glassy)",
+  "1 - Calm (rippled)",
+  "2 - Smooth",
+  "3 - Slight",
+  "4 - Moderate",
+  "5 - Rough",
+  "6 - Very rough",
+  "7 - High",
+  "8 - Very high",
+  "9 - Phenomenal",
 ];
 
 // --- Pure helpers ---------------------------------------------------------------
@@ -282,7 +282,7 @@ function CreateScenarioModal({
 }
 
 // Fictional sample order, written to parse cleanly offline (bullet + "at lat, lng" convention).
-const SAMPLE_OPORD = `OPORD 26-04 · OPERATION AZURE TRIDENT
+const SAMPLE_OPORD = `OPORD 26-04 - OPERATION AZURE TRIDENT
 References: Exercise AZURE HORIZON series. Classification: EXERCISE / FICTIONAL.
 
 1. SITUATION
@@ -375,7 +375,7 @@ function OpordWizardModal({
     return (
       <div key={sideId} className="sd-opord-sidecard">
         <p className={`sd-opord-sidehead ${sideId}`}>
-          {sideId === "blue" ? "BLUE FORCES" : "RED FORCES"} · {entities.length} group(s)
+          {sideId === "blue" ? "BLUE FORCES" : "RED FORCES"} | {entities.length} group(s)
         </p>
         {entities.length ? (
           <CompactTable
@@ -449,7 +449,7 @@ function OpordWizardModal({
                 <p className="sd-opord-sidehead">CONSTRAINTS</p>
                 {parse.constraints.map((c, i) => (
                   <p key={i} className="sd-opord-hint">
-                    · {c}
+                    - {c}
                   </p>
                 ))}
               </div>
@@ -931,8 +931,8 @@ export default function ScenarioDesign(props: PageProps) {
             value={side}
             onChange={(next) => setSide(next)}
             items={[
-              { id: "blue", label: "BLUE · Coalition" },
-              { id: "red", label: "RED · OPFOR" },
+              { id: "blue", label: "BLUE - Coalition" },
+              { id: "red", label: "RED - OPFOR" },
             ]}
           />
           <p className="sd-controls-hint">
@@ -1094,7 +1094,7 @@ export default function ScenarioDesign(props: PageProps) {
               <EmptyState
                 icon={Shield}
                 title="No RED units placed"
-                hint="Switch the side picker to RED · OPFOR and lay down the opposing force on the archipelago."
+                hint="Switch the side picker to RED - OPFOR and lay down the opposing force on the archipelago."
               />
             )}
           </section>
@@ -1112,7 +1112,7 @@ export default function ScenarioDesign(props: PageProps) {
           <div>
             <strong style={{ color: sideColors[columnSide] }}>{sideLabels[columnSide]}</strong>
             <small>
-              {objectives.length} objective{objectives.length === 1 ? "" : "s"} · weight total {totalWeight.toFixed(2)}
+              {objectives.length} objective{objectives.length === 1 ? "" : "s"} | weight total {totalWeight.toFixed(2)}
             </small>
           </div>
           <Button variant="secondary" icon={Plus} onClick={() => setObjModal({ side: columnSide, objective: null })}>
@@ -1136,7 +1136,7 @@ export default function ScenarioDesign(props: PageProps) {
                   <Tag label={`weight ${Math.round(objective.weight * 100)}%`} />
                   {objective.area ? (
                     <Tag
-                      label={`${objective.area.center.lat.toFixed(2)}, ${objective.area.center.lng.toFixed(2)} · r ${objective.area.radiusKm} km`}
+                      label={`${objective.area.center.lat.toFixed(2)}, ${objective.area.center.lng.toFixed(2)} | r ${objective.area.radiusKm} km`}
                     />
                   ) : null}
                   {objective.targetUnitIds && objective.targetUnitIds.length > 0 ? (
@@ -1313,8 +1313,8 @@ export default function ScenarioDesign(props: PageProps) {
               <Detail label="Theater" value={scn.theater} />
               <Detail label="Codename" value={scn.codename} />
               <Detail label="Duration" value={`${scn.durationHours} h planned`} />
-              <Detail label="Force mix" value={`${blueCount} BLUE · ${redCount} RED`} />
-              <Detail label="Objectives" value={`${blueObjectives} BLUE · ${redObjectives} RED`} />
+              <Detail label="Force mix" value={`${blueCount} BLUE | ${redCount} RED`} />
+              <Detail label="Objectives" value={`${blueObjectives} BLUE | ${redObjectives} RED`} />
               <Detail label="Last updated" value={timeAgo(scn.updatedAt)} />
             </DetailGrid>
           </div>
@@ -1412,7 +1412,7 @@ export default function ScenarioDesign(props: PageProps) {
                   <span>
                     <strong>{scenario.name}</strong>
                     <small>
-                      {scenario.codename} · {scenario.units.length} units · {scenario.objectives.length} objectives ·
+                      {scenario.codename} | {scenario.units.length} units | {scenario.objectives.length} objectives |
                       updated {timeAgo(scenario.updatedAt)}
                     </small>
                   </span>

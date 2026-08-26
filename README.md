@@ -14,7 +14,7 @@ pnpm install
 pnpm dev
 ```
 
-Frontend: `http://localhost:5188` · Backend API: `http://localhost:5189`.
+Frontend: `http://localhost:5188` | Backend API: `http://localhost:5189`.
 
 Optional: put `OPENAI_API_KEY=...` in `.env` to power the SAGE copilot with a live
 model; without it every AI endpoint degrades to offline heuristics.

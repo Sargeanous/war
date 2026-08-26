@@ -99,13 +99,13 @@ export default function Admin({ notify, profile }: PageProps) {
 
   return (
     <div className="page-body">
-      <div className="adm-banner">EXERCISE USE ONLY · ALL DATA FICTIONAL · Unified user, permission and log management</div>
+      <div className="adm-banner">EXERCISE USE ONLY | ALL DATA FICTIONAL | Unified user, permission and log management</div>
 
       <MetricGrid>
         <Metric label="Users" value={String(users.length)} helper={`${users.filter((u) => u.status === "active").length} active`} tone="info" />
         <Metric label="Roles" value={String(new Set(users.map((u) => u.role)).size)} helper="Distinct duty positions" tone="neutral" />
         <Metric label="Audit entries" value={String(audit.length)} helper="Retained 400 days" tone="neutral" />
-        <Metric label="Session policy" value="MFA · 12h" helper="Hardware token + revalidation" tone="good" />
+        <Metric label="Session policy" value="MFA | 12h" helper="Hardware token + revalidation" tone="good" />
       </MetricGrid>
 
       <Panel icon={Users} title="Users">
@@ -148,13 +148,13 @@ export default function Admin({ notify, profile }: PageProps) {
           <div className="detail-stack">
             <DetailGrid>
               <Detail label="Classification" value="EXERCISE / FICTIONAL" />
-              <Detail label="Data retention" value="Runs 180d · Audit 400d" />
+              <Detail label="Data retention" value="Runs 180d | Audit 400d" />
               <Detail label="Engine limit" value="8 concurrent branches" />
               <Detail label="API rate limit" value="600 calls/min/agent" />
-              <Detail label="Backups" value="Hourly snapshot · offsite daily" />
+              <Detail label="Backups" value="Hourly snapshot | offsite daily" />
               <Detail label="Identity" value="CAC + MFA, 12h session" />
               <Detail label="Log shipping" value="SIEM stream enabled" />
-              <Detail label="Model registry" value="12 agents · signed builds" />
+              <Detail label="Model registry" value="12 agents | signed builds" />
             </DetailGrid>
             <div>
               <Button

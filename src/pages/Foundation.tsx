@@ -116,7 +116,7 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
         <Metric label="Engines online" value={`${enginesOnline}/${platform.engines.length}`} helper="Simulation engine pool" tone={enginesOnline === platform.engines.length ? "good" : "warn"} />
         <Metric label="Data records" value={formatCount(totalRecords)} helper="Across five data domains" tone="info" />
         <Metric label="Active runs" value={String(platform.engines.reduce((s, e) => s + e.activeRuns, 0))} helper="Engine workload now" tone="neutral" />
-        <Metric label="Ontology classes" value={String(ontology?.classes.length ?? 0)} helper={`${ontology?.relations.length ?? 0} relations · v${ontology?.version ?? "-"}`} tone="info" />
+        <Metric label="Ontology classes" value={String(ontology?.classes.length ?? 0)} helper={`${ontology?.relations.length ?? 0} relations | v${ontology?.version ?? "-"}`} tone="info" />
       </MetricGrid>
 
       <Panel icon={Cpu} title="Multiple simulation engines">
@@ -129,7 +129,7 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
                 <StatusPill label={engine.status} tone={statusTone(engine.status)} />
               </header>
               <span className="fnd-meta">
-                {engine.kind} · v{engine.version} · {engine.activeRuns} active run(s)
+                {engine.kind} | v{engine.version} | {engine.activeRuns} active run(s)
               </span>
               <ProgressBar label="Load" value={engine.loadPct} tone={engine.loadPct > 75 ? "danger" : engine.loadPct > 45 ? "warn" : "good"} />
               <div className="fnd-caps">
@@ -140,7 +140,7 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
             </article>
           ))}
         </div>
-        <p className="fnd-caption">Unified real-time and turn-based engines · multi-resolution space-time · multi-branch COA in parallel · CGF and AI-agent runtime.</p>
+        <p className="fnd-caption">Unified real-time and turn-based engines | multi-resolution space-time | multi-branch COA in parallel | CGF and AI-agent runtime.</p>
       </Panel>
 
       <Panel icon={Database} title="Unified data foundation">
@@ -153,7 +153,7 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
                 <StatusPill label={domain.health} tone={statusTone(domain.health)} />
               </header>
               <span className="fnd-meta">
-                <Tag label={domain.store} /> · {formatCount(domain.records)} records · {domain.sizeGB} GB
+                <Tag label={domain.store} /> | {formatCount(domain.records)} records | {domain.sizeGB} GB
               </span>
               <span className="fnd-desc">{domain.description}</span>
             </article>
@@ -163,7 +163,7 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
       </Panel>
 
       <div className="split-grid equal">
-        <Panel icon={Puzzle} title="One platform · low-code inventory">
+        <Panel icon={Puzzle} title="One platform - low-code inventory">
           <div className="detail-stack">
             <DetailGrid>
               <Detail label="Maps" value={String(platform.lowCode.maps)} />

@@ -90,10 +90,10 @@ const CATEGORIES: Array<{ id: RuleCategory; label: string; icon: typeof Eye; hin
 ];
 
 const SITUATIONS = [
-  { id: "surface-engagement", label: "Surface action · BLUE destroyer vs RED missile boat at 32 km, clear weather" },
-  { id: "air-strike", label: "Air raid · BLUE strike package vs RED SAM battalion at 110 km, overcast" },
-  { id: "submarine-ambush", label: "Subsurface ambush · RED submarine vs BLUE supply ship at 12 km, EMCON silent" },
-  { id: "storm-transit", label: "Storm transit · BLUE task group at 18% supply moving through sea state 6" },
+  { id: "surface-engagement", label: "Surface action - BLUE destroyer vs RED missile boat at 32 km, clear weather" },
+  { id: "air-strike", label: "Air raid - BLUE strike package vs RED SAM battalion at 110 km, overcast" },
+  { id: "submarine-ambush", label: "Subsurface ambush - RED submarine vs BLUE supply ship at 12 km, EMCON silent" },
+  { id: "storm-transit", label: "Storm transit - BLUE task group at 18% supply moving through sea state 6" },
 ];
 
 function conditionSentence(c: RuleCondition): string {
@@ -398,7 +398,7 @@ export default function RuleConfig({ notify }: PageProps) {
                   <span>
                     <strong>{rs.name}</strong>
                     <small>
-                      {rs.rules.length} rules · {rs.domainFocus} · {rs.adjudication.mode}
+                      {rs.rules.length} rules | {rs.domainFocus} | {rs.adjudication.mode}
                     </small>
                   </span>
                   <StatusPill label={rs.status} tone={statusTone(rs.status)} />
@@ -430,7 +430,7 @@ export default function RuleConfig({ notify }: PageProps) {
                       <strong>Outcome</strong>
                       <span>{testResult.outcome}</span>
                       <small className="rc-test-meta">
-                        {testResult.situation} · tested {timeAgo(testResult.testedAt)}
+                        {testResult.situation} | tested {timeAgo(testResult.testedAt)}
                       </small>
                     </div>
                     <div className="rc-trace">

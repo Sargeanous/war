@@ -359,7 +359,7 @@ export function TimelineBar({
               <div
                 className="timeline-fill"
                 style={{ left: `${left}%`, width: `${width}%`, background: item.color ?? "var(--primary)" }}
-                title={`${item.label} · H+${item.startH} to H+${item.endH}${item.meta ? ` · ${item.meta}` : ""}`}
+                title={`${item.label} | H+${item.startH} to H+${item.endH}${item.meta ? ` | ${item.meta}` : ""}`}
               />
             </div>
             <em>

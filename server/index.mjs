@@ -650,7 +650,7 @@ function validateScenario(scenario) {
 const TEST_SITUATIONS = [
   {
     id: "surface-engagement",
-    label: "Surface action · BLUE destroyer vs RED missile boat at 32 km, clear weather",
+    label: "Surface action - BLUE destroyer vs RED missile boat at 32 km, clear weather",
     keywords: ["surface", "ship", "missile boat", "destroyer", "naval", "ssm"],
     facts: {
       range: 32,
@@ -672,7 +672,7 @@ const TEST_SITUATIONS = [
   },
   {
     id: "air-strike",
-    label: "Air raid · BLUE strike package vs RED SAM battalion at 110 km, overcast",
+    label: "Air raid - BLUE strike package vs RED SAM battalion at 110 km, overcast",
     keywords: ["air", "strike", "raid", "sam", "sead", "aircraft", "sortie"],
     facts: {
       range: 110,
@@ -694,7 +694,7 @@ const TEST_SITUATIONS = [
   },
   {
     id: "submarine-ambush",
-    label: "Subsurface ambush · RED submarine vs BLUE supply ship at 12 km, EMCON silent",
+    label: "Subsurface ambush - RED submarine vs BLUE supply ship at 12 km, EMCON silent",
     keywords: ["sub", "torpedo", "ambush", "underwater", "asw", "silent"],
     facts: {
       range: 12,
@@ -716,7 +716,7 @@ const TEST_SITUATIONS = [
   },
   {
     id: "storm-transit",
-    label: "Storm transit · BLUE task group at 18% supply moving through sea state 6",
+    label: "Storm transit - BLUE task group at 18% supply moving through sea state 6",
     keywords: ["storm", "supply", "logistic", "transit", "movement", "weather", "resupply"],
     facts: {
       range: 180,
@@ -901,7 +901,7 @@ function testRuleSet(ruleSet, situationText) {
 }
 
 // ---------------------------------------------------------------------------
-// Copilot · SAGE. OpenAI chat completions when a key is configured, otherwise
+// Copilot, SAGE. OpenAI chat completions when a key is configured, otherwise
 // rule-based answers composed from live state.
 // ---------------------------------------------------------------------------
 
@@ -940,7 +940,7 @@ function situationSummary() {
       for (const decision of branch.decisions) {
         if (decision.status !== "open") continue;
         const rec = decision.options.find((o) => o.id === decision.aiRecommendationId);
-        lines.push(`    Open decision: "${decision.title}" · AI recommends "${rec ? rec.label : decision.aiRecommendationId}".`);
+        lines.push(`    Open decision: "${decision.title}" | AI recommends "${rec ? rec.label : decision.aiRecommendationId}".`);
       }
     }
   }

@@ -1,6 +1,6 @@
 // CommandDashboard, the commander's landing view for Exercise AZURE HORIZON.
 // Metrics row, live theater picture of the focus deduction run, per-branch
-// telemetry, the L3/L2/L1 layer cards and the recent-activity stream.
+// telemetry, the platform layer cards and the recent-activity stream.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -39,7 +39,7 @@ import { affiliationOf, frameColor } from "../milsym";
 import TheaterMap from "../map";
 import "./commanddashboard.css";
 
-const DEFAULT_CENTER = { lat: 34.0, lng: -40.0 };
+const DEFAULT_CENTER = { lat: 23.85, lng: 61.1 };
 const DEFAULT_ZOOM = 7;
 
 const PAGE_LABELS: Partial<Record<PageId, string>> = {
@@ -265,7 +265,7 @@ export default function CommandDashboard(props: PageProps) {
         <Metric
           label="Agents ready"
           value={String(agentsReady)}
-          helper={`${agentsTraining} training · ${agentsOffline} offline`}
+          helper={`${agentsTraining} training | ${agentsOffline} offline`}
           tone={agentsReady > 0 ? "good" : "warn"}
         />
         <Metric
@@ -301,11 +301,11 @@ export default function CommandDashboard(props: PageProps) {
             <div className="legend">
               <span>
                 <i style={{ background: frameColor(affiliationOf("blue")) }} />
-                BLUE · Coalition Task Force
+                BLUE - Coalition Task Force
               </span>
               <span>
                 <i style={{ background: frameColor(affiliationOf("red")) }} />
-                RED · OPFOR
+                RED - OPFOR
               </span>
               {focusBranch ? (
                 <span>
@@ -316,9 +316,9 @@ export default function CommandDashboard(props: PageProps) {
             </div>
             <span className="cmd-map-source">
               {focusBranch && run
-                ? `Live pieces · ${run.scenarioName}`
+                ? `Live pieces - ${run.scenarioName}`
                 : mapScenario
-                  ? `Order of battle · ${mapScenario.name}`
+                  ? `Order of battle - ${mapScenario.name}`
                   : "Meridian Archipelago, no scenario loaded"}
             </span>
           </div>
@@ -335,7 +335,7 @@ export default function CommandDashboard(props: PageProps) {
                 <div className="sim-clock">
                   {simClock(run.clock.simTimeH)}
                   <small>
-                    tick {run.clock.tick} · {run.engine === "realtime" ? `×${run.clock.speed}` : "turn-based"}
+                    tick {run.clock.tick} | {run.engine === "realtime" ? `×${run.clock.speed}` : "turn-based"}
                   </small>
                 </div>
                 <span className="cmd-map-source">started {timeAgo(run.startedAt)}</span>
@@ -343,7 +343,7 @@ export default function CommandDashboard(props: PageProps) {
               <div className="cmd-run-meta">
                 <strong>{run.label}</strong>
                 <small>
-                  {run.scenarioName} · {run.branches.length} branch{run.branches.length === 1 ? "" : "es"} in parallel
+                  {run.scenarioName} | {run.branches.length} branch{run.branches.length === 1 ? "" : "es"} in parallel
                 </small>
               </div>
               {run.branches.map((branch) => (
@@ -356,8 +356,8 @@ export default function CommandDashboard(props: PageProps) {
                   <ProgressBar label="BLUE strength" value={branch.metrics.blueStrength} tone="info" />
                   <ProgressBar label="RED strength" value={branch.metrics.redStrength} tone="danger" />
                   <span className="cmd-branch-foot">
-                    Objectives {Math.round(branch.metrics.objectiveScore)}% · losses B{branch.metrics.blueLosses}/R
-                    {branch.metrics.redLosses} · {branch.eventCount} events
+                    Objectives {Math.round(branch.metrics.objectiveScore)}% | losses B{branch.metrics.blueLosses}/R
+                    {branch.metrics.redLosses} | {branch.eventCount} events
                   </span>
                 </div>
               ))}
@@ -366,7 +366,7 @@ export default function CommandDashboard(props: PageProps) {
                   rows={focusBranch.recentEvents.slice(0, 8).map((event) => ({
                     id: event.id,
                     title: event.title,
-                    meta: `${simClock(event.simTimeH)} · ${event.detail}`,
+                    meta: `${simClock(event.simTimeH)} | ${event.detail}`,
                     tone: eventTones[event.type] ?? "neutral",
                     status: event.type,
                   }))}
@@ -483,7 +483,7 @@ export default function CommandDashboard(props: PageProps) {
             rows={activity.map((row) => ({
               id: row.key,
               title: row.event.title,
-              meta: `${simClock(row.event.simTimeH)} · ${row.branchName} · ${row.event.detail}`,
+              meta: `${simClock(row.event.simTimeH)} | ${row.branchName} | ${row.event.detail}`,
               tone: eventTones[row.event.type] ?? "neutral",
               status: row.event.type,
             }))}

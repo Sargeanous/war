@@ -219,7 +219,7 @@ function LoginScreen({
           </div>
           <div className="login-brand-text">
             <h1>Access profile</h1>
-            <p>SANDTABLE · Scenario simulation and strategic planning</p>
+            <p>SANDTABLE - Scenario simulation and strategic planning</p>
           </div>
           <ThemeToggle theme={theme} onToggle={onToggleTheme} />
         </div>
@@ -402,7 +402,7 @@ function Copilot() {
       <header>
         <div>
           <Bot size={18} />
-          <strong>SAGE · Strategy Advisor</strong>
+          <strong>SAGE - Strategy Advisor</strong>
         </div>
         <button type="button" onClick={() => setOpen(false)}>
           <X size={16} />

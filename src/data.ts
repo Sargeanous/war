@@ -10,8 +10,8 @@ export const sideColors: Record<SideId, string> = {
 };
 
 export const sideLabels: Record<SideId, string> = {
-  blue: "BLUE · Coalition Task Force",
-  red: "RED · Opposing Force",
+  blue: "BLUE - Coalition Task Force",
+  red: "RED - Opposing Force",
   neutral: "Neutral",
 };
 
@@ -40,9 +40,9 @@ export const driveModeLabels: Record<DriveMode, string> = {
 };
 
 export const driveModeHints: Record<DriveMode, string> = {
-  "knowledge-reasoning": "Rules · behavior trees",
+  "knowledge-reasoning": "Rules | behavior trees",
   "data-learning": "Deep / reinforcement",
-  "operations-research": "Models · optimization",
+  "operations-research": "Models | optimization",
   "large-model": "Pre-trained reasoning",
   hybrid: "Composed mission agent",
 };

@@ -234,7 +234,7 @@ export type UnitStatus = "active" | "damaged" | "destroyed" | "withdrawn";
 export interface Unit {
   id: string;
   side: SideId;
-  name: string; // e.g. "CTF Sword · DDG 114"
+  name: string; // e.g. "CTF Sword - DDG 114"
   classId: string; // ontology class id
   domain: Domain;
   position: LatLng;
@@ -581,7 +581,7 @@ export type RunStatus = "initializing" | "running" | "paused" | "awaiting-decisi
 export type BranchStatus = "running" | "paused" | "awaiting-decision" | "completed" | "aborted";
 export type EngineKind = "realtime" | "turn-based";
 
-// Full adjudication math behind an engagement event · "show the dice".
+// Full adjudication math behind an engagement event, "show the dice".
 export interface EngagementAdjudication {
   attacker: string;
   target: string;

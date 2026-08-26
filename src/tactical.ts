@@ -5,6 +5,7 @@
  */
 
 import { affiliationOf, frameColor } from "./milsym";
+import type { Affiliation } from "./milsym";
 
 export interface LatLngLike {
   lat: number;
@@ -240,7 +241,7 @@ const HEADING_LENGTH_KM: Record<string, number> = {
 export function drawHeadingVector(
   L: any,
   layer: any,
-  unit: { position: LatLngLike; headingDeg: number; side: string; domain?: string },
+  unit: { position: LatLngLike; headingDeg: number; side: string; domain?: string; affiliation?: Affiliation },
   lengthKm?: number
 ): void {
   const domainDefault =
@@ -256,7 +257,7 @@ export function drawHeadingVector(
 
   const end: LatLngLike = { lat: lat + dLat, lng: unit.position.lng + dLng };
 
-  const color = frameColor(affiliationOf(unit.side));
+  const color = frameColor(unit.affiliation ?? affiliationOf(unit.side));
 
   layer.addLayer(
     L.polyline([unit.position, end], {

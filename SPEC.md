@@ -119,8 +119,8 @@ that tick, and the event list filtered up to that tick. Branch comparison table 
 multiple branches exist (side-by-side scores).
 
 ### AiLayer (`ailayer`)
-Three-column layout mirroring the slide. Column 1 "Strategic · task decomposition":
-missions with sub-task counts and status stage trackers. Column 2 "Tactical · agent
+Three-column layout mirroring the slide. Column 1 "Strategic - task decomposition":
+missions with sub-task counts and status stage trackers. Column 2 "Tactical - agent
 library": agent cards grouped by drive mode (`.agent-grid`), each with status, win rate,
 latency, episodes; click → Modal with details + recent AgentActivity for the latest run
 (api calls used: observation/piece-drive). Column 3 "Human + AI decision": OODA chips
@@ -132,7 +132,7 @@ latency, episodes; click → Modal with details + recent AgentActivity for the l
 Metrics: engines online, total records, active runs, ontology classes. Panel "Simulation
 engines": engine cards (kind, version, load ProgressBar, active runs, capabilities tags).
 Panel "Unified data foundation": data domain cards (store type Tag, records, size,
-health) — base/runtime/scenario/deduction-process/assessment. Panel "One platform ·
+health) — base/runtime/scenario/deduction-process/assessment. Panel "One platform -
 low-code inventory": counts (maps, pieces, rules, scenarios) + note on unified user/
 permission/log management with `goTo("admin")` when permitted. Panel "Ontology explorer":
 class tree (indent by parent, category Tag, domain), click class → attributes table +

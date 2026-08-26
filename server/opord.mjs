@@ -445,8 +445,8 @@ export function materializeScenario(parse, opts, state, nowIso) {
     createdBy: String(opts.createdBy || "Plans Cell (J5)"),
     updatedAt: nowIso(),
     sides: [
-      { id: "blue", name: "BLUE · Coalition Task Force", commander: "CDRE Ada Reyes", color: "#1f5f99" },
-      { id: "red", name: "RED · Opposing Force (OPFOR)", commander: "COL Stefan Marek", color: "#b42318" },
+      { id: "blue", name: "BLUE - Coalition Task Force", commander: "CDRE Ada Reyes", color: "#1f5f99" },
+      { id: "red", name: "RED - Opposing Force (OPFOR)", commander: "COL Stefan Marek", color: "#b42318" },
     ],
     units,
     objectives,

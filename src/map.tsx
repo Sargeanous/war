@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { LatLng, Objective, SimEvent, TheaterFeature, Unit } from "./types";
 import { sideColors } from "./data";
 import { affiliationOf, frameColor, milSymbolHtml } from "./milsym";
+import type { Affiliation } from "./milsym";
 import { addGraticule, drawEngagements, drawHeadingVector, drawObjective, objectiveLabelWidth, tintClass } from "./tactical";
 import "./map-extras.css";
 
@@ -21,18 +22,21 @@ declare global {
   }
 }
 
-// Tactical palette (MIL-STD-2525 style), sourced from the symbol generator so
-// trails, rings and vectors always match the unit counters.
-const TAC_COLORS: Record<string, string> = {
-  blue: frameColor(affiliationOf("blue")),
-  red: frameColor(affiliationOf("red")),
-  neutral: frameColor(affiliationOf("neutral")),
-};
-
 export interface MapUnit
   extends Pick<Unit, "id" | "side" | "name" | "domain" | "position" | "headingDeg" | "status" | "strength"> {
   detectedByEnemy?: boolean;
   classId?: string; // ontology class, drives the symbol icon when present
+  // Frame affiliation when the side does not carry it. A side is blue, red or
+  // neutral and has no value for an unidentified track, so a page holding one
+  // states the affiliation here rather than letting it plot as hostile.
+  affiliation?: Affiliation;
+}
+
+// Tactical palette (MIL-STD-2525 style), sourced from the symbol generator so
+// trails and rings always match the unit counters, including the yellow an
+// unidentified track wears.
+function tacColor(unit: MapUnit): string {
+  return frameColor(unit.affiliation ? unit.affiliation : affiliationOf(unit.side));
 }
 
 export interface TheaterMapProps {
@@ -189,6 +193,7 @@ function symbolSizeForZoom(z: number): number {
 function makeUnitIcon(L: any, unit: MapUnit, selected: boolean, size: number) {
   const sym = milSymbolHtml({
     side: unit.side,
+    affiliation: unit.affiliation,
     domain: unit.domain,
     classId: unit.classId,
     status: unit.status,
@@ -218,7 +223,7 @@ function bindUnitTooltip(marker: any, unit: MapUnit, symWidth: number, showLabel
     });
   } else {
     marker.bindTooltip(
-      `<strong>${unit.name}</strong><br/>${unit.status.toUpperCase()} · str ${Math.round(unit.strength)}%`,
+      `<strong>${unit.name}</strong><br/>${unit.status.toUpperCase()} | str ${Math.round(unit.strength)}%`,
       { direction: "top", offset: [0, -14] }
     );
   }
@@ -542,7 +547,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
       mapZoom, // objective label deconfliction is solved in screen space
       theater.map((f) => f.name),
       objectives?.map((o) => [o.id, o.side, o.title, o.area?.center.lat, o.area?.center.lng, o.area?.radiusKm]),
-      visibleUnits.map((u) => [u.id, u.position.lat, u.position.lng, u.headingDeg, u.status, u.strength, u.classId]),
+      visibleUnits.map((u) => [u.id, u.position.lat, u.position.lng, u.headingDeg, u.status, u.strength, u.classId, u.affiliation]),
       trails ? Object.entries(trails).map(([id, p]) => [id, p.length, p[p.length - 1]?.lat, p[p.length - 1]?.lng]) : null,
       events?.map((e) => e.id),
       sensorRingsFor,
@@ -631,7 +636,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
         if (!unit && fogSide) continue; // no trails for units this side cannot see
         L.polyline(
           path.map((p) => [p.lat, p.lng]),
-          { color: unit ? TAC_COLORS[unit.side] : "#888", weight: 1.5, opacity: 0.5, dashArray: "2 5", interactive: false }
+          { color: unit ? tacColor(unit) : "#888", weight: 1.5, opacity: 0.5, dashArray: "2 5", interactive: false }
         ).addTo(overlay);
       }
     }
@@ -643,7 +648,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
         if (!unit || !rangeKm) continue;
         L.circle([unit.position.lat, unit.position.lng], {
           radius: rangeKm * 1000,
-          color: TAC_COLORS[unit.side],
+          color: tacColor(unit),
           weight: 1,
           opacity: 0.45,
           fillOpacity: 0.03,
@@ -656,7 +661,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     // so positions glide; only their heading vectors redraw with the overlay.
     for (const unit of visibleUnits) {
       if (unit.status === "active" || unit.status === "damaged") {
-        drawHeadingVector(L, overlay, unit);
+        drawHeadingVector(L, overlay, { ...unit, affiliation: unit.affiliation });
       }
     }
 
@@ -771,6 +776,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
       const labelOn = Boolean(showLabels) && plan !== null;
       const iconKey = [
         unit.side,
+        unit.affiliation ?? "",
         unit.domain,
         unit.classId ?? "",
         unit.status,
@@ -978,7 +984,9 @@ function SvgTheaterMap({
       {visibleUnits.map((unit) => {
         const { x, y } = px(unit.position);
         const dead = unit.status === "destroyed";
-        const color = dead ? "#5b6663" : sideColors[unit.side];
+        // A stated affiliation wins over the side palette here too, so the
+        // offline plot never turns an unidentified track red.
+        const color = dead ? "#5b6663" : unit.affiliation ? frameColor(unit.affiliation) : sideColors[unit.side];
         const strength = Math.max(0, Math.min(100, Math.round(unit.strength)));
         const strengthColor = strength > 60 ? "#35c26e" : strength > 30 ? "#f5a524" : "#f04438";
         return (

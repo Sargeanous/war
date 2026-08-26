@@ -426,10 +426,10 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
         </button>
         <div className="ded-phase-banner">
           <strong>
-            R{round} · {phaseName}
+            R{round} - {phaseName}
           </strong>
           <span>
-            <Clock size={12} style={{ verticalAlign: "-2px" }} /> {simClock(simTimeH)} · tick {run.clock.tick}
+            <Clock size={12} style={{ verticalAlign: "-2px" }} /> {simClock(simTimeH)} | tick {run.clock.tick}
           </span>
         </div>
         {env ? (
@@ -441,7 +441,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
           </div>
         ) : null}
         <StatusPill label={run.status} tone={statusTone(run.status)} />
-        <Tag label={`${run.engine} · ${run.clock.speed}x`} />
+        <Tag label={`${run.engine} | ${run.clock.speed}x`} />
         <span className="spacer" />
         {run.status === "paused" ? (
           <Button icon={Play} onClick={() => doControl("resume")}>
@@ -503,7 +503,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
           <div className="ded-complete-grid">
             {run.branches.map((b) => (
               <div key={b.id}>
-                <Detail label={b.name} value={`Objectives ${b.metrics.objectiveScore}% · BLUE ${b.metrics.blueStrength}% · RED ${b.metrics.redStrength}%`} />
+                <Detail label={b.name} value={`Objectives ${b.metrics.objectiveScore}% | BLUE ${b.metrics.blueStrength}% | RED ${b.metrics.redStrength}%`} />
               </div>
             ))}
           </div>
@@ -623,7 +623,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
                     <Detail label="Speed" value={`${Math.round(selectedUnit.speedKts)} kts`} />
                   </DetailGrid>
                   <small>
-                    {selectedUnit.taskForce ?? selectedUnit.domain} · {selectedUnit.position.lat.toFixed(2)},{" "}
+                    {selectedUnit.taskForce ?? selectedUnit.domain} | {selectedUnit.position.lat.toFixed(2)},{" "}
                     {selectedUnit.position.lng.toFixed(2)}
                   </small>
                 </div>
@@ -689,8 +689,8 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
               />
             </div>
             <div className="ded-hintbar">
-              wheel zoom · drag pan · click a counter or ORBAT row to inspect · hex coordinates appear at close zoom
-              {fogSide ? ` · ${fogSide.toUpperCase()} picture: undetected enemy pieces are hidden` : ""}
+              wheel zoom | drag pan | click a counter or ORBAT row to inspect | hex coordinates appear at close zoom
+              {fogSide ? ` | ${fogSide.toUpperCase()} picture: undetected enemy pieces are hidden` : ""}
             </div>
           </div>
 
@@ -704,7 +704,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
                       rows={branch.recentEvents.map((event) => ({
                         id: event.id,
                         title: event.title,
-                        meta: `${simClock(event.simTimeH)} · ${event.detail}`,
+                        meta: `${simClock(event.simTimeH)} | ${event.detail}`,
                         tone: eventTones[event.type] ?? "neutral",
                         status: event.type,
                       }))}
@@ -727,7 +727,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
                             <div className="ded-adj-grid">
                               <span>Weapon</span>
                               <em>
-                                {a.weapon} · {a.rangeKm} km
+                                {a.weapon} | {a.rangeKm} km
                               </em>
                               <span>Base pk</span>
                               <em>{a.basePk.toFixed(2)}</em>
@@ -1129,7 +1129,7 @@ function Launcher({
                 rows={openRuns.map((r) => ({
                   id: r.id,
                   title: r.label,
-                  meta: `${r.scenarioName} · ${r.branchCount} branch(es) · T+${Math.round(r.simTimeH)}h`,
+                  meta: `${r.scenarioName} | ${r.branchCount} branch(es) | T+${Math.round(r.simTimeH)}h`,
                   tone: statusTone(r.status),
                   status: r.status,
                 }))}
@@ -1147,7 +1147,7 @@ function Launcher({
                   rows={doneRuns.slice(0, 5).map((r) => ({
                     id: r.id,
                     title: r.label,
-                    meta: `${r.scenarioName} · finished ${r.completedAt ? timeAgo(r.completedAt) : "-"}`,
+                    meta: `${r.scenarioName} | finished ${r.completedAt ? timeAgo(r.completedAt) : "-"}`,
                     tone: statusTone(r.status),
                     status: r.status,
                   }))}

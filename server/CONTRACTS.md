@@ -128,7 +128,7 @@ never `Math.random()` for engine outcomes.
 ## Addendum — war-room console fields (2026-08-19)
 
 - `Branch.currentPhaseName: string | null` — set at branch creation and on every phase
-  transition; drives the console's "R{n} · {phase}" banner. Optional in old state files.
+  transition; drives the console's "R{n} - {phase}" banner. Optional in old state files.
 - `Branch.score: { blue, red: {objective, force, combat, total}, net }` — recomputed by
   `computeScore(branch, scenario)` every tick and after interventions. Objective points
   = weighted objective completion ×2 (+ victory-rule points for BLUE); force = remaining

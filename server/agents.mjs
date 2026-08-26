@@ -369,7 +369,7 @@ export function buildCoaAnalysis(scenario, mission, strategyKey, generated) {
     { step: "Terrain & axis analysis", detail: "North, south and enveloping approach axes evaluated against the objective anchor and strait chokepoints.", ms: 1.1 },
     { step: "Constraints & weighting", detail: `Strategy "${w.label}", effect ${Math.round(w.effect * 100)}%, risk aversion ${Math.round(w.safety * 100)}%, tempo ${Math.round(w.tempo * 100)}%, feasibility ${Math.round(w.feasibility * 100)}%.`, ms: 0.8 },
     { step: "Candidate construction", detail: `${generated.length} doctrinal archetype(s) instantiated with four-phase skeletons and axis waypoints.`, ms: 1.6 },
-    { step: "Plan grading", detail: `Composites ${ranked.map((c) => c.scores.composite).join(" / ")} · "${ranked[0].name}" graded RECOMMENDED under ${w.label}.`, ms: 0.9 },
+    { step: "Plan grading", detail: `Composites ${ranked.map((c) => c.scores.composite).join(" / ")} | "${ranked[0].name}" graded RECOMMENDED under ${w.label}.`, ms: 0.9 },
   ];
 }
 
@@ -595,7 +595,7 @@ export function recommendationsFor(assessment, branch) {
     recs.push("Hold capital units outside the coastal missile arc until the battery threat is confirmed down; the attrition profile was driven by early exposure.");
   }
   if (tempo && tempo.score < 55) {
-    recs.push("Compress the shaping phase · ISR confidence plateaued well before the force actually moved.");
+    recs.push("Compress the shaping phase - ISR confidence plateaued well before the force actually moved.");
   }
   if (efficiency && efficiency.score < 55) {
     recs.push("Ration standoff munitions against mobile targets and push the replenishment cycle 6-8 hours earlier.");

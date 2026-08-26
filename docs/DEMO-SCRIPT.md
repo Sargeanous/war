@@ -1,4 +1,4 @@
-# SANDTABLE · 5-minute demo script
+# SANDTABLE - 5-minute demo script
 
 A repeatable walkthrough for client demos. Total time ≈ 5-7 minutes. All content is
 fictional (Meridian Archipelago, Exercise AZURE HORIZON), say so up front.
@@ -15,13 +15,13 @@ fictional (Meridian Archipelago, Exercise AZURE HORIZON), say so up front.
 
 ## The story: "mission decomposition to assessment, run by AI agents, decided by commanders"
 
-### Beat 1 · The platform (30s) · login screen
+### Beat 1 - The platform (30s) | login screen
 
 - Point at the five role profiles: the platform is permissioned by duty position -
   Commander, Plans (J5), Simulation Control, Analysis (J8), Admin.
 - Log in as **Plans Cell (J5)**.
 
-### Beat 2 · Scenario Design (60s) · L3 app 1
+### Beat 2 - Scenario Design (60s) | L3 app 1
 
 - Open **Scenario Design**: AZURE HORIZON with a 31-unit joint ORBAT placed on the
   **hex wargame board** (terrain-classified hexes over the chart, zoom in for grid
@@ -31,13 +31,13 @@ fictional (Meridian Archipelago, Exercise AZURE HORIZON), say so up front.
 - Switch tabs: **Objectives** (weighted, per side) and **Environment** (weather, sea
   state, EMCON).
 - Click **Validate**, structural checks pass; "ready for COA generation".
-- **The wow moment · Import OPORD**: click Import OPORD → Load sample → Parse. The
+- **The wow moment - Import OPORD**: click Import OPORD → Load sample → Parse. The
   Intelligent Documents pipeline (Claude when a key is set, offline rules otherwise)
   extracts 9 BLUE + 7 RED force groups, task organization and objectives from the
   order text, then materializes a ready scenario with ontology-typed pieces on the
   hex board. "From order to playable scenario in under a minute."
 
-### Beat 3 · Data & COA Generation (75s) · L2 strategic + L3 app 2
+### Beat 3 - Data & COA Generation (75s) | L2 strategic + L3 app 2
 
 - Open **Data & COA Generation**. Show the mission: commander's intent + end state.
 - The mission is already **decomposed into 10 sub-tasks** on a timeline, each assigned
@@ -51,7 +51,7 @@ fictional (Meridian Archipelago, Exercise AZURE HORIZON), say so up front.
 - Click **Silent deduction** on the recommended COA, a full headless 72-hour
   engine run projects objectives, strengths and net score onto the card. Select one.
 
-### Beat 4 · Simulation Rules (45s) · L3 app 3
+### Beat 4 - Simulation Rules (45s) | L3 app 3
 
 - Open **Simulation Rules**: the active "Standard Engagement Rules v2.1" set -
   adjudication mode, die model, phase order, 14 rules by category.
@@ -60,14 +60,14 @@ fictional (Meridian Archipelago, Exercise AZURE HORIZON), say so up front.
 - Run **Dry-run adjudication** on a canned situation, show which rules fired and the
   net result. These same rules drive the engine in the next beat.
 
-### Beat 5 · Full-Process Deduction (90s) · the centerpiece
+### Beat 5 - Full-Process Deduction (90s) | the centerpiece
 
 - Switch profile to **Joint Force Commander** → **Full-Process Deduction**.
 - Launch: scenario + two selected COAs (two **parallel branches**) + rule set +
   real-time engine at 2x. The screen becomes a **war-room console**: phase banner
-  ("R1 · Advance to contact" + sim clock), environment pills (weather / sea state /
-  EMCON / day-night), left ORBAT drawer, right drawers (Score · Orders · Adjudication
-  · Decisions).
+  ("R1 - Advance to contact" + sim clock), environment pills (weather / sea state /
+  EMCON / day-night), left ORBAT drawer, right drawers (Score | Orders | Adjudication
+  | Decisions).
 - Watch the board: NATO counters move on COA waypoints, engagements pulse, the live
   **mirrored scoreboard** (objective / force / combat points, BLUE vs RED) ticks.
 - Open the **Adjudication drawer**, every salvo shows its math: weapon, range, base
@@ -85,7 +85,7 @@ fictional (Meridian Archipelago, Exercise AZURE HORIZON), say so up front.
   environment pill flips, the inject is logged in the Orders drawer with its explicit
   rule effect, and movement/detection adjudication reacts immediately.
 
-### Beat 6 · Assessment & Replay (60s) · L3 app 5
+### Beat 6 - Assessment & Replay (60s) | L3 app 5
 
 - Speed to 4x, or switch to the pre-computed historical run in **Assessment & Replay**.
 - Show the branch verdicts: e.g. Direct Thrust = objectives faster but heavy losses;
@@ -101,7 +101,7 @@ fictional (Meridian Archipelago, Exercise AZURE HORIZON), say so up front.
   the branch's live state (with the exact rule modifiers and rolls), via the
   reasoning service or offline knowledge.
 
-### Beat 7 · The layers beneath (30s) · L2 + L1
+### Beat 7 - The layers beneath (30s) | L2 + L1
 
 - **AI Command Layer**: the agent library by drive mode (knowledge reasoning, data
   learning, operations research, large model → hybrid), decision history, and the

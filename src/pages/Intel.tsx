@@ -1,4 +1,4 @@
-// Intel · the intel-to-COA bridge. BASEER pushes normalised cues, SANDTABLE works
+// Intel - the intel-to-COA bridge. BASEER pushes normalised cues, SANDTABLE works
 // one cue from arrival to a live scenario: identify the contact, task collection,
 // release it under a named human, log the product, confirm the target, then
 // generate the scenario. SANDTABLE runs no detection of its own, it only consumes
@@ -57,6 +57,7 @@ import {
 } from "../components";
 import TheaterMap from "../map";
 import type { MapFocus, MapUnit } from "../map";
+import { frameColor } from "../milsym";
 import type { PageProps } from "../shell";
 import type {
   CollectionOption,
@@ -200,10 +201,11 @@ function dismissalRecord(cue: IntelCue): HandoffRecord | null {
   return null;
 }
 
-// The counter frame carries friend, hostile and neutral only, and an unidentified
-// track is none of them. Neutral is a positive call with consequences of its own,
-// so a track BASEER has not identified takes the possible hostile frame and only a
-// declared neutral plots neutral. Map and list then read the same track the same way.
+// A side answers "whose force is this", and for a track BASEER has not
+// identified there is no answer, so an unidentified track sits with the tracks
+// that are not ours and takes the APP-6 unknown frame rather than the hostile
+// diamond. Neutral is a positive call with consequences of its own, so only a
+// declared neutral plots neutral. Map and list then read the track the same way.
 function trackSide(entity: IntelEntity): MapUnit["side"] {
   return entity.affiliation === "neutral" ? "neutral" : "red";
 }
@@ -585,6 +587,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
     return cue.entities.map((entity) => ({
       id: entity.id,
       side: trackSide(entity),
+      affiliation: entity.affiliation,
       name: trackLabel(entity, confirmedRead),
       domain: kindDomains[entity.kind],
       position: { lat: entity.lat, lng: entity.lng },
@@ -675,7 +678,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
           <div className="intel-inbox-head">
             <span className="intel-inbox-count">
               <Inbox size={13} />
-              {cues.length} cue{cues.length === 1 ? "" : "s"} held · {newCount} new
+              {cues.length} cue{cues.length === 1 ? "" : "s"} held | {newCount} new
             </span>
             <Button icon={RefreshCw} variant="secondary" onClick={doSync} disabled={syncing}>
               {syncing ? "Syncing" : "Sync feed"}
@@ -695,7 +698,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
                     <strong>{item.title}</strong>
                     <small>
                       <span className="intel-origin">{originLabels[item.origin]}</span>
-                      {item.confidence}% · {timeAgo(item.observedAt)}
+                      {item.confidence}% | {timeAgo(item.observedAt)}
                     </small>
                   </span>
                   <StatusPill label={item.state.toUpperCase()} tone={stateTones[item.state]} />
@@ -714,7 +717,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
                 <div className="intel-invest-title">
                   <strong>{cue.title}</strong>
                   <span>
-                    {originLabels[cue.origin]} · {cue.geo.lat.toFixed(2)}, {cue.geo.lng.toFixed(2)} · radius {cue.geo.radiusKm} km ·
+                    {originLabels[cue.origin]} | {cue.geo.lat.toFixed(2)}, {cue.geo.lng.toFixed(2)} | radius {cue.geo.radiusKm} km |
                     observed {timeAgo(cue.observedAt)}
                   </span>
                 </div>
@@ -737,7 +740,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
                 <Card
                   kind="alert"
                   icon={AlertTriangle}
-                  kicker={`Pushed alert · ${originLabels[cue.origin]} · BASEER`}
+                  kicker={`Pushed alert | ${originLabels[cue.origin]} | BASEER`}
                   time={timeAgo(cue.observedAt)}
                   records={recordsFor(cue, [cue.ingestHandoffId])}
                 >
@@ -771,14 +774,17 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
                           className={`intel-entity${entity.id === entityId ? " active" : ""}`}
                           onClick={() => focusEntity(entity.id)}
                         >
-                          <span className={`intel-aff ${entity.affiliation}`} />
+                          <span
+                            className={`intel-aff ${entity.affiliation}`}
+                            style={{ background: frameColor(entity.affiliation) }}
+                          />
                           <span className="intel-entity-main">
                             <strong>{entity.name}</strong>
                             <small>
-                              {entity.kind} · {affiliationReading(entity, confirmedRead)} · {entity.lat.toFixed(2)},{" "}
+                              {entity.kind} | {affiliationReading(entity, confirmedRead)} | {entity.lat.toFixed(2)},{" "}
                               {entity.lng.toFixed(2)}
-                              {entity.courseDeg === null ? "" : ` · course ${Math.round(entity.courseDeg)} deg`}
-                              {entity.speedKts === null ? "" : ` · ${Math.round(entity.speedKts)} kts`}
+                              {entity.courseDeg === null ? "" : ` | course ${Math.round(entity.courseDeg)} deg`}
+                              {entity.speedKts === null ? "" : ` | ${Math.round(entity.speedKts)} kts`}
                             </small>
                           </span>
                           {entity.classHint ? <Tag label={entity.classHint} /> : null}
@@ -815,7 +821,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
                     key={task.id}
                     kind={`task ${task.status}`}
                     icon={Satellite}
-                    kicker={`Collection order · ${task.taskingId}`}
+                    kicker={`Collection order - ${task.taskingId}`}
                     time={timeAgo(task.requestedAt)}
                     records={taskRecords(cue, task)}
                   >
@@ -1061,7 +1067,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
           />
           <div className="intel-map-hint">
             {cue
-              ? `Cue area ${cue.geo.radiusKm} km, ${plural(cue.entities.length, "track")} read from BASEER. An unidentified track plots as possible hostile, only a declared neutral plots neutral. Click a counter to inspect it.`
+              ? `Cue area ${cue.geo.radiusKm} km, ${plural(cue.entities.length, "track")} read from BASEER. An unidentified track plots on the yellow unknown frame, never the hostile diamond, and only a declared neutral plots neutral. Click a counter to inspect it.`
               : "Meridian Archipelago theater. Select a cue to plot its tracks."}
           </div>
         </div>
@@ -1087,7 +1093,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
                 >
                   <strong>{option.asset}</strong>
                   <span>
-                    {option.mode} · {option.resolutionM} m · ETA {option.etaMinutes} min
+                    {option.mode} | {option.resolutionM} m | ETA {option.etaMinutes} min
                   </span>
                   <Tag label={`${option.priority} priority`} />
                   <span>{option.note}</span>

@@ -405,7 +405,7 @@ export default function Assessment({ notify, goTo }: PageProps) {
                       rows={snapshotEvents.map((event) => ({
                         id: event.id,
                         title: event.title,
-                        meta: `${simClock(event.simTimeH)} · ${event.detail}`,
+                        meta: `${simClock(event.simTimeH)} | ${event.detail}`,
                         tone: eventTones[event.type] ?? "neutral",
                         status: event.type,
                       }))}
@@ -484,7 +484,7 @@ export default function Assessment({ notify, goTo }: PageProps) {
             <header className="asm-report-head">
               <strong>{report.runLabel}</strong>
               <span>
-                {report.scenarioName} · T+{Math.round(report.simTimeH)}h · generated {timeAgo(report.generatedAt)}
+                {report.scenarioName} | T+{Math.round(report.simTimeH)}h | generated {timeAgo(report.generatedAt)}
               </span>
             </header>
             <div className="asm-report-figures">
@@ -493,10 +493,10 @@ export default function Assessment({ notify, goTo }: PageProps) {
                   <strong>{b.name}</strong>
                   <span>
                     {b.verdict}
-                    {b.overall !== null ? ` · ${b.overall}/100` : ""}
+                    {b.overall !== null ? ` | ${b.overall}/100` : ""}
                   </span>
                   <em>
-                    OBJ {b.objectiveScore}% · BLUE {Math.round(b.blueStrength)}% · RED {Math.round(b.redStrength)}% · LER {b.lossExchange}:1 ·
+                    OBJ {b.objectiveScore}% | BLUE {Math.round(b.blueStrength)}% | RED {Math.round(b.redStrength)}% | LER {b.lossExchange}:1 |
                     {" "}
                     {b.decisionsFollowed}/{b.decisionsTotal} with AI
                   </em>

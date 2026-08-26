@@ -3,7 +3,7 @@
 // strings, suitable for Leaflet divIcons and inline SVG. Pure, deterministic,
 // no imports, no DOM access.
 
-export type Affiliation = "friend" | "hostile" | "neutral";
+export type Affiliation = "friend" | "hostile" | "neutral" | "unknown";
 
 export interface MilSymbolOptions {
   side: "blue" | "red" | "neutral";
@@ -13,6 +13,9 @@ export interface MilSymbolOptions {
   strength: number; // 0..100
   selected?: boolean;
   size?: number; // frame width in px, default 30
+  // Frame affiliation when the side does not imply it. An unidentified track
+  // belongs to no side, and plotting it as hostile is a call nobody made.
+  affiliation?: Affiliation;
 }
 
 export interface MilSymbolResult {
@@ -40,12 +43,20 @@ const AFF_FILL: Record<Affiliation, string> = {
   friend: "#80E0FF",
   hostile: "#FF8080",
   neutral: "#AAFFAA",
+  unknown: "#FFFF80",
 };
 
 export function affiliationOf(side: string): Affiliation {
   if (side === "blue") return "friend";
   if (side === "red") return "hostile";
   return "neutral";
+}
+
+// A side of blue or red implies its frame, but an unidentified track belongs to
+// no side at all. When the caller states the affiliation it wins, so unknown
+// survives the trip onto the map instead of collapsing into hostile.
+function resolveAffiliation(opts: MilSymbolOptions): Affiliation {
+  return opts.affiliation ? opts.affiliation : affiliationOf(opts.side);
 }
 
 export function frameColor(aff: Affiliation): string {
@@ -67,13 +78,14 @@ function half(v: number): number {
 }
 
 type Shape =
-  | "roundRect" // friend land/sea/cyber
+  | "rect" // friend land/sea/cyber (square corners, per APP-6)
   | "archBottom" // friend air/space (open at the bottom)
   | "archTop" // friend subsurface (open at the top, U shape)
   | "diamond" // hostile land/sea/cyber
   | "tent" // hostile air/space (^, open at the bottom)
   | "vee" // hostile subsurface (V, open at the top)
-  | "square"; // neutral
+  | "square" // neutral
+  | "quatrefoil"; // unknown (four-lobed cloverleaf)
 
 interface FramePaths {
   fill: string; // closed silhouette path data (for the fill layer)
@@ -84,11 +96,14 @@ interface FramePaths {
 function pickShape(aff: Affiliation, domain: MilSymbolOptions["domain"], classId: string): Shape {
   const sub = classId.indexOf("submarine") >= 0;
   if (aff === "neutral") return "square";
+  // The unknown quatrefoil carries no domain variants: an unidentified track is
+  // exactly the case where the domain read is least trustworthy.
+  if (aff === "unknown") return "quatrefoil";
   const airlike = domain === "air" || domain === "space";
   if (aff === "friend") {
     if (sub) return "archTop";
     if (airlike) return "archBottom";
-    return "roundRect";
+    return "rect";
   }
   // hostile
   if (sub) return "vee";
@@ -99,11 +114,15 @@ function pickShape(aff: Affiliation, domain: MilSymbolOptions["domain"], classId
 // Frame bounding-box height for a given shape, keeping visual mass similar.
 function frameHeight(shape: Shape, size: number): number {
   switch (shape) {
-    case "roundRect":
+    case "rect":
       return half(size * 0.66);
     case "square":
       // True square; side chosen so the area is close to the friend rect.
       return half(size * 0.8);
+    case "quatrefoil":
+      // Square bounding box. The cusps eat into it, so it needs the extra span
+      // to carry the same visual mass as the diamond beside it.
+      return half(size * 0.9);
     case "archBottom":
     case "archTop":
     case "tent":
@@ -114,33 +133,45 @@ function frameHeight(shape: Shape, size: number): number {
   }
 }
 
-// Frame bounding-box width; the neutral frame is a true square with an area
-// comparable to the friend rectangle, so it is narrower than `size`.
+// Frame bounding-box width. The neutral square and the unknown quatrefoil are
+// both drawn in a square box with an area comparable to the friend rectangle,
+// so they are narrower than `size`.
 function frameWidth(shape: Shape, size: number): number {
   if (shape === "square") return half(size * 0.8);
+  if (shape === "quatrefoil") return half(size * 0.9);
   return size;
 }
 
-function framePaths(shape: Shape, x: number, y: number, w: number, h: number, rx: number): FramePaths {
+function framePaths(shape: Shape, x: number, y: number, w: number, h: number): FramePaths {
   const cx = x + w / 2;
   const cy = y + h / 2;
   switch (shape) {
-    case "roundRect": {
-      const r = Math.min(rx, w / 2, h / 2);
-      const d =
-        `M ${n(x + r)} ${n(y)} H ${n(x + w - r)} ` +
-        `A ${n(r)} ${n(r)} 0 0 1 ${n(x + w)} ${n(y + r)} V ${n(y + h - r)} ` +
-        `A ${n(r)} ${n(r)} 0 0 1 ${n(x + w - r)} ${n(y + h)} H ${n(x + r)} ` +
-        `A ${n(r)} ${n(r)} 0 0 1 ${n(x)} ${n(y + h - r)} V ${n(y + r)} ` +
-        `A ${n(r)} ${n(r)} 0 0 1 ${n(x + r)} ${n(y)} Z`;
-      return { fill: d, edge: d, open: false };
-    }
+    case "rect":
     case "square": {
       const d = `M ${n(x)} ${n(y)} H ${n(x + w)} V ${n(y + h)} H ${n(x)} Z`;
       return { fill: d, edge: d, open: false };
     }
     case "diamond": {
       const d = `M ${n(cx)} ${n(y)} L ${n(x + w)} ${n(cy)} L ${n(cx)} ${n(y + h)} L ${n(x)} ${n(cy)} Z`;
+      return { fill: d, edge: d, open: false };
+    }
+    case "quatrefoil": {
+      // Four half-ellipse lobes bulging off the sides of an inner box, meeting
+      // in cusps at its corners. Four arcs only, so the cloverleaf still reads
+      // as one at 11px where anything busier turns to mush.
+      const ax = w / 4;
+      const ay = h / 4;
+      const lx = cx - ax;
+      const rx = cx + ax;
+      const ty = cy - ay;
+      const by = cy + ay;
+      const r = `${n(ax)} ${n(ay)} 0 0 1`;
+      const d =
+        `M ${n(lx)} ${n(ty)} ` +
+        `A ${r} ${n(rx)} ${n(ty)} ` +
+        `A ${r} ${n(rx)} ${n(by)} ` +
+        `A ${r} ${n(lx)} ${n(by)} ` +
+        `A ${r} ${n(lx)} ${n(ty)} Z`;
       return { fill: d, edge: d, open: false };
     }
     case "archBottom": {
@@ -182,9 +213,12 @@ interface Box {
 
 function interiorBox(shape: Shape, fx: number, fy: number, fw: number, fh: number): Box {
   switch (shape) {
-    case "roundRect":
+    case "rect":
     case "square":
       return { x: fx + 3, y: fy + 3, w: fw - 6, h: fh - 6 };
+    case "quatrefoil":
+      // The inner box the four lobes hang off, opened up a little into them.
+      return { x: fx + fw * 0.22, y: fy + fh * 0.22, w: fw * 0.56, h: fh * 0.56 };
     case "archBottom":
       return { x: fx + 4, y: fy + 4, w: fw - 8, h: fh - 6 };
     case "archTop":
@@ -261,7 +295,7 @@ function iconMarkup(icon: IconSpec, shape: Shape, box: Box, size: number): strin
   const cy = box.y + box.h / 2;
   switch (icon.kind) {
     case "text": {
-      const tight = shape === "diamond" || shape === "tent" || shape === "vee";
+      const tight = shape === "diamond" || shape === "tent" || shape === "vee" || shape === "quatrefoil";
       let fs = size * (icon.label.length >= 3 ? 0.26 : 0.3);
       if (tight) fs *= 0.85;
       return (
@@ -327,7 +361,7 @@ interface Geom {
 
 function computeGeom(opts: MilSymbolOptions): Geom {
   const size = opts.size && opts.size > 0 ? opts.size : 30;
-  const aff = affiliationOf(opts.side);
+  const aff = resolveAffiliation(opts);
   const shape = pickShape(aff, opts.domain, (opts.classId || "").toLowerCase());
   const fw = frameWidth(shape, size);
   const fh = frameHeight(shape, size);
@@ -357,10 +391,10 @@ function computeGeom(opts: MilSymbolOptions): Geom {
 
 export function milSymbolSvg(opts: MilSymbolOptions): string {
   const g = computeGeom(opts);
-  const aff = affiliationOf(opts.side);
+  const aff = resolveAffiliation(opts);
   const classId = (opts.classId || "").toLowerCase();
   const icon = pickIcon(classId, opts.domain);
-  const paths = framePaths(g.shape, g.fx, g.fy, g.fw, g.fh, 2);
+  const paths = framePaths(g.shape, g.fx, g.fy, g.fw, g.fh);
   // Below ~20px the icon glyph and strength bar read as noise, not information;
   // compact symbols keep only frame, fill, status overlays and selection ring.
   const compact = g.size < 20;
@@ -444,7 +478,7 @@ export function milSymbolSvg(opts: MilSymbolOptions): string {
   // Painted last so the strength bar cannot clip its bottom edge.
   if (opts.selected) {
     const d = 3; // inflate so the ring gap reads as ~2px
-    const ring = framePaths(g.shape, g.fx - d, g.fy - d, g.fw + d * 2, g.fh + d * 2, 2 + d);
+    const ring = framePaths(g.shape, g.fx - d, g.fy - d, g.fw + d * 2, g.fh + d * 2);
     parts.push(
       `<path d="${ring.edge}" fill="none" stroke="#FFFFFF" stroke-width="2" ` +
         `stroke-linejoin="round" stroke-linecap="round"/>`
