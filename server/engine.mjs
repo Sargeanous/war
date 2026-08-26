@@ -260,7 +260,8 @@ export function createRun({ scenario, coas, ruleSet, engine, speed, label, id, r
         type: "adversary",
         severity: "info",
         title: "OPFOR is playing a plan",
-        detail: `The white cell holds an adversary scheme of manoeuvre for this branch. Its content stays masked until the run completes or the umpire reveals it. Opening fires policy: ${branch._red.fires.mode === "weapons-free" ? "weapons free" : "held"}.`,
+        detail:
+          "The white cell holds an adversary scheme of manoeuvre for this branch. Its content stays masked until the run completes or the umpire reveals it. Its opening fires posture is part of that content: BLUE learns it by watching, not by being told.",
       });
     }
     return branch;
@@ -677,6 +678,12 @@ function tickBranch(run, branch, ctx) {
     if (actor.side === "blue" && modActive) pk *= branch._mod.pkFactor;
     pk = clamp(pk, 0.02, 0.97);
 
+    // The first RED shot is the moment the players may legitimately know RED is
+    // shooting. Until then the fires posture is white-cell content.
+    if (actor.side === "red" && redPlan && !redPlan.firesObserved) {
+      redPlan.firesObserved = true;
+      redPlan.firesObservedAtH = round2(branch._simTimeH);
+    }
     weapon.ammo -= 1;
     actor.supply = clamp(actor.supply - 1.2, 0, 100);
     actor._cdUntil = branch._tick + SALVO_COOLDOWN_TICKS;
@@ -1383,7 +1390,7 @@ export function buildAssessments(run, ctx) {
 // Rewind a newly created branch to a recorded snapshot, so a run can be
 // re-launched from any replay frame with a different decision path. Unit states,
 // clock and RNG stream are all restored; the event log starts fresh from here.
-export function rewindBranchToSnapshot(branch, snapshot, sourceLabel) {
+export function rewindBranchToSnapshot(branch, snapshot, sourceLabel, sourceRed) {
   const byId = new Map(snapshot.units.map((u) => [u.id, u]));
   for (const unit of branch.units) {
     const s = byId.get(unit.id);
@@ -1405,6 +1412,22 @@ export function rewindBranchToSnapshot(branch, snapshot, sourceLabel) {
   // meets the parent's dice, and a fork that decides differently diverges only
   // where the decision actually changed the world. That is what isolates the
   // decision, which is the whole reason to fork.
+  // The adversary picks up where the world does. Anything the parent's plan did
+  // AFTER the snapshot is the fork's future, not its past, so it is left behind.
+  if (branch._red && sourceRed && branch._red.planId === sourceRed.planId) {
+    const releasedByNow = sourceRed.fires.releasedAtH !== null && sourceRed.fires.releasedAtH <= snapshot.simTimeH;
+    branch._red.fires.released = releasedByNow;
+    branch._red.fires.releasedAtH = releasedByNow ? sourceRed.fires.releasedAtH : null;
+    branch._red.fires.releaseReason = releasedByNow ? sourceRed.fires.releaseReason : null;
+    const observedByNow = sourceRed.firesObservedAtH !== null && sourceRed.firesObservedAtH <= snapshot.simTimeH;
+    branch._red.firesObserved = observedByNow;
+    branch._red.firesObservedAtH = observedByNow ? sourceRed.firesObservedAtH : null;
+    branch._red.indicators = sourceRed.indicators.filter((i) => i.atH <= snapshot.simTimeH);
+    const phase = adversaryPhaseAt(branch._red, snapshot.simTimeH);
+    branch._red.currentPhaseId = phase ? phase.id : branch._red.currentPhaseId;
+    branch._redPhaseId = branch._red.currentPhaseId;
+    branch.adversary = projectAdversary(branch._red);
+  }
   branch.metrics = { ...snapshot.metrics };
   branch._full = { events: [], snapshots: [] };
   branch.recentEvents = [];

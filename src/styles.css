@@ -2767,7 +2767,9 @@ th {
 .classification-banner.top {
   position: sticky;
   top: 0;
-  z-index: 40;
+  /* Above Leaflet's own panes, which run to 700 and put a map over the marking.
+     A banner a map can hide is not a marking. */
+  z-index: 1200;
 }
 
 .classification-banner.bottom {

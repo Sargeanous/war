@@ -409,6 +409,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
         setPickedCoaIds={setPickedCoaIds}
         ruleSets={ruleSets}
         ruleSetId={ruleSetId}
+        whiteCell={canIntervene}
         adversaryPlans={adversaryPlans}
         redPlanId={redPlanId}
         setRedPlanId={setRedPlanId}
@@ -1177,6 +1178,7 @@ function Launcher({
   ruleSets,
   ruleSetId,
   setRuleSetId,
+  whiteCell,
   adversaryPlans,
   redPlanId,
   setRedPlanId,
@@ -1200,6 +1202,7 @@ function Launcher({
   ruleSets: RuleSet[];
   ruleSetId: string;
   setRuleSetId: (v: string) => void;
+  whiteCell: boolean;
   adversaryPlans: AdversaryPlanSummary[];
   redPlanId: string;
   setRedPlanId: (v: string) => void;
@@ -1275,28 +1278,37 @@ function Launcher({
                 )}
               </div>
             </Field>
-            <Field label="OPFOR plan (white cell)">
+            <Field label="OPFOR plan">
               <div className="ded-advplan">
-                <select value={redPlanId} onChange={(e) => setRedPlanId(e.target.value)}>
-                  {adversaryPlans.map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.codename}, {plan.name}
-                    </option>
-                  ))}
-                </select>
-                {activePlan ? (
-                  <div className="ded-advplan-brief">
-                    <p>{activePlan.summary}</p>
-                    <DetailGrid>
-                      <Detail label="Fires" value={activePlan.firesNote} />
-                      <Detail label="Risk RED accepts" value={activePlan.risk} />
-                    </DetailGrid>
-                    <small>
-                      Every branch faces this same plan on the same seed, so what separates them is the friendly plan. The players are
-                      told an OPFOR plan exists and nothing more until it is revealed.
-                    </small>
-                  </div>
-                ) : null}
+                {whiteCell ? (
+                  <>
+                    <select value={redPlanId} onChange={(e) => setRedPlanId(e.target.value)}>
+                      {adversaryPlans.map((plan) => (
+                        <option key={plan.id} value={plan.id}>
+                          {plan.codename}, {plan.name}
+                        </option>
+                      ))}
+                    </select>
+                    {activePlan ? (
+                      <div className="ded-advplan-brief">
+                        <p>{activePlan.summary}</p>
+                        <DetailGrid>
+                          <Detail label="Fires" value={activePlan.firesNote} />
+                          <Detail label="Risk RED accepts" value={activePlan.risk} />
+                        </DetailGrid>
+                        <small>
+                          Every branch faces this same plan and meets the same dice on the same events, so what separates them is the
+                          friendly plan. This brief is white-cell material and is not shown to a commander.
+                        </small>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="ded-advplan-withheld">
+                    Exercise control sets the opposing plan. You are told one exists, which is the whole of what a commander is
+                    entitled to before the reveal.
+                  </p>
+                )}
               </div>
             </Field>
             <FormGrid columns={3}>

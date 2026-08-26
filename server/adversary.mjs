@@ -394,6 +394,10 @@ export function resolveAdversaryPlan({ scenario, planId, durationHours }) {
     phases,
     currentPhaseId: phases.length ? phases[0].id : null,
     revealed: false,
+    // Set the first time a RED unit actually fires, which is the only part of the
+    // fires policy the players can legitimately see.
+    firesObserved: false,
+    firesObservedAtH: null,
     // What BLUE could legitimately observe, appended as the run goes. This is the
     // masked view the players get before the reveal.
     indicators: [],
@@ -514,8 +518,14 @@ export function projectAdversary(redPlan) {
     indicators: redPlan.indicators.slice(-12),
   };
   if (!redPlan.revealed) {
+    // Before the reveal the players get what they OBSERVED, not the state of the
+    // gate. Under a weapons-free plan the gate is open at tick zero, and reporting
+    // that would name the plan to anyone who has read the catalogue. RED firing is
+    // observable; RED having permission to fire is not.
     return {
       ...base,
+      firesReleased: Boolean(redPlan.firesObserved),
+      firesReleasedAtH: redPlan.firesObservedAtH,
       planId: null,
       codename: "Withheld",
       name: "OPFOR plan withheld",

@@ -935,7 +935,9 @@ export interface DecisionSupportRow {
 
 export interface DecisionSupport {
   rows: DecisionSupportRow[];
-  namedAreas: Array<{ id: string; title: string; centre: LatLng; radiusKm: number; why: string }>;
+  // The friendly objective areas the plan is measured on. Named areas of interest
+  // are a different thing and belong to the intel bridge, see NamedArea.
+  objectiveAreas: Array<{ id: string; title: string; centre: LatLng; radiusKm: number; why: string }>;
   missionTitle: string | null;
 }
 

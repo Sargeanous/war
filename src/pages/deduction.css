@@ -1096,3 +1096,15 @@
   line-height: 1.5;
   overflow-wrap: break-word;
 }
+
+/* A commander is not shown the opponent's plan, or its name. */
+.ded-advplan-withheld {
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  border-inline-start: 3px solid var(--muted);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+  color: var(--muted);
+  line-height: 1.55;
+  overflow-wrap: break-word;
+}

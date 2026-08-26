@@ -286,3 +286,52 @@ never `Math.random()` for engine outcomes.
   `GET /api/intel/cues/:id/requirements` -> what one cue answers, with the evidence.
 - Matching is derived on read, so every cue that has ever landed is anchored without
   a state migration.
+
+## Addendum, corrections from adversarial review (2026-08-26)
+
+A six-dimension review of the work above, with every finding handed to a skeptic
+told to refute it, confirmed twelve defects. What changed:
+
+- **The mask leaked.** `run.redPlanId` was a public key on every run payload, and
+  the open plan catalogue turns an id into the full intent, risk and phases: the
+  mask carried its own answer key. It is `run._redPlanId` now, dropped by
+  `stripInternal`, absent from the run-started audit line, and absent from the
+  `SimRun` contract. `GET /api/runs/:id/adversary/truth` was ungated, which made
+  the human-required reveal it protects meaningless; it is gated on
+  `run.adversary.truth` (`?viewedBy=`) and audited. The masked projection reports
+  `firesReleased` from what BLUE OBSERVED (`redPlan.firesObserved`, set on the
+  first RED shot) rather than from the gate, which was open at tick zero under a
+  weapons-free plan and named the plan. The branch-init event no longer announces
+  the opening fires posture, and the launcher shows the plan picker and its brief
+  only to exercise control.
+- **Common random numbers, not a common seed.** See the addendum above; the
+  original claim was false and is now asserted on real adjudications.
+- **Geometry.** `towards()` extrapolated past its target, so any scenario whose
+  RED deny objective sat on top of BLUE (every intel-generated one) sent RED's
+  forward stations through the BLUE formation and out the far side on a
+  rounding-noise bearing. The fraction is capped and an objective centre within
+  25 km of BLUE falls back to the battery centre.
+- **Plan coherence.** A TIDEWALL phase marked `startsOnRelease` begins when fires
+  are released rather than on the clock, so a sprung ambush is not still logged as
+  silent watch.
+- **Hand-off honesty.** `kind` comes from `gate.kind`; five call sites hardcoded
+  `"human"` and signed machine acts as human ones under an auto policy.
+- **Two ungated actions.** `run.decide` (a decision cuts an order under a name,
+  and defaulted to the literal "commander") and `run.control` (aborting freezes
+  every branch; ships on `auto`).
+- **Classification.** `highWater()` was never called; the FRAGO compilation now
+  banners at the high water mark and `GET /api/runs/:id/fragos` returns `marking`.
+  A release statement survives a merge only when every source agrees on it, since
+  sorting by string length picked the shorter phrase rather than the narrower
+  audience. `releasableTo` is stripped of the separators that structure a marking,
+  which could otherwise forge a caveat. `RunReport` carries `classification` and
+  `marking`, which the Admin console already claimed it did.
+- **The 403 body** documented above now actually reaches the client (`code`,
+  `actionId`, `actorField`).
+- **A fork inherits the adversary state that was true AT the snapshot** and
+  nothing that happened after it.
+- **`buildDecisionSupport` returns `objectiveAreas`**, not `namedAreas`: those are
+  the friendly areas the plan is scored on, and named areas of interest belong to
+  the intel bridge. PIR 2 indicator B moved to its own `nai-monte-airfield`, since
+  anchored on the channel it missed the only air-surge cue in the corpus by 1.6 km
+  and was unanswerable by construction.

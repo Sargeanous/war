@@ -223,7 +223,11 @@ export function buildDecisionSupport(scenario, coa, ruleSet, mission) {
     });
   }
 
-  const namedAreas = objectives
+  // These are the friendly objective areas the plan is measured on, not named
+  // areas of interest. An NAI is ground the commander wants watched and the intel
+  // bridge owns those; calling both by one name puts two different things behind
+  // one piece of doctrine.
+  const objectiveAreas = objectives
     .filter((o) => o.area)
     .map((o) => ({
       id: o.id,
@@ -233,7 +237,7 @@ export function buildDecisionSupport(scenario, coa, ruleSet, mission) {
       why: o.description,
     }));
 
-  return { rows, namedAreas, missionTitle: mission ? mission.title : null };
+  return { rows, objectiveAreas, missionTitle: mission ? mission.title : null };
 }
 
 // ---------------------------------------------------------------------------
@@ -523,7 +527,12 @@ export function renderOpordText(doc) {
         }
       }
       if (annex.sync.idle.length) {
-        out.push(`   ${annex.mark} Untasked across every phase: ${annex.sync.idle.join(", ")}`);
+        out.push(`   ${annex.mark} Formations untasked across every phase: ${annex.sync.idle.join(", ")}`);
+      }
+      // The unit-level gap is the one worth reading. A whole formation is rarely
+      // idle; a single squadron often is, and the order should say so on paper.
+      if (annex.sync.idleUnits.length) {
+        out.push(`   ${annex.mark} Units untasked across every phase: ${annex.sync.idleUnits.join(", ")}`);
       }
     }
     if (annex.kind === "decision-support") {
@@ -534,8 +543,8 @@ export function renderOpordText(doc) {
         out.push(`      Criteria: ${row.criteria.join(" ")}`);
         out.push(`      Options: ${row.options.join(" | ")}`);
       }
-      for (const area of annex.dsm.namedAreas) {
-        out.push(`      Named area "${area.title}": ${area.radiusKm} km around ${area.centre.lat.toFixed(2)}N ${area.centre.lng.toFixed(2)}E`);
+      for (const area of annex.dsm.objectiveAreas) {
+        out.push(`      Objective area "${area.title}": ${area.radiusKm} km around ${area.centre.lat.toFixed(2)}N ${area.centre.lng.toFixed(2)}E`);
       }
     }
     out.push("");

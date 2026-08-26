@@ -15,6 +15,7 @@ import {
   Tag,
   simClock,
   timeAgo,
+  plural,
 } from "../components";
 import { driveModeHints, driveModeLabels, statusTone } from "../data";
 import type { PageProps } from "../shell";
@@ -152,7 +153,7 @@ export default function AiLayer({ notify }: PageProps) {
                       ))}
                       {mission.subTasks.length > 6 ? (
                         <span>
-                          <GitBranch size={12} />… {mission.subTasks.length - 6} more sub-task(s)
+                          <GitBranch size={12} />… {plural(mission.subTasks.length - 6, "more sub-task")}
                         </span>
                       ) : null}
                     </div>

@@ -1606,6 +1606,15 @@ const GOVERNED_ACTIONS = [
     detail: "Handing over the adversary's whole scheme of manoeuvre while the run is still live. The same act as revealing it, minus the ceremony.",
   },
   {
+    id: "run.control",
+    label: "Pause, resume or abort a live run",
+    group: "Exercise control",
+    actorField: "requestedBy",
+    machineActor: "operator",
+    defaultAutonomy: "auto",
+    detail: "Exercise control over a run in progress. Aborting one freezes every branch and is not recoverable.",
+  },
+  {
     id: "run.intervene",
     label: "Inject into a live run",
     group: "Exercise control",
@@ -2544,7 +2553,7 @@ function handleResumeFromBreakpoint(runId, branchId, body) {
     redPlanId: source._redPlanId || DEFAULT_ADVERSARY_PLAN_ID,
   });
   run._redPlanId = source._redPlanId || DEFAULT_ADVERSARY_PLAN_ID;
-  rewindBranchToSnapshot(run.branches[0], snap, source.label);
+  rewindBranchToSnapshot(run.branches[0], snap, source.label, branch._red);
   // A fork keeps the crew that flew the original.
   run.seats = Array.isArray(source.seats) && source.seats.length ? JSON.parse(JSON.stringify(source.seats)) : buildSeats();
   run.clock.tick = snap.tick;
@@ -2692,6 +2701,10 @@ async function handleGenerateReport(runId) {
     runId: run.id,
     runLabel: run.label,
     scenarioName: run.scenarioName,
+    // A document the platform emits carries the platform marking, like the orders
+    // do. The Administration console says the report inherits it, so it does.
+    classification: normalizeClassification(state.classification),
+    marking: markingLine(state.classification),
     generatedAt: nowIso(),
     source,
     simTimeH: run.clock.simTimeH,
@@ -2819,6 +2832,10 @@ function handleStartRun(body) {
 
 function handleControlRun(id, body) {
   const run = requireRun(id);
+  // Aborting freezes every branch and cannot be undone, so the control passes the
+  // gate like every other act on a live run. It ships on "auto" because pausing is
+  // routine; an exercise that wants a name on an abort sets it to human-required.
+  const controlledBy = gateAction("run.control", body.requestedBy).actor;
   const action = String(body.action || "");
   if (TERMINAL_RUN_STATUSES.includes(run.status)) {
     throw httpError(400, `Run is already ${run.status}.`);
@@ -2862,7 +2879,12 @@ function handleControlRun(id, body) {
     default:
       throw httpError(400, `Unknown control action "${action}".`);
   }
-  audit("operator", `run-${action}`, run.id, `Control "${action}"${body.value !== undefined ? ` (${body.value})` : ""} applied to ${run.label}.`);
+  audit(
+    controlledBy,
+    `run-${action}`,
+    run.id,
+    `Control "${action}"${body.value !== undefined ? ` (${body.value})` : ""} applied to ${run.label} by ${controlledBy}.`
+  );
   schedulePersist();
   return serializeRun(run);
 }
@@ -3519,7 +3541,14 @@ const server = http.createServer(async (req, res) => {
   } catch (err) {
     const status = err && Number.isInteger(err.status) ? err.status : 500;
     if (status === 500) console.error(`[sandtable] ${req.method} ${pathname} failed:`, err);
-    sendJson(res, status, { error: err && err.message ? err.message : "Internal server error." });
+    const payload = { error: err && err.message ? err.message : "Internal server error." };
+    // A governance refusal carries the fields a client needs to react to it: which
+    // action was refused and which field it wants a name in. CONTRACTS documents
+    // that body, so it has to actually arrive.
+    if (err && err.code) payload.code = err.code;
+    if (err && err.actionId) payload.actionId = err.actionId;
+    if (err && err.actorField) payload.actorField = err.actorField;
+    sendJson(res, status, payload);
   }
 });
 

@@ -121,7 +121,9 @@ export default function Orders({ notify, profile }: PageProps) {
       }
       setBusy(true);
       try {
-        const result = await fetchCoaOrders(id, `${profile.name}, ${profile.role}`);
+        // No issuedBy: an order is issued by a headquarters, not by whoever opened
+        // the page to read it.
+        const result = await fetchCoaOrders(id);
         if (token !== orderTokenRef.current) return;
         setOrders(result);
       } catch (error) {
@@ -133,7 +135,7 @@ export default function Orders({ notify, profile }: PageProps) {
         if (token === orderTokenRef.current) setBusy(false);
       }
     },
-    [notify, profile.name, profile.role]
+    [notify]
   );
 
   useEffect(() => {
@@ -420,10 +422,10 @@ export default function Orders({ notify, profile }: PageProps) {
                   </div>
                 </div>
               ))}
-              {orders.dsm.namedAreas.length ? (
+              {orders.dsm.objectiveAreas.length ? (
                 <div className="ord-nai">
-                  <p className="ord-label">Named areas of interest</p>
-                  {orders.dsm.namedAreas.map((area) => (
+                  <p className="ord-label">Objective areas</p>
+                  {orders.dsm.objectiveAreas.map((area) => (
                     <div key={area.id} className="ord-nai-row">
                       <strong>{area.title}</strong>
                       <small>

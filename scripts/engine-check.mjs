@@ -147,10 +147,31 @@ for (const branch of tidewall.run.branches) {
 
 section("6. SEA LANCE: weapons free from the opening tick");
 const sealance = runToCompletion("adv-sealance", "check SEA LANCE");
+const firstRedShotAt = (run) => {
+  let earliest = Infinity;
+  for (const branch of run.branches) {
+    const redIds = new Set(branch.units.filter((u) => u.side === "red").map((u) => u.id));
+    for (const event of branch._full.events) {
+      if (event.type === "engagement" && redIds.has(event.actorId)) earliest = Math.min(earliest, event.simTimeH);
+    }
+  }
+  return earliest;
+};
 for (const branch of sealance.run.branches) {
-  check(`[${branch.name}] fires start free`, branch._red.fires.released === true);
   check(`[${branch.name}] plan is SEA LANCE`, branch._red.planId === "adv-sealance");
 }
+// Reading the flag back would only prove the template was copied. The claim worth
+// asserting is that the fires policy has a consequence: a weapons-free RED shoots
+// sooner than one holding an ambush.
+const sealanceShot = firstRedShotAt(sealance.run);
+const tidewallShot = firstRedShotAt(tidewall.run);
+console.log(`  (first RED shot: SEA LANCE T+${sealanceShot}h, TIDEWALL T+${tidewallShot}h)`);
+check(
+  "a weapons-free RED opens fire no later than one holding an ambush",
+  sealanceShot <= tidewallShot,
+  `SEA LANCE fired at T+${sealanceShot}h, TIDEWALL at T+${tidewallShot}h`
+);
+check("RED fired at all under SEA LANCE", Number.isFinite(sealanceShot));
 
 section("7. The two plans produce different exercises");
 const tw = tidewall.run.branches[0].metrics;

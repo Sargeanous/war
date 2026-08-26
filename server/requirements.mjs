@@ -55,6 +55,14 @@ export function buildNamedAreas() {
       why: "Where the opposing air defence network is believed to be anchored. New emitters here change the air plan.",
     },
     {
+      id: "nai-monte-airfield",
+      name: "MONTE AIRFIELD",
+      title: "Monte Meridian airfield",
+      centre: { lat: 23.99, lng: 62.36 },
+      radiusKm: 45,
+      why: "The only hard runway in the archipelago. Sortie tempo here is the difference between an air defence sitting still and an air force being generated.",
+    },
+    {
       id: "nai-half-moon",
       name: "HALF-MOON",
       title: "Half-Moon Bank narrows",
@@ -123,8 +131,8 @@ export function buildRequirements() {
         {
           id: "pir-2-b",
           letter: "B",
-          text: "Air activity generated from the northern airfields.",
-          naiId: "nai-north-channel",
+          text: "Sortie tempo above baseline over the archipelago airfield.",
+          naiId: "nai-monte-airfield",
           kinds: ["aircraft"],
           keywords: ["sortie", "squadron", "airfield", "orbit", "combat air"],
         },

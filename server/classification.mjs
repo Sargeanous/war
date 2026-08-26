@@ -50,8 +50,12 @@ export function normalizeClassification(value) {
   const level = BY_ID.has(String(value.level)) ? String(value.level) : base.level;
   const requested = Array.isArray(value.caveats) ? value.caveats.map(String).filter((c) => CAVEAT_BY_ID.has(c)) : [];
   const caveats = [...new Set([...LOCKED_CAVEATS, ...requested])];
-  const releasableTo =
-    typeof value.releasableTo === "string" && value.releasableTo.trim() ? value.releasableTo.trim().slice(0, 60).toUpperCase() : base.releasableTo;
+  // Whatever lands here is concatenated into the marking line, so it must not be
+  // able to carry the separators that give a marking its structure: a release
+  // statement of "X // NOFORN" would forge a caveat it was never granted.
+  const cleaned =
+    typeof value.releasableTo === "string" ? value.releasableTo.replace(/[^A-Za-z0-9 ,.()-]/g, " ").replace(/\s+/g, " ").trim() : "";
+  const releasableTo = cleaned ? cleaned.slice(0, 60).toUpperCase() : base.releasableTo;
   return {
     level,
     caveats,
@@ -63,7 +67,10 @@ export function normalizeClassification(value) {
 
 /** The single line that goes at the head and foot of a document. */
 export function markingLine(classification) {
-  const c = normalizeClassification(classification);
+  // A derived marking has already been resolved and may deliberately carry no
+  // release statement. Re-normalising it would hand the default straight back.
+  const c =
+    classification && classification.updatedBy === "derived by high water mark" ? classification : normalizeClassification(classification);
   const parts = [levelFor(c.level).label];
   for (const id of c.caveats) {
     const caveat = CAVEAT_BY_ID.get(id);
@@ -95,8 +102,15 @@ export function highWater(...classifications) {
     if (levelFor(input.level).rank > levelFor(level).rank) level = input.level;
   }
   const caveats = [...new Set(inputs.flatMap((i) => i.caveats))];
-  // The narrowest release statement wins, and NOFORN removes it entirely.
-  const releasable = caveats.includes("noforn") ? "" : inputs.map((i) => i.releasableTo).filter(Boolean).sort((a, b) => a.length - b.length)[0] || "";
+  // A compilation may only go to an audience every source allows, so the release
+  // statement survives only where the sources agree on it. Disagreement resolves
+  // to the narrowest possible answer, which is no release statement at all.
+  // Sorting by string length picked the shorter phrase, which is an accident of
+  // spelling rather than a rule about audiences.
+  const statements = new Set(inputs.map((i) => i.releasableTo).filter(Boolean));
+  const releasable = caveats.includes("noforn") || statements.size !== 1 ? "" : [...statements][0];
+  // Deliberately not normalized on the way out: normalizeClassification would put
+  // the default release statement back and widen the audience this just narrowed.
   return {
     level,
     caveats,
