@@ -506,10 +506,6 @@ button:disabled {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.split-grid.cms-grid {
-  grid-template-columns: minmax(320px, 0.88fr) minmax(0, 1.35fr);
-}
-
 .split-grid.network-grid {
   grid-template-columns: minmax(380px, 0.95fr) minmax(0, 1.25fr);
 }
@@ -862,7 +858,6 @@ button:disabled {
 /* Grid items default to min-width:auto, wide tables must shrink and scroll
    inside .table-card instead of stretching their grid track past the viewport. */
 .split-grid > *,
-.cms-grid > *,
 .sd-stack > *,
 .detail-stack > *,
 .coa-compare > * {
@@ -1225,7 +1220,6 @@ select:focus {
 
   .split-grid.wide-left,
   .split-grid.equal,
-  .split-grid.cms-grid,
   .split-grid.network-grid,
   .submission-hero,
   .device-dossier,
@@ -2898,4 +2892,111 @@ th {
 
 .classification-banner.bottom {
   margin-top: auto;
+}
+
+/* =============================================================================
+   Collapsible navigation
+   The sidebar is 246px of chrome sitting beside every screen. On a war room
+   projector that is 246px the map could have had, so it folds down to a rail of
+   icons and remembers which way the operator left it.
+   ============================================================================= */
+
+:root {
+  --sidebar-rail: 64px;
+}
+
+.app.nav-collapsed {
+  grid-template-columns: var(--sidebar-rail) minmax(0, 1fr);
+}
+
+.sidebar {
+  transition: padding var(--ease);
+}
+
+.sidebar-brand {
+  position: relative;
+}
+
+/* The toggle sits with the brand, and stays reachable in either state. */
+.nav-collapse {
+  margin-inline-start: auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+  color: var(--muted);
+}
+
+.nav-collapse:hover {
+  border-color: var(--line-strong);
+  color: var(--ink-2);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Collapsed: icons only --------------------------------------------------- */
+
+.sidebar.collapsed {
+  padding: 16px 8px;
+  gap: 14px;
+  align-items: center;
+}
+
+.sidebar.collapsed .sidebar-brand {
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+/* The wordmark, the duty position and every nav label are the same thing when
+   the rail is closed: text there is no room for. */
+.sidebar.collapsed .sidebar-brand > div:nth-of-type(2),
+.sidebar.collapsed .current-profile,
+.sidebar.collapsed .nav-group > p,
+.sidebar.collapsed .nav-groups button > span,
+.sidebar.collapsed .switch-profile > span {
+  display: none;
+}
+
+.sidebar.collapsed .nav-collapse {
+  margin-inline-start: 0;
+}
+
+.sidebar.collapsed .nav-group {
+  gap: 4px;
+}
+
+.sidebar.collapsed .nav-groups button,
+.sidebar.collapsed .switch-profile {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  padding: 10px 0;
+  margin-inline: auto;
+  gap: 0;
+}
+
+/* The selection bar is the one piece of chrome that has to survive the fold:
+   without a label, it is the only thing saying which page you are on. */
+.sidebar.collapsed .nav-group button.active {
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+
+.sidebar.collapsed .brand-mark {
+  width: 32px;
+  height: 32px;
 }

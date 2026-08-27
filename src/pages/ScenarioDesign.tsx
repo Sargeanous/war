@@ -4,6 +4,7 @@
 // an explicit local dirty state; Save pushes the whole scenario via updateScenario.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import {
   AlertTriangle,
   Anchor,
@@ -626,6 +627,76 @@ function ObjectiveEditorModal({
 
 // --- Page -------------------------------------------------------------------------
 
+const LIB_MIN = 210;
+const LIB_MAX = 520;
+const LIB_DEFAULT = 286;
+
+function clampLib(width: number): number {
+  return Math.max(LIB_MIN, Math.min(LIB_MAX, Math.round(width)));
+}
+
+/** Pointer capture throws if the pointer is already gone, which happens on a
+ *  release outside the window. Losing the capture is survivable; throwing out of
+ *  the handler and leaving the drag latched is not. */
+function capture(node: Element, pointerId: number, hold: boolean) {
+  try {
+    if (hold) node.setPointerCapture(pointerId);
+    else node.releasePointerCapture(pointerId);
+  } catch {
+    // The pointer went away on its own. Nothing to hold or release.
+  }
+}
+
+/** The grab handle between the scenario library and the workspace. Draggable with
+ *  a pointer, and movable with the arrow keys once it has focus, because a staff
+ *  officer working a table display is not always holding a mouse. */
+function LibraryResizer({ width, onWidth }: { width: number; onWidth: (width: number) => void }) {
+  const from = useRef<{ x: number; width: number } | null>(null);
+  const nudge = (delta: number) => onWidth(clampLib(width + delta));
+  return (
+    <div
+      className="sd-lib-resizer"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Scenario library width"
+      aria-valuenow={width}
+      aria-valuemin={LIB_MIN}
+      aria-valuemax={LIB_MAX}
+      tabIndex={0}
+      onPointerDown={(event) => {
+        from.current = { x: event.clientX, width };
+        capture(event.currentTarget, event.pointerId, true);
+      }}
+      onPointerMove={(event) => {
+        if (!from.current) return;
+        onWidth(clampLib(from.current.width + (event.clientX - from.current.x)));
+      }}
+      onPointerUp={(event) => {
+        from.current = null;
+        capture(event.currentTarget, event.pointerId, false);
+      }}
+      onPointerCancel={() => {
+        from.current = null;
+      }}
+      onDoubleClick={() => onWidth(LIB_DEFAULT)}
+      onKeyDown={(event) => {
+        const step = event.shiftKey ? 48 : 12;
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          nudge(-step);
+        } else if (event.key === "ArrowRight") {
+          event.preventDefault();
+          nudge(step);
+        } else if (event.key === "Home") {
+          event.preventDefault();
+          onWidth(LIB_DEFAULT);
+        }
+      }}
+      title="Drag to resize the library. Double click to reset."
+    />
+  );
+}
+
 export default function ScenarioDesign(props: PageProps) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -646,6 +717,14 @@ export default function ScenarioDesign(props: PageProps) {
 
   const [showCreate, setShowCreate] = useState(false);
   const [showOpord, setShowOpord] = useState(false);
+  const [libWidth, setLibWidth] = useState(() => {
+    const saved = Number(window.localStorage.getItem("sandtable-scn-library"));
+    return Number.isFinite(saved) && saved > 0 ? clampLib(saved) : LIB_DEFAULT;
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem("sandtable-scn-library", String(libWidth));
+  }, [libWidth]);
   const [creating, setCreating] = useState(false);
   const [objModal, setObjModal] = useState<{ side: PlacementSide; objective: Objective | null } | null>(null);
 
@@ -1385,7 +1464,7 @@ export default function ScenarioDesign(props: PageProps) {
 
   return (
     <PageBody>
-      <div className="split-grid cms-grid">
+      <div className="sd-lib-grid" style={{ "--sd-lib": `${libWidth}px` } as CSSProperties}>
         <Panel
           icon={MapIcon}
           title="Scenario library"
@@ -1408,27 +1487,36 @@ export default function ScenarioDesign(props: PageProps) {
             />
           ) : (
             <div className="zone-list">
-              {scenarios.map((scenario) => (
-                <button
-                  key={scenario.id}
-                  type="button"
-                  className={`sd-scn-row${scenario.id === selectedId ? " sd-scn-selected" : ""}`}
-                  onClick={() => handleSelectScenario(scenario)}
-                >
-                  <em>{initials(scenario.codename || scenario.name)}</em>
-                  <span>
-                    <strong>{scenario.name}</strong>
-                    <small>
-                      {scenario.codename} | {scenario.units.length} units | {scenario.objectives.length} objectives |
-                      updated {timeAgo(scenario.updatedAt)}
-                    </small>
-                  </span>
-                  <StatusPill label={scenario.status} tone={statusTone(scenario.status)} />
-                </button>
-              ))}
+              {scenarios.map((scenario) => {
+                // A scenario is usually named "CODENAME - what it is", so repeating the
+                // codename in the detail line says nothing and costs a whole line of a
+                // narrow list. It is only worth printing when the name does not carry it.
+                const namesCodename =
+                  scenario.codename.length > 0 && scenario.name.toLowerCase().startsWith(scenario.codename.toLowerCase());
+                return (
+                  <button
+                    key={scenario.id}
+                    type="button"
+                    className={`sd-scn-row${scenario.id === selectedId ? " sd-scn-selected" : ""}`}
+                    onClick={() => handleSelectScenario(scenario)}
+                  >
+                    <em>{initials(scenario.codename || scenario.name)}</em>
+                    <span>
+                      <strong>{scenario.name}</strong>
+                      <small>
+                        {namesCodename ? "" : `${scenario.codename} | `}
+                        {plural(scenario.units.length, "unit")} | {plural(scenario.objectives.length, "objective")} |
+                        updated {timeAgo(scenario.updatedAt)}
+                      </small>
+                    </span>
+                    <StatusPill label={scenario.status} tone={statusTone(scenario.status)} />
+                  </button>
+                );
+              })}
             </div>
           )}
         </Panel>
+        <LibraryResizer width={libWidth} onWidth={setLibWidth} />
         <div className="sd-stack">
           {working ? (
             renderWorkspace(working)

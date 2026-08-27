@@ -10,6 +10,8 @@ import {
   LockKeyhole,
   LogOut,
   Map as MapIcon,
+  PanelLeftClose,
+  PanelLeftOpen,
   MessageSquare,
   Moon,
   Radar,
@@ -156,6 +158,7 @@ export default function App() {
   // every workspace, because a headquarters reads the marking before the page.
   const [marking, setMarking] = useState("");
   const [theme, setTheme] = useState<Theme>(() => (window.localStorage.getItem("sandtable-theme") === "light" ? "light" : "dark"));
+  const [navCollapsed, setNavCollapsed] = useState(() => window.localStorage.getItem("sandtable-nav") === "collapsed");
   const toastTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -183,6 +186,14 @@ export default function App() {
   }, [profile]);
 
   const toggleTheme = useCallback(() => setTheme((current) => (current === "dark" ? "light" : "dark")), []);
+
+  const toggleNav = useCallback(() => {
+    setNavCollapsed((current) => {
+      const next = !current;
+      window.localStorage.setItem("sandtable-nav", next ? "collapsed" : "open");
+      return next;
+    });
+  }, []);
 
   const notify = useCallback((message: string) => {
     setToast(message);
@@ -213,8 +224,15 @@ export default function App() {
   const Page = pageComponents[page];
 
   return (
-    <div className="app">
-      <Sidebar profile={profile} page={page} goTo={goTo} onSwitch={() => setProfile(null)} />
+    <div className={`app${navCollapsed ? " nav-collapsed" : ""}`}>
+      <Sidebar
+        profile={profile}
+        page={page}
+        goTo={goTo}
+        onSwitch={() => setProfile(null)}
+        collapsed={navCollapsed}
+        onToggleCollapse={toggleNav}
+      />
       <main className="workspace">
         <ClassificationBanner marking={marking} where="top" />
         <Topbar profile={profile} page={page} theme={theme} onToggleTheme={toggleTheme} />
@@ -299,23 +317,37 @@ function Sidebar({
   page,
   goTo,
   onSwitch,
+  collapsed,
+  onToggleCollapse,
 }: {
   profile: Profile;
   page: PageId;
   goTo: (page: PageId) => void;
   onSwitch: () => void;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
 }) {
   const allowed = new Set(profile.pages);
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${collapsed ? " collapsed" : ""}`}>
       <div className="sidebar-brand">
         <div className="brand-mark">
-          <BrandMark size={40} />
+          <BrandMark size={collapsed ? 28 : 40} />
         </div>
         <div>
           <strong>SANDTABLE</strong>
           <span>Wargame Platform</span>
         </div>
+        <button
+          type="button"
+          className="nav-collapse"
+          onClick={onToggleCollapse}
+          aria-expanded={!collapsed}
+          title={collapsed ? "Expand the navigation" : "Collapse the navigation"}
+        >
+          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          <span className="sr-only">{collapsed ? "Expand the navigation" : "Collapse the navigation"}</span>
+        </button>
       </div>
       <div className="current-profile">
         <small>Access profile</small>
@@ -333,7 +365,13 @@ function Sidebar({
                 const item = navItems[id];
                 const Icon = item.icon;
                 return (
-                  <button key={id} className={page === id ? "active" : ""} type="button" onClick={() => goTo(id)}>
+                  <button
+                    key={id}
+                    className={page === id ? "active" : ""}
+                    type="button"
+                    onClick={() => goTo(id)}
+                    title={collapsed ? item.label : undefined}
+                  >
                     <Icon size={18} />
                     <span>{item.label}</span>
                   </button>
@@ -343,9 +381,9 @@ function Sidebar({
           );
         })}
       </nav>
-      <button className="switch-profile" type="button" onClick={onSwitch}>
+      <button className="switch-profile" type="button" onClick={onSwitch} title={collapsed ? "Switch profile" : undefined}>
         <LogOut size={17} />
-        Switch profile
+        <span>Switch profile</span>
       </button>
     </aside>
   );
