@@ -14,6 +14,7 @@ import { sideColors } from "./data";
 import { affiliationOf, frameColor, milSymbolHtml } from "./milsym";
 import type { Affiliation } from "./milsym";
 import { addGraticule, drawEngagements, drawHeadingVector, drawObjective, objectiveLabelWidth, tintClass } from "./tactical";
+import { createSandTableLayer } from "./sandtable";
 import "./map-extras.css";
 
 declare global {
@@ -362,11 +363,17 @@ function LeafletTheaterMap(props: TheaterMapProps) {
   const prevWorldKeyRef = useRef<string | undefined>(undefined);
   const fxTimersRef = useRef<Set<number>>(new Set());
   const clickRef = useRef(onMapClick);
+  // The map is built once; the relief layer reads the theater through a ref so it
+  // always renders the archipelago the page is actually showing.
+  const theaterRef = useRef(theater);
+  theaterRef.current = theater;
   const selectRef = useRef(onSelectUnit);
   clickRef.current = onMapClick;
   selectRef.current = onSelectUnit;
   // True while the pale "Nautical chart" base layer is active.
   const [baseLight, setBaseLight] = useState(false);
+  // The relief already draws the coast, so the polygon fill would double it.
+  const [baseSand, setBaseSand] = useState(true);
   // Live zoom level (user pan/zoom included), drives counter sizing.
   const [mapZoom, setMapZoom] = useState(zoom);
 
@@ -401,12 +408,17 @@ function LeafletTheaterMap(props: TheaterMapProps) {
       maxZoom: 13,
       minZoom: 4,
     });
-    satellite.addTo(map);
+    // The sand table: the archipelago as a lit relief model, generated from the
+    // scenario's own island and shoal polygons rather than draped over satellite
+    // imagery of a real place the exercise is not set in.
+    const sandTable = createSandTableLayer(L, theaterRef.current);
+    sandTable.addTo(map);
     L.control
-      .layers({ Satellite: satellite, "Nautical chart": chart, "Low light": lowLight }, undefined, {
-        position: "topleft",
-        collapsed: true,
-      })
+      .layers(
+        { "Sand table": sandTable, Satellite: satellite, "Nautical chart": chart, "Low light": lowLight },
+        undefined,
+        { position: "topleft", collapsed: true }
+      )
       .addTo(map);
     L.control.scale({ imperial: false, position: "bottomleft" }).addTo(map);
     graticuleRef.current = addGraticule(L, map, 1);
@@ -418,7 +430,10 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     map.on("click", (e: any) => {
       if (clickRef.current) clickRef.current({ lat: e.latlng.lat, lng: e.latlng.lng });
     });
-    map.on("baselayerchange", (e: any) => setBaseLight(e.name === "Nautical chart"));
+    map.on("baselayerchange", (e: any) => {
+      setBaseLight(e.name === "Nautical chart");
+      setBaseSand(e.name === "Sand table");
+    });
     // Permanent unit labels pile into an unreadable stack once the board
     // shrinks below its design zoom; gate them the way hex labels are gated.
     // The same handler tracks the live zoom for counter sizing.
@@ -559,6 +574,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
       symbolSize,
       mapZoom, // objective label deconfliction is solved in screen space
       theater.map((f) => f.name),
+      baseSand,
       objectives?.map((o) => [o.id, o.side, o.title, o.area?.center.lat, o.area?.center.lng, o.area?.radiusKm]),
       namedAreas?.map((a) => [a.id, a.centre.lat, a.centre.lng, a.radiusKm]),
       visibleUnits.map((u) => [u.id, u.position.lat, u.position.lng, u.headingDeg, u.status, u.strength, u.classId, u.affiliation]),
@@ -574,6 +590,21 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     for (const feature of theater) {
       const latlngs = feature.polygon.map((p) => [p.lat, p.lng]);
       if (feature.kind === "island") {
+        if (baseSand) {
+          // The relief has already built this island out of the same polygon, so
+          // all it needs from the overlay is a name and a hairline to read the
+          // coast by. Filling it again would flatten the shading underneath.
+          L.polygon(latlngs, {
+            color: "#f0e4cd",
+            weight: 1,
+            opacity: 0.34,
+            fill: false,
+            pane: "theaterPane",
+          })
+            .bindTooltip(feature.name, { direction: "center", className: "map-feature-label" })
+            .addTo(overlay);
+          continue;
+        }
         // Coastline glow under the landmass reads like chart cartography.
         L.polygon(latlngs, { color: "#cfdcb0", weight: 5, opacity: 0.16, fill: false, interactive: false, pane: "theaterPane" }).addTo(overlay);
         L.polygon(latlngs, { color: "#cfdcb0", weight: 1.2, opacity: 0.85, fillColor: "#66784f", fillOpacity: 0.92, pane: "theaterPane" })
@@ -583,7 +614,9 @@ function LeafletTheaterMap(props: TheaterMapProps) {
       }
       const style =
         feature.kind === "shoal"
-          ? { color: "#6fc7d6", weight: 1, dashArray: "4 4", fillColor: "#2a5b66", fillOpacity: 0.4 }
+          ? baseSand
+            ? { color: "#8fd0dd", weight: 1, dashArray: "4 4", fillOpacity: 0 }
+            : { color: "#6fc7d6", weight: 1, dashArray: "4 4", fillColor: "#2a5b66", fillOpacity: 0.4 }
           : { color: "#8a7b3f", weight: 1, dashArray: "6 4", fillOpacity: 0.06, fillColor: "#8a7b3f" };
       L.polygon(latlngs, { ...style, pane: "theaterPane" })
         .bindTooltip(feature.name, { direction: "center", className: "map-feature-label" })
@@ -720,7 +753,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
         if (el && el.style) el.style.animationDelay = `-${Date.now() % 1600}ms`;
       }
     }
-  }, [visibleUnits, fogSide, theater, objectives, namedAreas, selectedUnitId, trails, events, sensorRingsFor, sensorRanges, showLabels, mapZoom]);
+  }, [visibleUnits, fogSide, theater, objectives, namedAreas, selectedUnitId, trails, events, sensorRingsFor, sensorRanges, showLabels, mapZoom, baseSand]);
 
   // Persistent unit counters: diffed against a registry instead of rebuilt, so
   // position changes tween via the CSS transition on .map-unit-icon and the
@@ -876,7 +909,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
   const tint = tintClass(weather, daylight ?? true);
   return (
     <div
-      className={`theater-map-wrap${tint ? ` ${tint}` : ""}${baseLight ? " map-base-light" : ""}${glideSpeed === "fast" ? " map-glide-fast" : ""}`}
+      className={`theater-map-wrap${tint ? ` ${tint}` : ""}${baseLight ? " map-base-light" : ""}${baseSand ? " map-base-sand" : ""}${glideSpeed === "fast" ? " map-glide-fast" : ""}`}
       style={{ height }}
     >
       <div ref={containerRef} className="theater-map" />

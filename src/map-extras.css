@@ -294,3 +294,34 @@
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
   transform: translate(-50%, -14px);
 }
+
+/* --- The sand table ----------------------------------------------------------
+   The relief tiles carry the key light. This is the falloff at the edges, which
+   is what makes the theater read as an object under a lamp rather than as a
+   texture that happens to be sandy. It sits above the terrain and the theater
+   polygons but below the counters at pane z 600, because dimming the pieces at
+   the edge of the table would cost legibility to buy atmosphere. */
+.theater-map-wrap.map-base-sand::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 450;
+  pointer-events: none;
+  background: radial-gradient(
+    118% 94% at 46% 40%,
+    rgba(6, 5, 4, 0) 36%,
+    rgba(6, 5, 4, 0.34) 74%,
+    rgba(6, 5, 4, 0.68) 100%
+  );
+}
+
+/* Place names on the relief are chart lettering, not UI labels. */
+.theater-map-wrap.map-base-sand .map-feature-label {
+  color: #f4ead6;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
