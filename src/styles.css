@@ -426,7 +426,7 @@ button:disabled {
 .metric,
 .panel {
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   box-shadow: 0 1px 0 rgba(34, 52, 47, 0.03);
 }
@@ -874,6 +874,130 @@ button:disabled {
   overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  /* The card is the container its table has to fit, not the window. A five
+     column table in a 389px panel needs to stack whether the window is 1366 or
+     2560 wide, and a viewport query cannot know that. */
+  container-type: inline-size;
+}
+
+/* Too narrow to be a table. The same stacked-card shape the 640px viewport
+   breakpoint uses, keyed to the space the table actually has. The threshold sits
+   below the 389px card the workspace gives at a normal window, because five
+   columns still read as a table there; it catches the 294px card a narrower
+   window produces, where they do not. */
+@container (max-width: 360px) {
+  .compact-table thead {
+    display: none;
+  }
+
+  .compact-table table,
+  .compact-table tbody,
+  .compact-table tr {
+    display: block;
+    width: 100%;
+  }
+
+  .compact-table tr {
+    margin-bottom: 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface-3);
+    overflow: hidden;
+  }
+
+  .compact-table tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .compact-table td {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: 10px;
+    align-items: baseline;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .compact-table tr td:last-child {
+    border-bottom: 0;
+  }
+
+  .compact-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+}
+
+/* Actually compact.
+   The scrollbar under these tables was not a width problem, it was a constraint
+   problem: overflow-x on the card means the table is never constrained, so the
+   auto layout algorithm takes its max-content width and spills every time,
+   however much padding you shave off. Letting the card clip instead puts the
+   card width back in charge, and auto layout then shares it between the columns
+   in proportion to their content, which is what gives Unit and Class more room
+   than Status without anyone hardcoding a width. Cells wrap rather than push. */
+.compact-table table {
+  /* Fixed layout is what actually makes a table fit. Under the default auto
+     algorithm the columns claim their min-content width and the table spills
+     past the card holding it, and no amount of padding or overflow-wrap changes
+     that: overflow-wrap: break-word is ignored when min-content is computed, and
+     overflow-wrap: anywhere fixes the width by stacking headings one letter per
+     line, which this codebase has been bitten by before. Fixed layout shares the
+     card width between the columns and lets the cells wrap inside it. */
+  table-layout: fixed;
+  width: 100%;
+}
+
+.compact-table th,
+.compact-table td {
+  padding: 8px 9px;
+  overflow-wrap: break-word;
+}
+
+/* Deliberately break-word and not anywhere. anywhere would lower the min-content
+   floor and close the last few pixels of bleed, but it also breaks words mid
+   syllable and pushed the worst ORBAT row from three lines to five. The bleed it
+   removes is a handful of pixels into a cell padding, which nobody can see; the
+   extra lines are the first thing you notice. Neither produces a scrollbar. */
+
+.compact-table td {
+  font-size: 13px;
+}
+
+/* A pill is a single unbreakable object, and in a fixed-layout table it is the
+   one thing that can push a cell past its column and put the scrollbar back.
+   Percentage widths cannot fix that on their own: the column scales with the
+   card and the pill does not, so a width that fits at 1680 spills at 1366. The
+   pill has to be able to give. Inside a compact table it drops its minimum
+   height, wraps its label and never exceeds the cell, which makes the fit hold
+   at any width instead of at the one width it was measured on. */
+.compact-table .status-pill,
+.compact-table .tag {
+  min-height: 0;
+  max-width: 100%;
+  padding: 2px 7px;
+  font-size: 10.5px;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+/* Same rule for any inline-flex label sitting in a cell. An element that lays
+   its children out in a row will happily run past the column unless it is told
+   it may wrap, and a swatch beside a name is exactly that shape. */
+.compact-table td > .coa-series-name,
+.compact-table td > span[class*="-name"] {
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+  overflow-wrap: break-word;
+}
+
+.compact-table th {
+  font-size: 11px;
+  letter-spacing: 0.05em;
 }
 
 table {
@@ -1794,7 +1918,10 @@ select:focus {
 
 [data-theme="dark"] .metric,
 [data-theme="dark"] .panel {
-  box-shadow: var(--elev-2);
+  /* Elevation, plus a hairline of light along the top edge. A raised object on a
+     lit table catches the lamp there, and that single line does more to separate
+     a panel from the ground than any weight of border. */
+  box-shadow: var(--elev-2), inset 0 1px 0 rgba(246, 242, 232, 0.055);
 }
 
 /* Inline-colored accents (COA/side colors) are tuned for light surfaces;
@@ -2175,9 +2302,20 @@ th {
   border-radius: var(--radius-lg);
 }
 
-/* Equal-height cards across every split row (a short card beside a tall one
-   reads as an unfinished layout). */
+/* Cards size to their own content.
+   This used to stretch every card in a split row to match its tallest
+   neighbour, on the grounds that a short card beside a tall one reads as an
+   unfinished layout. That holds when the two are comparable and breaks badly
+   when they are not: on Scenario Design it left a 263px scenario library
+   stretched into a 2263px box, two thousand pixels of nothing with the list
+   stranded at the top. A card that fits its content is never the thing that
+   looks unfinished.
+   A row that genuinely wants equal heights asks for it by name. */
 .split-grid {
+  align-items: start;
+}
+
+.split-grid.fill {
   align-items: stretch;
 }
 

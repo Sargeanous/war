@@ -82,6 +82,12 @@ interface ObjectivePayload {
 }
 
 const UNIT_COLUMNS = ["Unit", "Class", "Position", "Strength", "Status"];
+// The name and class carry the reading; a coordinate needs one line and a
+// percentage needs almost nothing.
+// Status has to hold a pill, which is one unbreakable object and the widest
+// thing in the row for its column. A coordinate wrapping over two lines costs
+// less than a class name wrapping over three.
+const UNIT_WIDTHS = ["28%", "22%", "18%", "12%", "20%"];
 
 const DOMAIN_ORDER: Domain[] = ["sea", "air", "land", "cyber", "space"];
 
@@ -1074,7 +1080,7 @@ export default function ScenarioDesign(props: PageProps) {
               <Tag label={`${blueUnits.length} units`} />
             </header>
             {blueUnits.length > 0 ? (
-              <CompactTable columns={UNIT_COLUMNS} rows={unitRows(blueUnits)} />
+              <CompactTable columns={UNIT_COLUMNS} widths={UNIT_WIDTHS} rows={unitRows(blueUnits)} />
             ) : (
               <EmptyState
                 icon={Anchor}
@@ -1090,7 +1096,7 @@ export default function ScenarioDesign(props: PageProps) {
               <Tag label={`${redUnits.length} units`} />
             </header>
             {redUnits.length > 0 ? (
-              <CompactTable columns={UNIT_COLUMNS} rows={unitRows(redUnits)} />
+              <CompactTable columns={UNIT_COLUMNS} widths={UNIT_WIDTHS} rows={unitRows(redUnits)} />
             ) : (
               <EmptyState
                 icon={Shield}
@@ -1406,7 +1412,7 @@ export default function ScenarioDesign(props: PageProps) {
                 <button
                   key={scenario.id}
                   type="button"
-                  className={scenario.id === selectedId ? "sd-scn-selected" : ""}
+                  className={`sd-scn-row${scenario.id === selectedId ? " sd-scn-selected" : ""}`}
                   onClick={() => handleSelectScenario(scenario)}
                 >
                   <em>{initials(scenario.codename || scenario.name)}</em>

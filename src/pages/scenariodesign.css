@@ -1,5 +1,11 @@
 /* ScenarioDesign page styles, every class carries the sd- prefix. */
 
+/* This list leads with an initials badge, so the flexible column is the second
+   one and every title starts at the same x whatever the name is. */
+.zone-list button.sd-scn-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
 button.sd-scn-selected.sd-scn-selected {
   border-color: var(--primary);
   background: var(--primary-soft);

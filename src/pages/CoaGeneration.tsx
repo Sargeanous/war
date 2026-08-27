@@ -728,6 +728,9 @@ export default function CoaGeneration(props: PageProps) {
                   "Composite",
                   "Status",
                 ]}
+                // Six score columns hold two digits each; the name and the
+                // status pill are the only cells that need real room.
+                widths={["22%", "10%", "10%", "10%", "10%", "10%", "10%", "18%"]}
                 rows={comparable.map((c) => [
                   <span key="name" className="coa-series-name">
                     <i style={{ background: c.color }} />

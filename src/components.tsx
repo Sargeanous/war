@@ -122,10 +122,29 @@ export function DetailGrid({ children }: { children: ReactNode }) {
   return <div className="detail-grid">{children}</div>;
 }
 
-export function CompactTable({ columns, rows }: { columns: string[]; rows: ReactNode[][] }) {
+export function CompactTable({
+  columns,
+  rows,
+  widths,
+}: {
+  columns: string[];
+  rows: ReactNode[][];
+  // Optional column proportions, e.g. ["30%", "24%", ...]. Compact tables use a
+  // fixed layout so they always fit their card, which shares the width evenly
+  // unless a table states its own shape. A name column and a percentage column
+  // do not want the same room.
+  widths?: string[];
+}) {
   return (
     <div className="table-card compact-table">
       <table>
+        {widths ? (
+          <colgroup>
+            {widths.map((width, index) => (
+              <col key={index} style={{ width }} />
+            ))}
+          </colgroup>
+        ) : null}
         <thead>
           <tr>
             {columns.map((column) => (
