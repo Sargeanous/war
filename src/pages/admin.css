@@ -40,7 +40,7 @@
 }
 
 .adm-reset-note code {
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--mono);
   font-size: 11.5px;
 }
 
@@ -83,7 +83,7 @@
 }
 
 .adm-policy-refusals {
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 11.5px;
   color: var(--muted);
 }
@@ -107,7 +107,7 @@
   border-radius: var(--radius);
   background: var(--red-soft);
   color: var(--red);
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -150,7 +150,7 @@
 }
 
 .adm-caveat strong {
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 11.5px;
   letter-spacing: 0.06em;
   color: var(--ink);

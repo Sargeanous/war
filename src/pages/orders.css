@@ -11,7 +11,7 @@
   border-radius: var(--radius);
   background: var(--red-soft);
   color: var(--red);
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 11.5px;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -88,7 +88,7 @@
 }
 
 .ord-doc-head span {
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 11.5px;
   color: var(--muted);
 }
@@ -139,7 +139,7 @@
 }
 
 .ord-mark {
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 10.5px;
   font-weight: 800;
   letter-spacing: 0.05em;
@@ -198,7 +198,7 @@
 .ord-matrix tbody th small {
   display: block;
   margin-top: 2px;
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 10.5px;
   font-weight: 500;
   color: var(--muted);
@@ -240,7 +240,7 @@
 }
 
 .ord-cell-task strong {
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 11px;
   color: var(--ink);
   overflow-wrap: break-word;
@@ -275,8 +275,8 @@
   display: grid;
   gap: var(--s3);
   padding: var(--s4) var(--s4);
-  border: 1px solid var(--line);
-  border-inline-start: 3px solid var(--blue);
+  border: 1px solid color-mix(in srgb, var(--blue) 34%, transparent);
+  box-shadow: var(--elev-1);
   border-radius: var(--radius);
   background: var(--surface-3);
 }
@@ -343,7 +343,7 @@
 }
 
 .ord-nai-row small {
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 11px;
   color: var(--muted);
 }
@@ -361,14 +361,17 @@
   display: grid;
   gap: var(--s2);
   padding: var(--s4) var(--s4);
-  border: 1px solid var(--line);
-  border-inline-start: 3px solid var(--blue);
+  border: 1px solid color-mix(in srgb, var(--blue) 34%, transparent);
+  box-shadow: var(--elev-1);
   border-radius: var(--radius);
   background: var(--surface-3);
 }
 
+/* An override is the one a staff officer has to read carefully, so it is lifted
+   further off the page rather than given a different coloured edge. */
 .ord-frago.override {
-  border-inline-start-color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 44%, transparent);
+  box-shadow: var(--elev-2);
 }
 
 .ord-frago header {
@@ -391,7 +394,7 @@
 }
 
 .ord-frago header small {
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 11px;
   color: var(--muted);
   overflow-wrap: break-word;

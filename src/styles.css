@@ -21,6 +21,18 @@
   --red-soft: #fde8e5;
   --shadow: 0 10px 28px rgba(34, 52, 47, 0.08);
 
+  /* Who did a thing, in three colours and no more. A person is warm, the model
+     is Origen green, everything else the machine did is cold. Rules and dice are
+     the machine and take no colour of their own. */
+  --hand: #8a6320;
+  --machine: #3a6675;
+  --model: var(--primary);
+  --faint: #9aa8a3;
+
+  /* One mono for everything measured. Tabular figures are the point: a column of
+     numbers that does not line up is a column of numbers nobody checks. */
+  --mono: "DM Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+
   /* Spacing scale. Every gap and padding in the shell resolves to one of these. */
   --s1: 4px;
   --s2: 6px;
@@ -41,10 +53,10 @@
   --t-kicker: 10.5px;
 
   /* Radii, elevation, control sizing, motion. */
-  --radius: 8px;
-  --radius-sm: 6px;
-  --radius-lg: 10px;
-  --radius-xl: 14px;
+  --radius: 3px;
+  --radius-sm: 2px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
   --elev-1: 0 1px 2px rgba(0, 0, 0, 0.18);
   --elev-2: 0 12px 28px -14px rgba(0, 0, 0, 0.4);
   --elev-3: 0 24px 60px -28px rgba(0, 0, 0, 0.55);
@@ -817,7 +829,8 @@ button:disabled {
 .notes {
   margin: 0;
   padding: 12px;
-  border-inline-start: 4px solid var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 32%, transparent);
+  box-shadow: var(--elev-1);
   border-radius: var(--radius);
   background: var(--surface-3);
   color: var(--ink-2);
@@ -1674,7 +1687,7 @@ select:focus {
 /* Hex board coordinate labels (visible at high zoom) */
 .hex-coord-label {
   color: rgba(214, 233, 240, 0.42);
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--mono);
   font-size: 8.5px;
   letter-spacing: 0.05em;
   text-align: center;
@@ -1692,24 +1705,30 @@ select:focus {
   animation: event-pulse 1.6s ease-in-out infinite;
 }
 
+/* The same instrument wherever a sim time is shown, so the clock reads the same
+   on the overview and in replay as it does in the war room. */
 .sim-clock {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  display: grid;
+  gap: 2px;
+  padding: 7px 14px 8px;
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  background: #0d1a24;
-  color: #d8f0e6;
-  font-family: "Cascadia Mono", Consolas, monospace;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  background: var(--surface-3);
+  box-shadow: var(--elev-1);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 25px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.03em;
 }
 
 .sim-clock small {
-  color: #7ba394;
-  font-size: 11px;
-  letter-spacing: 0.02em;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
 }
 
 .chat-panel form.chat-input {
@@ -1752,29 +1771,48 @@ select:focus {
 
 [data-theme="dark"] {
   color-scheme: dark;
-  /* Origen theme dark tokens, ported verbatim from project-start
-     (Figma "DOOH" + "Origen UI Kit"; dark is the designed default there). */
-  --bg: #181b1a;
-  --surface: #1f2221;
-  --surface-2: #272a29;
-  --surface-3: #1c1f1e;
-  --ink: rgba(253, 255, 254, 0.98);
-  --ink-2: rgba(244, 254, 251, 0.71);
-  --muted: rgba(229, 253, 246, 0.49);
-  --line: rgba(255, 255, 255, 0.09);
-  --line-strong: rgba(255, 255, 255, 0.18);
-  --primary: #009b5d;
-  /* project-start keeps --primary-dark #02542d but never draws it as text on
-     dark surfaces; SANDTABLE does, so it maps to the kit's dark-mode green ink. */
-  --primary-dark: #46a758;
-  --primary-soft: rgba(0, 155, 93, 0.16);
+  /* The room, not the page. A briefing room is dark and only the table is lit, so
+     the ground goes deep and warm and the surfaces above it get real separation.
+     The previous ramp ran #181b1a to #272a29: fifteen points of brightness across
+     three steps, which is why every panel sat at the same optical depth as the
+     page behind it and nothing on any screen read as foreground. */
+  --bg: #0c0b09;
+  --surface-3: #121110;
+  --surface: #191715;
+  --surface-2: #23201c;
+  --surface-4: #2d2924;
+
+  --ink: #f2eee6;
+  --ink-2: #b8afa1;
+  --muted: #8a8073;
+  --faint: #574f45;
+  --line: rgba(242, 238, 230, 0.1);
+  --line-strong: rgba(242, 238, 230, 0.2);
+
+  /* Origen green, lifted. On a ground this deep the kit value reads muddy; this
+     is the same hue with the luminance the darker room needs. */
+  --primary: #00c06f;
+  --primary-dark: #4fd394;
+  --primary-soft: rgba(0, 192, 111, 0.16);
+
   --blue: #5b9cf5;
   --blue-soft: rgba(91, 156, 245, 0.14);
-  --amber: #f77e15;
-  --amber-soft: rgba(247, 126, 21, 0.16);
-  --red: #f53f3f;
-  --red-soft: rgba(255, 53, 35, 0.17);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --amber: #f7a115;
+  --amber-soft: rgba(247, 161, 21, 0.16);
+  --red: #f5503f;
+  --red-soft: rgba(245, 80, 63, 0.16);
+
+  /* Warm is a person, cold is the machine, green is the model. */
+  --hand: #e8c48a;
+  --machine: #8fb2bf;
+  --model: var(--primary);
+
+  /* Elevation that renders. The old dark shadow was a one pixel hairline at 35
+     percent black over a ground the same colour as the panel, which is nothing. */
+  --shadow: 0 10px 26px -14px rgba(0, 0, 0, 0.9);
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.55);
+  --elev-2: 0 14px 30px -16px rgba(0, 0, 0, 0.92);
+  --elev-3: 0 28px 64px -30px rgba(0, 0, 0, 0.96);
 }
 
 [data-theme="dark"] .login-screen {
@@ -1801,7 +1839,7 @@ select:focus {
 
 [data-theme="dark"] .metric,
 [data-theme="dark"] .panel {
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  box-shadow: var(--elev-2);
 }
 
 /* Inline-colored accents (COA/side colors) are tuned for light surfaces;
@@ -2755,7 +2793,7 @@ th {
   padding: 4px var(--s5);
   background: var(--red);
   color: #fff;
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 10.5px;
   font-weight: 800;
   letter-spacing: 0.12em;

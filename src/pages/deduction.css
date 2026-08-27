@@ -139,7 +139,8 @@
 .ded-sage-quote {
   margin: 0;
   padding: 10px 12px;
-  border-inline-start: 4px solid var(--blue);
+  border: 1px solid color-mix(in srgb, var(--blue) 38%, transparent);
+  box-shadow: var(--elev-1);
   border-radius: var(--radius);
   background: var(--blue-soft);
   color: var(--ink-2);
@@ -255,26 +256,43 @@
 
 /* --- War-room console -------------------------------------------------------- */
 
+/* The exercise clock, as an instrument rather than a caption. Tabular figures
+   so the digits do not shift as the clock runs, and the label above it so the
+   readout itself never has to spend characters explaining what it is. */
 .ded-phase-banner {
   display: grid;
-  gap: 1px;
-  padding: 6px 14px;
+  gap: 2px;
+  padding: 7px 15px 8px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  background: #0d1a24;
+  background: var(--surface-3);
+  box-shadow: var(--elev-1);
 }
 
-.ded-phase-banner strong {
-  color: #e8f4ee;
-  font-size: 13.5px;
-  letter-spacing: 0.03em;
+.ded-phase-banner .k {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--faint);
 }
 
-.ded-phase-banner span {
-  color: #8aa39b;
-  font-family: "Cascadia Mono", Consolas, monospace;
-  font-size: 11px;
+.ded-phase-banner .v {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 27px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.ded-phase-banner .m {
+  font-family: var(--mono);
+  font-size: 10.5px;
   letter-spacing: 0.05em;
+  color: var(--muted);
+  overflow-wrap: break-word;
 }
 
 .ded-env-pills {
@@ -455,7 +473,7 @@
 .ded-unit-card small {
   color: var(--muted);
   font-size: 11px;
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--mono);
 }
 
 .ded-map-zone {
@@ -508,7 +526,7 @@
   background: rgba(10, 16, 14, 0.78);
   backdrop-filter: blur(3px);
   color: #dfe9f0;
-  font: 10.5px "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+  font: 10.5px var(--mono);
   padding: 2px 8px;
   cursor: pointer;
   text-align: left;
@@ -640,7 +658,7 @@
   padding: 10px 12px;
   border-radius: var(--radius);
   background: #0d1a24;
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--mono);
 }
 
 .ded-score-head .blue {
@@ -681,13 +699,13 @@
 .ded-score-row .blue {
   color: #4f8fca;
   font-weight: 900;
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--mono);
 }
 
 .ded-score-row .red {
   color: #c9564a;
   font-weight: 900;
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--mono);
   text-align: end;
 }
 
@@ -705,7 +723,7 @@
   gap: 8px;
   padding: 10px 11px;
   border: 1px solid var(--line-strong);
-  border-inline-start: 4px solid var(--muted);
+  box-shadow: var(--elev-1);
   border-radius: var(--radius);
   background: var(--surface-3);
 }
@@ -729,7 +747,7 @@
 .ded-adj-card small {
   color: var(--muted);
   font-size: 10.5px;
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--mono);
 }
 
 .ded-adj-grid {
@@ -753,7 +771,7 @@
   font-style: normal;
   color: var(--ink);
   font-weight: 700;
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--mono);
 }
 
 @media (max-width: 1180px) {
@@ -812,8 +830,8 @@
   display: grid;
   gap: 6px;
   padding: 10px 11px;
-  border: 1px solid var(--line-strong);
-  border-inline-start: 4px solid var(--blue);
+  border: 1px solid color-mix(in srgb, var(--blue) 38%, transparent);
+  box-shadow: var(--elev-1);
   border-radius: var(--radius);
   background: var(--surface-3);
 }
@@ -951,7 +969,8 @@
   display: grid;
   gap: 3px;
   padding: var(--s3) var(--s4);
-  border-inline-start: 3px solid var(--red);
+  border: 1px solid color-mix(in srgb, var(--red) 34%, transparent);
+  box-shadow: var(--elev-1);
   border-radius: var(--radius);
   background: var(--surface-3);
 }
@@ -994,7 +1013,7 @@
 }
 
 .ded-opfor-indicators span {
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 11px;
   color: var(--muted);
 }
@@ -1014,8 +1033,9 @@
 }
 
 .ded-opfor-phase.current {
-  border-color: var(--red);
-  box-shadow: inset 3px 0 0 var(--red);
+  border-color: color-mix(in srgb, var(--red) 52%, transparent);
+  background: var(--surface-2);
+  box-shadow: var(--elev-2);
 }
 
 .ded-opfor-phase-head {
@@ -1032,7 +1052,7 @@
 }
 
 .ded-opfor-phase-head small {
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   color: var(--muted);
   white-space: nowrap;
 }
@@ -1079,7 +1099,8 @@
   display: grid;
   gap: var(--s3);
   padding: var(--s3) var(--s4);
-  border-inline-start: 3px solid var(--red);
+  border: 1px solid color-mix(in srgb, var(--red) 34%, transparent);
+  box-shadow: var(--elev-1);
   border-radius: var(--radius);
   background: var(--surface-3);
 }
@@ -1101,7 +1122,7 @@
 .ded-advplan-withheld {
   margin: 0;
   padding: var(--s3) var(--s4);
-  border-inline-start: 3px solid var(--muted);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-3);
   color: var(--muted);

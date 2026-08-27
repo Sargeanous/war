@@ -2,7 +2,6 @@ import {
   Activity,
   BarChart3,
   BrainCircuit,
-  Clock,
   FileCheck2,
   ListChecks,
   MapPinned,
@@ -354,10 +353,9 @@ export default function Assessment({ notify, goTo }: PageProps) {
               title="Replay"
               action={
                 <span className="sim-clock">
-                  <Clock size={14} />
                   {simClock(snapshot.simTimeH)}
                   <small>
-                    frame {frame + 1}/{replay.snapshots.length}
+                    frame {frame + 1} of {replay.snapshots.length}
                   </small>
                 </span>
               }

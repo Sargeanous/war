@@ -1,6 +1,9 @@
 /* Intel page styles, every class carries the intel- prefix. */
 
+/* The console is one screen height minus the shell chrome: the inbox and the
+   investigation panel are both pinned to it so each scrolls inside itself. */
 .intel-console {
+  --intel-h: clamp(560px, calc(100vh - 232px), 900px);
   /* The rail and the investigation column are pinned to the map height so each
      zone scrolls inside itself instead of stretching the row. */
   --intel-h: 588px;
@@ -169,7 +172,7 @@
   justify-items: end;
   gap: 1px;
   color: var(--ink);
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--mono);
   font-size: 15px;
   font-weight: 800;
 }
@@ -256,7 +259,7 @@
 .intel-card-time {
   margin-inline-start: auto;
   color: var(--muted);
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--mono);
   font-size: var(--t-kicker);
 }
 
@@ -719,7 +722,10 @@
 }
 
 @media (max-width: 1320px) {
-  .intel-console {
+  /* The console is one screen height minus the shell chrome: the inbox and the
+   investigation panel are both pinned to it so each scrolls inside itself. */
+.intel-console {
+  --intel-h: clamp(560px, calc(100vh - 232px), 900px);
     grid-template-columns: 250px minmax(0, 1fr);
   }
 
@@ -729,7 +735,10 @@
 }
 
 @media (max-width: 900px) {
-  .intel-console {
+  /* The console is one screen height minus the shell chrome: the inbox and the
+   investigation panel are both pinned to it so each scrolls inside itself. */
+.intel-console {
+  --intel-h: clamp(560px, calc(100vh - 232px), 900px);
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -801,7 +810,7 @@
   gap: var(--s2);
   padding: var(--s3) var(--s4);
   border: 1px solid var(--line);
-  border-inline-start: 3px solid var(--muted);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-3);
   min-width: 0;
@@ -822,7 +831,7 @@
 }
 
 .intel-pir-number {
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 10.5px;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -866,7 +875,7 @@
 }
 
 .intel-pir-letter {
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 11px;
   font-weight: 800;
   color: var(--ink);
@@ -878,7 +887,7 @@
   border-radius: 999px;
   background: none;
   color: var(--ink-2);
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -922,7 +931,8 @@
   gap: 3px;
   margin: 0;
   padding: var(--s2) var(--s3);
-  border-inline-start: 3px solid var(--amber);
+  border: 1px solid color-mix(in srgb, var(--amber) 36%, transparent);
+  box-shadow: var(--elev-1);
   border-radius: var(--radius);
   background: var(--surface-3);
   color: var(--ink-2);

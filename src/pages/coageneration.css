@@ -279,7 +279,7 @@
 
 .coa-analysis-ms {
   color: var(--muted);
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--mono);
   font-size: 10.5px;
   text-align: end;
 }
@@ -289,7 +289,8 @@
   gap: 2px;
   padding: 8px 11px;
   border: 1px solid var(--line-strong);
-  border-inline-start: 4px solid var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 32%, transparent);
+  box-shadow: var(--elev-1);
   border-radius: var(--radius);
   background: var(--primary-soft);
 }
@@ -304,7 +305,7 @@
 
 .coa-projection strong {
   font-size: 12px;
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--mono);
 }
 
 @media (max-width: 900px) {

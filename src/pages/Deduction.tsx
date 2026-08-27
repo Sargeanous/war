@@ -3,7 +3,6 @@ import {
   BrainCircuit,
   CheckCircle2,
   ChevronLeft,
-  Clock,
   ListChecks,
   PanelLeftClose,
   PanelLeftOpen,
@@ -476,11 +475,10 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
           Runs
         </button>
         <div className="ded-phase-banner">
-          <strong>
-            R{round} - {phaseName}
-          </strong>
-          <span>
-            <Clock size={12} style={{ verticalAlign: "-2px" }} /> {simClock(simTimeH)} | tick {run.clock.tick}
+          <span className="k">Exercise clock</span>
+          <strong className="v">{simClock(simTimeH)}</strong>
+          <span className="m">
+            R{round} | {phaseName} | tick {run.clock.tick}
           </span>
         </div>
         {env ? (

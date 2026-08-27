@@ -298,7 +298,7 @@ button.sd-danger:hover {
   display: block;
   margin-top: 2px;
   color: var(--muted);
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.03em;
 }
@@ -327,7 +327,8 @@ button.sd-danger:hover {
   gap: 8px;
   margin: 0;
   padding: 11px 13px;
-  border-inline-start: 4px solid var(--blue);
+  border: 1px solid color-mix(in srgb, var(--blue) 32%, transparent);
+  box-shadow: var(--elev-1);
   border-radius: var(--radius);
   background: var(--blue-soft);
   color: var(--ink-2);
@@ -379,7 +380,7 @@ button.sd-danger:hover {
 
 .sd-opord-text {
   width: 100%;
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--mono);
   font-size: 12px;
   line-height: 1.5;
 }
