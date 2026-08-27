@@ -729,7 +729,8 @@
 }
 
 .ded-adj-card.hit {
-  border-inline-start-color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 34%, transparent);
+  background: color-mix(in srgb, var(--red) 7%, var(--surface-3));
 }
 
 .ded-adj-card header {

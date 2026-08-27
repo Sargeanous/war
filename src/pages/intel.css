@@ -805,23 +805,33 @@
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
 }
 
+/* A requirement sits on the table as a card: soft corners, its own edge and a
+   shadow under it. Its state is a fraction, so it is drawn as one. */
 .intel-pir-card {
   display: grid;
   gap: var(--s2);
-  padding: var(--s3) var(--s4);
+  padding: var(--s4);
   border: 1px solid var(--line);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-3);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--elev-1);
   min-width: 0;
 }
 
-.intel-pir-card.developing {
-  border-inline-start-color: var(--amber);
+/* How far this question has actually got. Two pixels of real measurement in
+   place of a coloured bar standing in for a category. */
+.intel-pir-progress {
+  height: 2px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--ink) 11%, transparent);
+  overflow: hidden;
 }
 
-.intel-pir-card.answered {
-  border-inline-start-color: var(--green, #2e7d32);
+.intel-pir-progress i {
+  display: block;
+  height: 100%;
+  border-radius: 1px;
+  background: var(--primary);
 }
 
 .intel-pir-question {
@@ -860,10 +870,11 @@
 .intel-pir-ind {
   display: grid;
   gap: 3px;
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
+  padding: var(--s3);
+  border: 1px solid transparent;
   border-radius: var(--radius);
-  background: var(--surface);
+  background: var(--surface-3);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
   min-width: 0;
 }
 
@@ -942,7 +953,7 @@
 }
 
 .intel-anchor.none {
-  border-inline-start-color: var(--muted);
+  border-color: var(--line);
   color: var(--muted);
   font-style: italic;
 }

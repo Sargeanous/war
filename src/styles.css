@@ -457,24 +457,39 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+/* The tone is a judgement about the value, so it colours the value. The card
+   takes a whisper of the same hue so a row of metrics still groups at a glance,
+   and nothing wears a bar across its head. */
+.metric.tone-good strong {
+  color: var(--primary);
+}
+
 .metric.tone-good {
-  border-top: 4px solid var(--primary);
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+
+.metric.tone-warn strong {
+  color: var(--amber);
 }
 
 .metric.tone-warn {
-  border-top: 4px solid var(--amber);
+  background: color-mix(in srgb, var(--amber) 7%, var(--surface));
+}
+
+.metric.tone-danger strong {
+  color: var(--red);
 }
 
 .metric.tone-danger {
-  border-top: 4px solid var(--red);
+  background: color-mix(in srgb, var(--red) 7%, var(--surface));
+}
+
+.metric.tone-info strong {
+  color: var(--blue);
 }
 
 .metric.tone-info {
-  border-top: 4px solid var(--blue);
-}
-
-.metric.tone-neutral {
-  border-top: 4px solid var(--line-strong);
+  background: color-mix(in srgb, var(--blue) 6%, var(--surface));
 }
 
 .split-grid {
@@ -1261,66 +1276,6 @@ select:focus {
     bottom: 12px;
     width: calc(100vw - 24px);
   }
-}
-
-/* ============================ Asset digital twin (3D) ============================ */
-.twin-wrap {
-  display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 16px;
-}
-.twin-layout-toggle button.active {
-  background: var(--primary, #2563eb);
-  color: #fff;
-}
-
-/* compact screen-space hover pill */
-.twin-tip {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 4px 9px; border-radius: 999px;
-  background: rgba(255, 255, 255, 0.97); border: 1px solid #dbe3ea;
-  box-shadow: 0 4px 12px rgba(15, 30, 50, 0.18);
-  font-family: inherit; white-space: nowrap; line-height: 1;
-  transform: translateY(-16px);
-}
-
-/* floating click-to-open detail window over the 3D stage */
-.twin-window {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  width: 300px;
-  max-width: calc(100% - 28px);
-  z-index: 40;
-  padding: 13px 14px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.98);
-  border: 1px solid #dbe3ea;
-  border-top: 4px solid var(--muted-2, #94a3b8);
-  box-shadow: 0 16px 40px rgba(15, 30, 50, 0.28);
-  backdrop-filter: blur(4px);
-}
-
-/* active-issues list in the side panel */
-.twin-issues { display: flex; flex-direction: column; gap: 6px; }
-.twin-issue.active { border-color: var(--primary, #2563eb); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18); }
-
-/* clicked-component detail card */
-.twin-detail.selected { border-left-color: var(--primary, #2563eb); background: #eef4ff; }
-.twin-detail.selected.tone-fault { border-left-color: #d43f35; }
-.twin-detail.selected.tone-degrading { border-left-color: #d98a10; }
-.twin-detail-issue.muted { color: #64748b; font-weight: 500; }
-.twin-summary .warn { background: #fdf3e2; color: #8a5a08; }
-.twin-summary .ok { color: var(--muted, #64748b); }
-.twin-part.active { border-color: var(--primary, #2563eb); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18); }
-.twin-detail.muted { color: var(--muted, #64748b); font-size: 12.5px; border-left-color: transparent; }
-
-/* Rich component inspection panel */
-.twin-photo { width: 100%; height: 96px; object-fit: cover; border-radius: 7px; margin-bottom: 6px; background: #e6ecf1; }
-
-@media (max-width: 900px) {
-  .twin-wrap { grid-template-columns: 1fr; }
-  .twin-stage { min-height: 340px; }
 }
 
 /* MediaGPT chat: live-answer badge + thinking state */
@@ -2293,21 +2248,14 @@ th {
 
 .ded-sage-quote,
 .ded-sage-answer {
-  border-inline-start-color: var(--line);
   background: color-mix(in srgb, var(--blue) 7%, var(--surface-3));
 }
 
 .coa-projection {
-  border-inline-start-color: var(--line);
   background: color-mix(in srgb, var(--primary) 8%, var(--surface-3));
 }
 
-.ded-adj-card {
-  border-inline-start-color: var(--line);
-}
-
 .ded-adj-card.hit {
-  border-inline-start-color: var(--line);
   background: color-mix(in srgb, var(--red) 7%, var(--surface-3));
 }
 

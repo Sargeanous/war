@@ -276,6 +276,9 @@ function RequirementsBanner({
                 <span className="intel-pir-number">PIR {pir.number}</span>
                 <strong>{pir.question}</strong>
               </div>
+              <div className="intel-pir-progress" aria-hidden="true">
+                <i style={{ width: `${pir.total ? (pir.answered / pir.total) * 100 : 0}%` }} />
+              </div>
               <p className="intel-pir-decision">Feeds the decision: {pir.decision}</p>
               <div className="intel-pir-indicators">
                 {pir.indicators.map((indicator) => {
