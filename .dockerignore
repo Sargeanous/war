@@ -1,0 +1,32 @@
+# Keep the build context small and keep secrets out of it.
+#
+# .env is the important line. It holds live API keys, it is gitignored, and it must
+# never reach the image. Keys are supplied at run time as environment variables.
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+node_modules
+dist
+
+# Local runtime state. The container starts from the seed and persists into its own
+# volume; copying a developer's exercise state into the image would be confusing.
+server/state.json
+logs
+tmp
+*.log
+
+# Not part of the product: the client deck, its renders and its toolchain.
+slide-canvas
+
+# Editor and OS noise
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Documentation that does not need to be in the build context
+*.md
+!README.md

@@ -56,7 +56,12 @@ import {
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(SERVER_DIR, "..");
-const STATE_PATH = path.join(SERVER_DIR, "state.json");
+// Where the exercise is persisted. It sits beside the server in development, and a
+// packaged deployment points WAR_STATE_PATH at a mounted volume so a restart does not
+// throw the running exercise away. See DEPLOY.md.
+const STATE_PATH = process.env.WAR_STATE_PATH
+  ? path.resolve(process.env.WAR_STATE_PATH)
+  : path.join(SERVER_DIR, "state.json");
 const MAX_BODY_BYTES = 1024 * 1024;
 const HISTORICAL_TICK_CAP = 20000;
 const ACTIVE_RUN_STATUSES = ["initializing", "running", "awaiting-decision", "paused"];
@@ -170,6 +175,7 @@ let stateDirty = false;
 function persistNow() {
   if (!state) return;
   try {
+    fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
     fs.writeFileSync(STATE_PATH, JSON.stringify(state));
     stateDirty = false;
   } catch (err) {
@@ -3515,6 +3521,62 @@ function sendJson(res, status, payload) {
   res.end(text);
 }
 
+// ---------------------------------------------------------------------------
+// Static front end, for packaged deployments
+// ---------------------------------------------------------------------------
+// In development Vite serves the front end on its own port and proxies /api here,
+// so none of this runs. In a container there is one process and one port: the API
+// answers first, and anything it does not claim falls through to the built assets.
+
+const WEB_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "dist");
+
+const MIME = {
+  ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+  ".webp": "image/webp", ".ico": "image/x-icon", ".woff": "font/woff", ".woff2": "font/woff2",
+  ".map": "application/json; charset=utf-8", ".txt": "text/plain; charset=utf-8",
+};
+
+async function serveStatic(pathname, res) {
+  let rel = decodeURIComponent(pathname);
+  // Never let a request climb out of the web root. Resolve first, then check the
+  // result is still inside it, which also covers encoded and Windows separators.
+  const candidate = path.resolve(WEB_ROOT, "." + (rel === "/" ? "/index.html" : rel));
+  if (candidate !== WEB_ROOT && !candidate.startsWith(WEB_ROOT + path.sep)) return false;
+
+  let file = candidate;
+  let stat = await fs.promises.stat(file).catch(() => null);
+  if (stat && stat.isDirectory()) {
+    file = path.join(file, "index.html");
+    stat = await fs.promises.stat(file).catch(() => null);
+  }
+  // Single-page app: an unknown path that is not asking for a file is a client
+  // route, so hand back the shell and let the router deal with it.
+  if (!stat && !path.extname(candidate)) {
+    file = path.join(WEB_ROOT, "index.html");
+    stat = await fs.promises.stat(file).catch(() => null);
+  }
+  if (!stat || !stat.isFile()) return false;
+
+  const ext = path.extname(file).toLowerCase();
+  const immutable = file.includes(`${path.sep}assets${path.sep}`);
+  res.writeHead(200, {
+    "Content-Type": MIME[ext] || "application/octet-stream",
+    "Content-Length": stat.size,
+    // Vite fingerprints everything under assets/, so those are safe to cache hard.
+    // index.html must not be, or a deployment ships and nobody sees it.
+    "Cache-Control": immutable ? "public, max-age=31536000, immutable" : "no-cache",
+  });
+  await new Promise((resolve, reject) => {
+    const stream = fs.createReadStream(file);
+    stream.on("error", reject);
+    stream.on("end", resolve);
+    stream.pipe(res, { end: true });
+  });
+  return true;
+}
+
 const server = http.createServer(async (req, res) => {
   let pathname = "/";
   let query = new URLSearchParams();
@@ -3537,6 +3599,11 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, payload);
       return;
     }
+    // Nothing in the API matched. In a packaged deployment this process also serves
+    // the built front end, so the request is handed to the static handler before it
+    // is called a 404. In development the front end is served by Vite instead and
+    // dist/ does not exist, so this is a no-op and the 404 stands.
+    if (req.method === "GET" && (await serveStatic(pathname, res))) return;
     sendJson(res, 404, { error: `No route for ${req.method} ${pathname}.` });
   } catch (err) {
     const status = err && Number.isInteger(err.status) ? err.status : 500;

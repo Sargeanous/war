@@ -1,0 +1,42 @@
+# SANDTABLE, single service.
+#
+#   docker compose up -d --build
+#   open http://localhost:5189
+#
+# The app and the API are served by the same process on the same port, so there is
+# nothing else to start and no proxy to configure.
+
+services:
+  sandtable:
+    build: .
+    image: sandtable:latest
+    container_name: sandtable
+    restart: unless-stopped
+    ports:
+      # Change the left side to move the published port. The right side is fixed.
+      - "5189:5189"
+    environment:
+      # The exercise assistant. With no key the platform still runs: answers are
+      # composed deterministically from the actual run state instead of the model.
+      # Supply a key only if you want the live model, and pass it from the host
+      # environment or a secret store rather than writing it in this file.
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      ANTHROPIC_MODEL: "${ANTHROPIC_MODEL:-claude-opus-5}"
+      WAR_STATE_PATH: /data/state.json
+    volumes:
+      # Keeps the running exercise across restarts. Remove this line and every
+      # restart begins again from the seed.
+      - sandtable-state:/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:5189/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+
+volumes:
+  sandtable-state:

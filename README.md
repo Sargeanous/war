@@ -1,7 +1,11 @@
 # SANDTABLE
 
+> **Deploying this?** Read [DEPLOY.md](DEPLOY.md) first. It covers the container
+> build, configuration, state persistence, and one thing you must know before you put
+> it on a network: the platform has no authentication.
+
 Standalone localhost demo of a **Scenario Simulation & Strategic Planning** wargame
-platform — scenario simulation from mission decomposition to assessment, run by AI
+platform. Scenario simulation from mission decomposition to assessment, run by AI
 agents, decided by commanders. Mirrors the DOOH platform layout (Vite + React frontend,
 plain Node backend, JSON state persistence).
 

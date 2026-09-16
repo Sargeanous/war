@@ -4,3 +4,11 @@ server/state.json
 .env
 logs
 tmp
+
+# Client deck and its toolchain. Collateral, not product code, and 92 MB of it.
+# Kept out of the repo the tech team clones to deploy. Delete this line if you
+# want it versioned here instead.
+slide-canvas/
+
+# Stray logs from local agent tooling
+.codex-dev.*.log
