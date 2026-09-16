@@ -11,14 +11,17 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 
-# Dependencies first, so a source-only change does not reinstall the world.
-COPY package.json package-lock.json* ./
-RUN npm ci
+# The project is on pnpm and pnpm-lock.yaml is committed, so the build installs from
+# that lockfile rather than resolving fresh. corepack ships with the node image and
+# pins the version recorded in package.json.
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 COPY . .
-# Type check and bundle. `npm run build` runs tsc --noEmit and then vite build, so a
-# type error fails the image rather than shipping.
-RUN npm run build
+# Type check and bundle. `build` runs tsc --noEmit and then vite build, so a type
+# error fails the image rather than shipping.
+RUN pnpm run build
 
 # ---------------------------------------------------------------- runtime stage
 FROM node:22-alpine AS runtime
