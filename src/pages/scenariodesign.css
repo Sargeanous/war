@@ -98,19 +98,19 @@
 
 .zone-list button.sd-scn-row small {
   margin-top: 2px;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
 .zone-list button.sd-scn-row em {
   width: 26px;
   height: 26px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .zone-list button.sd-scn-row .status-pill {
   padding: 2px 7px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 @media (max-width: 1180px) {
@@ -126,8 +126,9 @@
 }
 
 button.sd-scn-selected.sd-scn-selected {
-  border-color: var(--primary);
-  background: var(--primary-soft);
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--ink) 5%, var(--surface));
+  box-shadow: inset 2px 0 0 var(--ink-2);
 }
 
 .sd-stack {
@@ -145,6 +146,139 @@ button.sd-scn-selected.sd-scn-selected {
   margin: 0 0 12px;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.sd-artifact-control {
+  display: grid;
+  gap: 9px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-3);
+}
+
+.sd-artifact-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sd-artifact-facts > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sd-artifact-facts span,
+.sd-control-notice strong {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.sd-artifact-facts strong {
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.sd-artifact-facts > div:nth-child(3) strong {
+  font-family: var(--mono);
+}
+
+.sd-lifecycle {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+}
+
+.sd-lifecycle span {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sd-lifecycle span:not(:last-child)::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  min-width: 8px;
+  margin-inline: 3px 8px;
+  background: var(--line-strong);
+}
+
+.sd-lifecycle i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+}
+
+.sd-lifecycle span.is-complete,
+.sd-lifecycle span.is-current {
+  color: var(--ink);
+}
+
+.sd-lifecycle span.is-complete i,
+.sd-lifecycle span.is-current i {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.sd-lifecycle span.is-current {
+  font-weight: 800;
+}
+
+.sd-control-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 9px 11px;
+  border-inline-start: 3px solid var(--blue);
+  border-block: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.sd-control-notice.is-locked {
+  border-inline-start-color: var(--amber);
+}
+
+.sd-control-notice > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sd-control-notice > div > span {
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sd-readonly-hint {
+  max-width: none;
+  padding: 8px 11px;
+  border-inline-start: 3px solid var(--line-strong);
+  background: var(--surface-3);
+}
+
+.sd-readonly-form :disabled {
+  opacity: 0.76;
+  cursor: default;
 }
 
 .sd-meta-grid {
@@ -186,8 +320,8 @@ button.sd-scn-selected.sd-scn-selected {
 .sd-palette-head {
   padding-top: 6px;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 900;
+  font-size: 12px;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.07em;
 }
@@ -424,7 +558,7 @@ button.sd-danger:hover {
   margin-top: 2px;
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.03em;
 }
 
@@ -472,6 +606,24 @@ button.sd-danger:hover {
 }
 
 @media (max-width: 860px) {
+  .sd-artifact-facts,
+  .sd-lifecycle {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sd-lifecycle {
+    gap: 8px 12px;
+  }
+
+  .sd-lifecycle span::after {
+    display: none;
+  }
+
+  .sd-control-notice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .sd-palette-group {
     grid-template-columns: 1fr;
   }
@@ -548,8 +700,8 @@ button.sd-danger:hover {
 
 .sd-opord-sidehead {
   margin: 0;
-  font-size: 11px;
-  font-weight: 900;
+  font-size: 12px;
+  font-weight: 800;
   letter-spacing: 0.08em;
   color: var(--muted);
 }

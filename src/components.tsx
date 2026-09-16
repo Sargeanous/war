@@ -26,12 +26,10 @@ export function Metric({ label, value, helper, tone }: { label: string; value: s
 }
 
 export function Panel({
-  icon: Icon,
   title,
   action,
   children,
 }: {
-  icon: LucideIcon;
   title: string;
   action?: ReactNode;
   children: ReactNode;
@@ -40,9 +38,6 @@ export function Panel({
     <section className="panel">
       <header className="panel-header">
         <div>
-          <span className="panel-icon">
-            <Icon size={18} />
-          </span>
           <h2>{title}</h2>
         </div>
         {action ? <div className="panel-action">{action}</div> : null}
@@ -195,10 +190,9 @@ export function Toast({ children }: { children: ReactNode }) {
   return <div className="toast">{children}</div>;
 }
 
-export function EmptyState({ icon: Icon, title, hint }: { icon: LucideIcon; title: string; hint: string }) {
+export function EmptyState({ title, hint }: { icon?: LucideIcon; title: string; hint: string }) {
   return (
     <div className="empty-state">
-      <Icon size={28} />
       <strong>{title}</strong>
       <small>{hint}</small>
     </div>

@@ -86,8 +86,9 @@
 }
 
 .fnd-tree-row.active {
-  border-color: var(--primary);
-  background: var(--primary-soft);
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--ink) 5%, var(--surface));
+  box-shadow: inset 2px 0 0 var(--ink-2);
 }
 
 .fnd-tree-row strong {

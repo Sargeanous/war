@@ -1,14 +1,10 @@
 import {
   Activity,
   BarChart3,
-  BrainCircuit,
   FileCheck2,
   ListChecks,
-  MapPinned,
   Pause,
   Play,
-  Split,
-  Target,
   FileText,
   Rewind,
 } from "lucide-react";
@@ -62,12 +58,12 @@ const errMsg = (error: unknown) => (error instanceof ApiError ? error.message : 
 
 const dimTone = (score: number) => (score >= 75 ? "var(--primary)" : score >= 50 ? "var(--blue)" : score >= 35 ? "var(--amber)" : "var(--red)");
 
-export default function Assessment({ notify, goTo }: PageProps) {
+export default function Assessment({ notify, goTo, profile }: PageProps) {
   const [boot, setBoot] = useState<Bootstrap | null>(null);
   const [runs, setRuns] = useState<RunSummary[]>([]);
-  const [runId, setRunId] = useState("");
+  const [runId, setRunId] = useState(() => new URLSearchParams(window.location.search).get("run") ?? "");
   const [assessments, setAssessments] = useState<AssessmentRecord[]>([]);
-  const [branchId, setBranchId] = useState("");
+  const [branchId, setBranchId] = useState(() => new URLSearchParams(window.location.search).get("branch") ?? "");
   const [replay, setReplay] = useState<ReplayData | null>(null);
   const [frame, setFrame] = useState(0);
   const [report, setReport] = useState<RunReport | null>(null);
@@ -77,11 +73,14 @@ export default function Assessment({ notify, goTo }: PageProps) {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const playTimer = useRef<number | undefined>(undefined);
+  const replaySection = useRef<HTMLDivElement | null>(null);
+  const reportSection = useRef<HTMLDivElement | null>(null);
 
   const completedRuns = useMemo(() => runs.filter((r) => r.status === "completed"), [runs]);
   const run = completedRuns.find((r) => r.id === runId);
   const runAssessments = assessments.filter((a) => a.runId === runId);
   const assessment = runAssessments.find((a) => a.branchId === branchId) ?? runAssessments[0];
+  const canForkReplay = profile.id === "operator";
 
   useEffect(() => {
     let alive = true;
@@ -91,7 +90,10 @@ export default function Assessment({ notify, goTo }: PageProps) {
         setBoot(b);
         setRuns(r);
         const done = r.filter((x) => x.status === "completed");
-        if (done.length) setRunId(done[done.length - 1].id);
+        const requestedRunId = new URLSearchParams(window.location.search).get("run");
+        const requested = done.find((item) => item.id === requestedRunId);
+        if (requested) setRunId(requested.id);
+        else if (done.length) setRunId(done[done.length - 1].id);
         setLoading(false);
       })
       .catch((error) => {
@@ -109,11 +111,12 @@ export default function Assessment({ notify, goTo }: PageProps) {
   useEffect(() => {
     if (!runId) return;
     let alive = true;
+    setReport(null);
     fetchAssessments(runId)
       .then((data) => {
         if (!alive) return;
         setAssessments((list) => [...list.filter((a) => a.runId !== runId), ...data]);
-        if (data.length) setBranchId(data[0].branchId);
+        if (data.length) setBranchId((current) => data.some((item) => item.branchId === current) ? current : data[0].branchId);
       })
       .catch((error) => alive && notify(errMsg(error)));
     return () => {
@@ -121,6 +124,15 @@ export default function Assessment({ notify, goTo }: PageProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId]);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (runId) url.searchParams.set("run", runId);
+    else url.searchParams.delete("run");
+    if (runId && branchId) url.searchParams.set("branch", branchId);
+    else url.searchParams.delete("branch");
+    window.history.replaceState({}, "", url);
+  }, [branchId, runId]);
 
   // Replay data per branch
   useEffect(() => {
@@ -202,12 +214,15 @@ export default function Assessment({ notify, goTo }: PageProps) {
     }
     setGenerating(false);
   }
-  async function handleGenerateReport() {
+  async function handleGenerateReport(focusReport = false) {
     if (!runId || reporting) return;
     setReporting(true);
     try {
       const next = await generateReport(runId);
       setReport(next);
+      if (focusReport) {
+        window.requestAnimationFrame(() => reportSection.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+      }
       notify(
         next.source === "anthropic"
           ? "After-action report written by the reasoning service"
@@ -222,12 +237,20 @@ export default function Assessment({ notify, goTo }: PageProps) {
 
   async function handleResume() {
     if (!runId || !branchId || !snapshot || resuming) return;
+    if (!canForkReplay) {
+      notify(`Replay fork requested from Simulation Control at T+${Math.round(snapshot.simTimeH)}h`);
+      return;
+    }
+    if (!window.confirm(`Fork ${assessment?.branchName ?? "this branch"} from T+${Math.round(snapshot.simTimeH)}h? A new live run will be created; the source replay remains unchanged.`)) return;
     setResuming(true);
     try {
       const next = await resumeFromBreakpoint(runId, branchId, snapshot.tick, 4);
       notify(`Forked a live run from T+${Math.round(snapshot.simTimeH)}h, opening the war room`);
+      const url = new URL(window.location.href);
+      url.searchParams.set("run", next.id);
+      if (next.branches[0]?.id) url.searchParams.set("branch", next.branches[0].id);
+      window.history.replaceState({}, "", url);
       goTo("deduction");
-      void next;
     } catch (e) {
       notify(errMsg(e));
     } finally {
@@ -295,25 +318,62 @@ export default function Assessment({ notify, goTo }: PageProps) {
             <Metric label="Verdict" value={assessment.verdict.replace("-", " ")} helper="Weighted across 5 dimensions" tone={statusTone(assessment.verdict)} />
             <Metric label="Loss exchange" value={`${assessment.lossExchangeRatio.toFixed(1)} : 1`} helper="RED losses per BLUE loss" tone={assessment.lossExchangeRatio >= 2 ? "good" : "warn"} />
             <Metric
-              label="Decisions"
-              value={`${assessment.decisionStats.followedAi}/${assessment.decisionStats.total} with AI`}
-              helper={plural(assessment.decisionStats.overridden, "commander override")}
+              label="Command decisions"
+              value={`${assessment.decisionStats.total}`}
+              helper={`AI recommendation followed ${assessment.decisionStats.followedAi}/${assessment.decisionStats.total} · ${plural(
+                assessment.decisionStats.overridden,
+                "human override"
+              )}`}
               tone="info"
             />
           </MetricGrid>
 
+          <div className="asm-command-bar" aria-label="Assessment basis and outcome actions">
+            <div className="asm-decision-basis">
+              <span>Decision-quality basis</span>
+              <strong>Intent, available evidence, operational outcome and counterfactual alternatives</strong>
+              <small>Agreement with SAGE is recorded for audit, but it does not improve the decision-quality score.</small>
+            </div>
+            <ActionRow>
+              {replay && snapshot && scenario ? (
+                <Button
+                  icon={Play}
+                  variant="secondary"
+                  onClick={() => replaySection.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                >
+                  Review replay
+                </Button>
+              ) : null}
+              <Button
+                icon={FileText}
+                onClick={() =>
+                  report
+                    ? reportSection.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+                    : handleGenerateReport(true)
+                }
+                disabled={reporting || !runId}
+              >
+                {reporting ? "Writing report…" : report ? "Open report" : "Generate report"}
+              </Button>
+            </ActionRow>
+          </div>
+
           <div className="split-grid equal">
-            <Panel icon={BarChart3} title="Assessment dimensions">
+            <Panel title="Assessment dimensions">
               <div className="detail-stack">
                 {assessment.dimensions.map((dim) => (
                   <div key={dim.name}>
                     <BarRow label={`${dim.name} (${Math.round(dim.weight * 100)}%)`} value={dim.score} max={100} color={dimTone(dim.score)} />
-                    <small style={{ color: "var(--muted)", fontSize: 12 }}>{dim.detail}</small>
+                    <small style={{ color: "var(--muted)", fontSize: 12 }}>
+                      {dim.name.toLowerCase().includes("decision quality")
+                        ? `Scored against intent, evidence available at the time, operational outcome and counterfactual alternatives. SAGE agreement ${assessment.decisionStats.followedAi}/${assessment.decisionStats.total} recorded for audit.`
+                        : dim.detail}
+                    </small>
                   </div>
                 ))}
               </div>
             </Panel>
-            <Panel icon={Target} title="Objective results">
+            <Panel title="Objective results">
               <CompactTable
                 columns={["Objective", "Result", "Completion"]}
                 rows={assessment.objectiveResults.map((obj) => [
@@ -336,87 +396,102 @@ export default function Assessment({ notify, goTo }: PageProps) {
             </Panel>
           </div>
 
-          <Panel icon={BrainCircuit} title="SAGE commentary & recommendations">
+          <Panel title="SAGE assessment note" action={<StatusPill label="advisory" tone="info" />}>
             <div className="detail-stack">
+              <div className="asm-sage-provenance">
+                <span>Grounded in</span>
+                <strong>
+                  {run?.label ?? "Completed run"} · {assessment.branchName}
+                </strong>
+                <small>Evidence basis: event ledger, objective results, force state and command decision record.</small>
+              </div>
               <p className="asm-commentary">{assessment.aiCommentary}</p>
               <ul className="asm-recs">
                 {assessment.recommendations.map((rec, i) => (
                   <li key={i}>{rec}</li>
                 ))}
               </ul>
+              <p className="asm-sage-authority">
+                SAGE informs interpretation. Command authority remains human, and the assessment does not reward agreement with the recommendation.
+              </p>
             </div>
           </Panel>
 
           {replay && snapshot && scenario ? (
-            <Panel
-              icon={MapPinned}
-              title="Replay"
-              action={
-                <span className="sim-clock">
-                  {simClock(snapshot.simTimeH)}
-                  <small>
-                    frame {frame + 1} of {replay.snapshots.length}
-                  </small>
-                </span>
-              }
-            >
-              <div className="detail-stack">
-                <div className="asm-replay-controls">
-                  <Button icon={playing ? Pause : Play} variant="secondary" onClick={() => setPlaying((p) => !p)}>
-                    {playing ? "Pause" : "Play"}
-                  </Button>
-                  <input
-                    type="range"
-                    min={0}
-                    max={Math.max(0, replay.snapshots.length - 1)}
-                    value={frame}
-                    onChange={(e) => {
-                      setPlaying(false);
-                      setFrame(Number(e.target.value));
-                    }}
-                  />
-                  <Tag label={`BLUE ${Math.round(snapshot.metrics.blueStrength)}%`} color={sideColors.blue} />
-                  <Tag label={`RED ${Math.round(snapshot.metrics.redStrength)}%`} color={sideColors.red} />
-                  <Tag label={`OBJ ${snapshot.metrics.objectiveScore}%`} />
-                  <Button
-                    icon={Rewind}
-                    variant="secondary"
-                    onClick={handleResume}
-                    disabled={resuming}
-                    title="Fork a live run from this moment and take a different decision path"
-                  >
-                    {resuming ? "Forking run…" : "Resume from here"}
-                  </Button>
-                </div>
-                <div className="split-grid wide-left">
-                  <TheaterMap
-                    center={scenario.mapCenter}
-                    zoom={scenario.mapZoom}
-                    units={replayUnits}
-                    theater={boot?.theater ?? []}
-                    objectives={scenario.objectives}
-                    worldKey={`replay:${runId}:${assessment?.branchId ?? ""}`}
-                    glideSpeed="fast"
-                    height={430}
-                  />
-                  <div className="asm-events">
-                    <ObjectList
-                      rows={snapshotEvents.map((event) => ({
-                        id: event.id,
-                        title: event.title,
-                        meta: `${simClock(event.simTimeH)} | ${event.detail}`,
-                        tone: eventTones[event.type] ?? "neutral",
-                        status: event.type,
-                      }))}
+            <div ref={replaySection} className="asm-section-anchor">
+              <Panel
+                title="Replay"
+                action={
+                  <span className="sim-clock">
+                    {simClock(snapshot.simTimeH)}
+                    <small>
+                      frame {frame + 1} of {replay.snapshots.length}
+                    </small>
+                  </span>
+                }
+              >
+                <div className="detail-stack">
+                  <div className="asm-replay-controls">
+                    <Button icon={playing ? Pause : Play} variant="secondary" onClick={() => setPlaying((p) => !p)}>
+                      {playing ? "Pause" : "Play"}
+                    </Button>
+                    <input
+                      type="range"
+                      min={0}
+                      max={Math.max(0, replay.snapshots.length - 1)}
+                      value={frame}
+                      onChange={(e) => {
+                        setPlaying(false);
+                        setFrame(Number(e.target.value));
+                      }}
                     />
+                    <Tag label={`BLUE ${Math.round(snapshot.metrics.blueStrength)}%`} color={sideColors.blue} />
+                    <Tag label={`RED ${Math.round(snapshot.metrics.redStrength)}%`} color={sideColors.red} />
+                    <Tag label={`OBJ ${snapshot.metrics.objectiveScore}%`} />
+                    <Button
+                      icon={Rewind}
+                      variant="secondary"
+                      onClick={handleResume}
+                      disabled={resuming}
+                      title={
+                        canForkReplay
+                          ? "Fork a live run from this moment and take a different decision path"
+                          : "Send this replay breakpoint to Simulation Control for authorization"
+                      }
+                    >
+                      {resuming ? "Forking run…" : canForkReplay ? "Resume from here" : "Request replay fork"}
+                    </Button>
+                  </div>
+                  <div className="split-grid wide-left">
+                    <TheaterMap
+                      center={scenario.mapCenter}
+                      zoom={scenario.mapZoom}
+                      units={replayUnits}
+                      theater={boot?.theater ?? []}
+                      objectives={scenario.objectives}
+                      worldKey={`replay:${runId}:${assessment?.branchId ?? ""}`}
+                      glideSpeed="fast"
+                      height={430}
+                    />
+                    <div className="asm-events">
+                      <ObjectList
+                        rows={snapshotEvents.map((event) => ({
+                          id: event.id,
+                          title: event.title,
+                          meta: `${simClock(event.simTimeH)} | ${event.detail}`,
+                          tone: eventTones[event.type] ?? "neutral",
+                          status: event.type,
+                        }))}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            </Panel>
+              </Panel>
+            </div>
           ) : null}
 
           {runAssessments.length > 1 ? (
-            <Panel icon={Split} title="Branch comparison">
+            <Panel title="Branch comparison">
               <div className="detail-stack">
                 <div className="asm-compare-radar">
                   <SvgRadar
@@ -461,25 +536,25 @@ export default function Assessment({ notify, goTo }: PageProps) {
         />
       )}
 
-      <Panel
-        icon={FileText}
-        title="After-action report"
-        action={
-          <ActionRow>
-            {report ? (
-              <Tag
-                label={report.source === "anthropic" ? "reasoning service" : "composed from figures"}
-                color={report.source === "anthropic" ? "var(--blue)" : undefined}
-              />
-            ) : null}
-            <Button icon={FileText} onClick={handleGenerateReport} disabled={reporting || !runId}>
-              {reporting ? "Writing report…" : report ? "Regenerate" : "Generate report"}
-            </Button>
-          </ActionRow>
-        }
-      >
-        {report ? (
-          <div className="asm-report">
+      <div ref={reportSection} className="asm-section-anchor">
+        <Panel
+          title="After-action report"
+          action={
+            <ActionRow>
+              {report ? (
+                <Tag
+                  label={report.source === "anthropic" ? "reasoning service" : "composed from figures"}
+                  color={report.source === "anthropic" ? "var(--blue)" : undefined}
+                />
+              ) : null}
+              <Button icon={FileText} onClick={() => handleGenerateReport()} disabled={reporting || !runId}>
+                {reporting ? "Writing report…" : report ? "Regenerate" : "Generate report"}
+              </Button>
+            </ActionRow>
+          }
+        >
+          {report ? (
+            <div className="asm-report">
             <header className="asm-report-head">
               <strong>{report.runLabel}</strong>
               <span>
@@ -497,7 +572,7 @@ export default function Assessment({ notify, goTo }: PageProps) {
                   <em>
                     OBJ {b.objectiveScore}% | BLUE {Math.round(b.blueStrength)}% | RED {Math.round(b.redStrength)}% | LER {b.lossExchange}:1 |
                     {" "}
-                    {b.decisionsFollowed}/{b.decisionsTotal} with AI
+                    AI recommendation followed {b.decisionsFollowed}/{b.decisionsTotal} | human overrides {Math.max(0, b.decisionsTotal - b.decisionsFollowed)}
                   </em>
                 </div>
               ))}
@@ -508,15 +583,16 @@ export default function Assessment({ notify, goTo }: PageProps) {
                 <p>{sec.body}</p>
               </section>
             ))}
-          </div>
-        ) : (
-          <EmptyState
-            icon={FileText}
-            title="No report generated yet"
-            hint="Generates a director-ready document from this run: verdicts per branch, the decision record, and observations with optimisation recommendations."
-          />
-        )}
-      </Panel>
+            </div>
+          ) : (
+            <EmptyState
+              icon={FileText}
+              title="No report generated yet"
+              hint="Generates a director-ready document from this run: verdicts per branch, the decision record, and observations with optimisation recommendations."
+            />
+          )}
+        </Panel>
+      </div>
     </div>
   );
 }

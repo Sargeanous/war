@@ -66,8 +66,9 @@
 }
 
 .intel-cue-row.active {
-  border-color: var(--primary);
-  background: var(--primary-soft);
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--ink) 5%, var(--surface));
+  box-shadow: inset 2px 0 0 var(--ink-2);
 }
 
 .intel-sev {
@@ -104,7 +105,7 @@
   border-radius: 999px;
   background: var(--surface-2);
   color: var(--ink-2);
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -112,7 +113,7 @@
 
 .intel-cue-row .status-pill {
   flex: none;
-  font-size: 9.5px;
+  font-size: 12px;
   letter-spacing: 0.05em;
 }
 
@@ -180,7 +181,7 @@
 .intel-conf small {
   color: var(--muted);
   font-family: inherit;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -236,16 +237,6 @@
   display: flex;
   align-items: center;
   gap: var(--s2);
-}
-
-.intel-card-icon {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
-  background: var(--surface-2);
-  color: var(--ink-2);
 }
 
 .intel-card-kicker {
@@ -407,8 +398,9 @@
 }
 
 .intel-entity.active {
-  border-color: var(--primary);
-  background: var(--primary-soft);
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--ink) 5%, var(--surface));
+  box-shadow: inset 2px 0 0 var(--ink-2);
 }
 
 .intel-aff {
@@ -842,7 +834,7 @@
 
 .intel-pir-number {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.1em;
   color: var(--muted);
@@ -857,7 +849,7 @@
 .intel-pir-decision {
   margin: 0;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.45;
   overflow-wrap: break-word;
 }
@@ -887,7 +879,7 @@
 
 .intel-pir-letter {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   color: var(--ink);
 }
@@ -899,7 +891,7 @@
   background: none;
   color: var(--ink-2);
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.05em;
   cursor: pointer;
@@ -914,7 +906,7 @@
 .intel-pir-ind p {
   margin: 0;
   color: var(--ink-2);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.45;
   overflow-wrap: break-word;
 }
@@ -947,7 +939,7 @@
   border-radius: var(--radius);
   background: var(--surface-3);
   color: var(--ink-2);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.45;
   overflow-wrap: break-word;
 }

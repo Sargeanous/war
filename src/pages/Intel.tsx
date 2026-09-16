@@ -5,11 +5,9 @@
 // cues. Every step that commits anything is signed by a person, never by a seat.
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import {
   AlertTriangle,
-  BrainCircuit,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -17,9 +15,7 @@ import {
   FileCheck,
   Inbox,
   Radar,
-  Radio,
   RefreshCw,
-  Rocket,
   Satellite,
   Send,
   ShieldCheck,
@@ -899,7 +895,6 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
               <div className="intel-transcript" ref={transcriptRef}>
                 <Card
                   kind="alert"
-                  icon={AlertTriangle}
                   kicker={`Pushed alert | ${originLabels[cue.origin]} | BASEER`}
                   time={timeAgo(cue.observedAt)}
                   records={recordsFor(cue, [cue.ingestHandoffId])}
@@ -928,7 +923,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
                   </DetailGrid>
                 </Card>
 
-                <Card kind="evidence" icon={Radio} kicker="Evidence, as received">
+                <Card kind="evidence" kicker="Evidence, as received">
                   <DetailGrid>
                     <Detail label="Sensor" value={cue.provenance.sensor} />
                     <Detail label="Detector" value={cue.provenance.detector} />
@@ -973,7 +968,6 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
                 {cue.assessment ? (
                   <Card
                     kind="assess"
-                    icon={BrainCircuit}
                     kicker="SAGE identification"
                     time={timeAgo(cue.assessment.atIso)}
                     records={recordsFor(cue, [cue.assessment.handoffId])}
@@ -994,7 +988,6 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
                   <Card
                     key={task.id}
                     kind={`task ${task.status}`}
-                    icon={Satellite}
                     kicker={`Collection order - ${task.taskingId}`}
                     time={timeAgo(task.requestedAt)}
                     records={taskRecords(cue, task)}
@@ -1064,7 +1057,6 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
                     ) : (
                       <Card
                         kind="answer"
-                        icon={BrainCircuit}
                         kicker="SAGE answer"
                         time={turn.answeredAt ? timeAgo(turn.answeredAt) : undefined}
                         records={turn.handoff ? [turn.handoff] : []}
@@ -1097,7 +1089,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
                     </p>
                     {canOpenScenario ? (
                       <ActionRow>
-                        <Button icon={Rocket} onClick={() => openGeneratedScenario(cue.scenarioId)}>
+                        <Button onClick={() => openGeneratedScenario(cue.scenarioId)}>
                           Open this scenario
                         </Button>
                       </ActionRow>
@@ -1144,7 +1136,6 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
                 <p className="intel-actionbar-hint">{ladderHint(cue)}</p>
                 <div className="intel-actionbar-row">
                   <Button
-                    icon={BrainCircuit}
                     variant={canIdentify ? "primary" : "secondary"}
                     onClick={doIdentify}
                     disabled={!canIdentify || locked}
@@ -1190,7 +1181,6 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
                     Confirm target
                   </Button>
                   <Button
-                    icon={Rocket}
                     variant={canSpawn ? "primary" : "secondary"}
                     onClick={() => {
                       setSigner(profile.name);
@@ -1340,7 +1330,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
           </p>
           <ActionRow>
             {signFor === "identify" ? (
-              <Button icon={BrainCircuit} onClick={doIdentify} disabled={busy !== null}>
+              <Button onClick={doIdentify} disabled={busy !== null}>
                 {busy === "identify" ? "Identifying" : "Identify contact"}
               </Button>
             ) : signFor === "confirm" ? (
@@ -1348,7 +1338,7 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
                 {busy === "confirm" ? "Confirming" : "Confirm target"}
               </Button>
             ) : (
-              <Button icon={Rocket} onClick={doSpawn} disabled={busy !== null}>
+              <Button onClick={doSpawn} disabled={busy !== null}>
                 {busy === "spawn" ? "Generating" : "Generate scenario"}
               </Button>
             )}
@@ -1392,14 +1382,12 @@ export default function Intel({ notify, goTo, profile }: PageProps) {
 
 function Card({
   kind,
-  icon: Icon,
   kicker,
   time,
   records,
   children,
 }: {
   kind: string;
-  icon: LucideIcon;
   kicker: string;
   time?: string;
   records?: HandoffRecord[];
@@ -1408,9 +1396,6 @@ function Card({
   return (
     <article className={`intel-card ${kind}`}>
       <header>
-        <span className="intel-card-icon">
-          <Icon size={13} />
-        </span>
         <span className="intel-card-kicker">{kicker}</span>
         {time ? <span className="intel-card-time">{time}</span> : null}
       </header>

@@ -8,9 +8,7 @@ import type { CSSProperties } from "react";
 import {
   AlertTriangle,
   Anchor,
-  CloudSun,
   Compass,
-  Crosshair,
   FileText,
   Map as MapIcon,
   Pencil,
@@ -113,6 +111,13 @@ const SEA_STATE_LABELS = [
   "9 - Phenomenal",
 ];
 
+const SCENARIO_STAGES: Array<{ status: Scenario["status"]; label: string }> = [
+  { status: "draft", label: "Draft" },
+  { status: "ready", label: "Validated" },
+  { status: "running", label: "In execution" },
+  { status: "completed", label: "Closed" },
+];
+
 // --- Pure helpers ---------------------------------------------------------------
 
 function errMsg(err: unknown): string {
@@ -121,6 +126,10 @@ function errMsg(err: unknown): string {
 
 function cloneScenario(scenario: Scenario): Scenario {
   return JSON.parse(JSON.stringify(scenario)) as Scenario;
+}
+
+function scenarioIsLocked(scenario: Scenario): boolean {
+  return scenario.status === "running" || scenario.status === "completed";
 }
 
 function kindLabel(kind: Objective["kind"]): string {
@@ -731,6 +740,7 @@ export default function ScenarioDesign(props: PageProps) {
   const [validation, setValidation] = useState<ValidationReport | null>(null);
   const [validating, setValidating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [forking, setForking] = useState(false);
 
   const aliveRef = useRef(true);
   useEffect(() => {
@@ -798,6 +808,7 @@ export default function ScenarioDesign(props: PageProps) {
   // --- Local mutation plumbing (explicit dirty state) -----------------------------
 
   const mutateWorking = (fn: (draft: Scenario) => void) => {
+    if (!working || scenarioIsLocked(working)) return;
     setWorking((prev) => {
       if (!prev) return prev;
       const draft = cloneScenario(prev);
@@ -954,7 +965,7 @@ export default function ScenarioDesign(props: PageProps) {
   };
 
   const handleSave = async () => {
-    if (!working || saving) return;
+    if (!working || saving || scenarioIsLocked(working)) return;
     setSaving(true);
     try {
       const saved = await updateScenario(working.id, working);
@@ -968,6 +979,36 @@ export default function ScenarioDesign(props: PageProps) {
       if (aliveRef.current) props.notify(errMsg(err));
     } finally {
       if (aliveRef.current) setSaving(false);
+    }
+  };
+
+  const handleForkScenario = async () => {
+    if (!working || forking) return;
+    setForking(true);
+    try {
+      const copyRoot = `${working.name} - Planning Copy`;
+      const copyNumber = scenarios.filter((scenario) => scenario.name.startsWith(copyRoot)).length + 1;
+      const created = await createScenario({
+        name: `${copyRoot} ${copyNumber}`,
+        codename: `${working.codename} REV ${copyNumber}`,
+        description: `Controlled planning revision derived from ${working.name}. The source baseline remains unchanged.`,
+        template: working.id,
+      });
+      if (!aliveRef.current) return;
+      setScenarios((prev) => [created, ...prev]);
+      setSelectedId(created.id);
+      setWorking(cloneScenario(created));
+      setDirty(false);
+      setValidation(null);
+      setSelectedUnitId(null);
+      setPlacementClassId(null);
+      setObjModal(null);
+      setTab("orbat");
+      props.notify(`Planning copy "${created.name}" created; the ${working.status} baseline remains locked`);
+    } catch (err) {
+      if (aliveRef.current) props.notify(errMsg(err));
+    } finally {
+      if (aliveRef.current) setForking(false);
     }
   };
 
@@ -994,9 +1035,14 @@ export default function ScenarioDesign(props: PageProps) {
 
   // --- Render helpers ---------------------------------------------------------------
 
-  const unitRows = (units: Unit[]) =>
+  const unitRows = (units: Unit[], locked: boolean) =>
     units.map((unit) => [
-      <button type="button" className="sd-unit-link" onClick={() => setSelectedUnitId(unit.id)}>
+      <button
+        type="button"
+        className="sd-unit-link"
+        title={locked ? "Inspect committed unit record" : "Open unit editor"}
+        onClick={() => setSelectedUnitId(unit.id)}
+      >
         {unit.name}
       </button>,
       classLabel(unit.classId),
@@ -1006,51 +1052,59 @@ export default function ScenarioDesign(props: PageProps) {
     ]);
 
   const renderOrbat = (scn: Scenario) => {
+    const locked = scenarioIsLocked(scn);
     const selectedUnit = selectedUnitId ? scn.units.find((u) => u.id === selectedUnitId) ?? null : null;
     const blueUnits = scn.units.filter((u) => u.side === "blue");
     const redUnits = scn.units.filter((u) => u.side === "red");
     const armedClass = placementClassId ? classById.get(placementClassId) ?? null : null;
     return (
       <div className="sd-tab-stack">
-        <div className="sd-orbat-controls">
-          <Segmented
-            value={side}
-            onChange={(next) => setSide(next)}
-            items={[
-              { id: "blue", label: "BLUE - Coalition" },
-              { id: "red", label: "RED - OPFOR" },
-            ]}
-          />
-          <p className="sd-controls-hint">
-            Arm a unit class from the ontology palette, then click the chart to place it for the selected side. Click a
-            placed unit to open the editor.
-          </p>
-        </div>
-        <div className="sd-palette">
-          {paletteGroups.map((group) => (
-            <div key={group.domain} className="sd-palette-group">
-              <span className="sd-palette-head">{domainLabels[group.domain]}</span>
-              <div className="sd-palette-chips">
-                {group.classes.map((cls) => (
-                  <button
-                    key={cls.id}
-                    type="button"
-                    className={`sd-chip${placementClassId === cls.id ? " sd-armed" : ""}`}
-                    title={cls.description}
-                    onClick={() => togglePlacement(cls)}
-                  >
-                    {cls.label}
-                  </button>
-                ))}
-              </div>
+        {!locked ? (
+          <>
+            <div className="sd-orbat-controls">
+              <Segmented
+                value={side}
+                onChange={(next) => setSide(next)}
+                items={[
+                  { id: "blue", label: "BLUE - Coalition" },
+                  { id: "red", label: "RED - OPFOR" },
+                ]}
+              />
+              <p className="sd-controls-hint">
+                Arm a unit class from the ontology palette, then click the chart to place it for the selected side. Click a
+                placed unit to open the editor.
+              </p>
             </div>
-          ))}
-        </div>
-        {armedClass ? (
+            <div className="sd-palette">
+              {paletteGroups.map((group) => (
+                <div key={group.domain} className="sd-palette-group">
+                  <span className="sd-palette-head">{domainLabels[group.domain]}</span>
+                  <div className="sd-palette-chips">
+                    {group.classes.map((cls) => (
+                      <button
+                        key={cls.id}
+                        type="button"
+                        className={`sd-chip${placementClassId === cls.id ? " sd-armed" : ""}`}
+                        title={cls.description}
+                        onClick={() => togglePlacement(cls)}
+                      >
+                        {cls.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="sd-controls-hint sd-readonly-hint">
+            Baseline order of battle. Select a unit to inspect its committed record; create a planning copy to make changes.
+          </p>
+        )}
+        {!locked && armedClass ? (
           <div className="sd-placement-note">
-            <Crosshair size={15} />
             <span>
-              Placement armed, click the chart to position <strong>{armedClass.label}</strong> for {sideLabels[side]}.
+              <strong>PLACEMENT ARMED</strong> — click the chart to position <strong>{armedClass.label}</strong> for {sideLabels[side]}.
             </span>
             <button
               type="button"
@@ -1072,7 +1126,7 @@ export default function ScenarioDesign(props: PageProps) {
           objectives={scn.objectives}
           selectedUnitId={selectedUnitId}
           onSelectUnit={(id) => setSelectedUnitId(id)}
-          onMapClick={handleMapClick}
+          onMapClick={locked ? undefined : handleMapClick}
           showHexGrid
           showLabels
           worldKey={`design:${scn.id}`}
@@ -1080,8 +1134,7 @@ export default function ScenarioDesign(props: PageProps) {
         />
         {selectedUnit ? (
           <Panel
-            icon={Crosshair}
-            title={`Unit editor, ${selectedUnit.name}`}
+            title={`${locked ? "Unit record" : "Unit editor"}, ${selectedUnit.name}`}
             action={<Tag label={sideLabels[selectedUnit.side]} color={sideColors[selectedUnit.side]} />}
           >
             <div className="sd-stack">
@@ -1097,55 +1150,59 @@ export default function ScenarioDesign(props: PageProps) {
                   value={selectedUnit.weapons.length > 0 ? selectedUnit.weapons.map((w) => w.type).join(", ") : "none fitted"}
                 />
               </DetailGrid>
-              <FormGrid columns={4}>
-                <div className="sd-span-full">
-                  <Field label="Unit name">
-                    <input value={selectedUnit.name} onChange={(e) => updateUnit(selectedUnit.id, { name: e.target.value })} />
+              {!locked ? (
+                <FormGrid columns={4}>
+                  <div className="sd-span-full">
+                    <Field label="Unit name">
+                      <input value={selectedUnit.name} onChange={(e) => updateUnit(selectedUnit.id, { name: e.target.value })} />
+                    </Field>
+                  </div>
+                  <Field label="Strength (%)">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={selectedUnit.strength}
+                      onChange={(e) => updateUnit(selectedUnit.id, { strength: clampNum(e.target.value, 0, 100) })}
+                    />
                   </Field>
-                </div>
-                <Field label="Strength (%)">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={selectedUnit.strength}
-                    onChange={(e) => updateUnit(selectedUnit.id, { strength: clampNum(e.target.value, 0, 100) })}
-                  />
-                </Field>
-                <Field label="Heading (deg)">
-                  <input
-                    type="number"
-                    min={0}
-                    max={359}
-                    value={selectedUnit.headingDeg}
-                    onChange={(e) => updateUnit(selectedUnit.id, { headingDeg: clampNum(e.target.value, 0, 359) })}
-                  />
-                </Field>
-                <Field label="Speed (kts)">
-                  <input
-                    type="number"
-                    min={0}
-                    max={900}
-                    value={selectedUnit.speedKts}
-                    onChange={(e) => updateUnit(selectedUnit.id, { speedKts: clampNum(e.target.value, 0, 900) })}
-                  />
-                </Field>
-                <Field label="Supply (%)">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={selectedUnit.supply}
-                    onChange={(e) => updateUnit(selectedUnit.id, { supply: clampNum(e.target.value, 0, 100) })}
-                  />
-                </Field>
-              </FormGrid>
+                  <Field label="Heading (deg)">
+                    <input
+                      type="number"
+                      min={0}
+                      max={359}
+                      value={selectedUnit.headingDeg}
+                      onChange={(e) => updateUnit(selectedUnit.id, { headingDeg: clampNum(e.target.value, 0, 359) })}
+                    />
+                  </Field>
+                  <Field label="Speed (kts)">
+                    <input
+                      type="number"
+                      min={0}
+                      max={900}
+                      value={selectedUnit.speedKts}
+                      onChange={(e) => updateUnit(selectedUnit.id, { speedKts: clampNum(e.target.value, 0, 900) })}
+                    />
+                  </Field>
+                  <Field label="Supply (%)">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={selectedUnit.supply}
+                      onChange={(e) => updateUnit(selectedUnit.id, { supply: clampNum(e.target.value, 0, 100) })}
+                    />
+                  </Field>
+                </FormGrid>
+              ) : null}
               <ActionRow>
-                <Button className="button sd-danger" icon={Trash2} onClick={() => removeUnit(selectedUnit.id)}>
-                  Remove unit
-                </Button>
+                {!locked ? (
+                  <Button className="button sd-danger" icon={Trash2} onClick={() => removeUnit(selectedUnit.id)}>
+                    Remove unit
+                  </Button>
+                ) : null}
                 <Button variant="secondary" onClick={() => setSelectedUnitId(null)}>
-                  Close editor
+                  Close {locked ? "record" : "editor"}
                 </Button>
               </ActionRow>
             </div>
@@ -1159,7 +1216,7 @@ export default function ScenarioDesign(props: PageProps) {
               <Tag label={`${blueUnits.length} units`} />
             </header>
             {blueUnits.length > 0 ? (
-              <CompactTable columns={UNIT_COLUMNS} widths={UNIT_WIDTHS} rows={unitRows(blueUnits)} />
+              <CompactTable columns={UNIT_COLUMNS} widths={UNIT_WIDTHS} rows={unitRows(blueUnits, locked)} />
             ) : (
               <EmptyState
                 icon={Anchor}
@@ -1175,7 +1232,7 @@ export default function ScenarioDesign(props: PageProps) {
               <Tag label={`${redUnits.length} units`} />
             </header>
             {redUnits.length > 0 ? (
-              <CompactTable columns={UNIT_COLUMNS} widths={UNIT_WIDTHS} rows={unitRows(redUnits)} />
+              <CompactTable columns={UNIT_COLUMNS} widths={UNIT_WIDTHS} rows={unitRows(redUnits, locked)} />
             ) : (
               <EmptyState
                 icon={Shield}
@@ -1190,6 +1247,7 @@ export default function ScenarioDesign(props: PageProps) {
   };
 
   const renderObjectiveColumn = (scn: Scenario, columnSide: PlacementSide) => {
+    const locked = scenarioIsLocked(scn);
     const objectives = scn.objectives.filter((o) => o.side === columnSide);
     const totalWeight = objectives.reduce((acc, o) => acc + o.weight, 0);
     return (
@@ -1201,9 +1259,11 @@ export default function ScenarioDesign(props: PageProps) {
               {objectives.length} objective{objectives.length === 1 ? "" : "s"} | weight total {totalWeight.toFixed(2)}
             </small>
           </div>
-          <Button variant="secondary" icon={Plus} onClick={() => setObjModal({ side: columnSide, objective: null })}>
-            Add objective
-          </Button>
+          {!locked ? (
+            <Button variant="secondary" icon={Plus} onClick={() => setObjModal({ side: columnSide, objective: null })}>
+              Add objective
+            </Button>
+          ) : null}
         </header>
         {objectives.length === 0 ? (
           <EmptyState
@@ -1230,18 +1290,20 @@ export default function ScenarioDesign(props: PageProps) {
                   ) : null}
                 </div>
               </div>
-              <div className="sd-obj-actions">
-                <button
-                  type="button"
-                  className="sd-icon-btn"
-                  onClick={() => setObjModal({ side: columnSide, objective })}
-                >
-                  <Pencil size={13} /> Edit
-                </button>
-                <button type="button" className="sd-icon-btn sd-danger-link" onClick={() => removeObjective(objective.id)}>
-                  <Trash2 size={13} /> Remove
-                </button>
-              </div>
+              {!locked ? (
+                <div className="sd-obj-actions">
+                  <button
+                    type="button"
+                    className="sd-icon-btn"
+                    onClick={() => setObjModal({ side: columnSide, objective })}
+                  >
+                    <Pencil size={13} /> Edit
+                  </button>
+                  <button type="button" className="sd-icon-btn sd-danger-link" onClick={() => removeObjective(objective.id)}>
+                    <Trash2 size={13} /> Remove
+                  </button>
+                </div>
+              ) : null}
             </article>
           ))
         )}
@@ -1255,87 +1317,97 @@ export default function ScenarioDesign(props: PageProps) {
     );
   };
 
-  const renderEnvironment = (scn: Scenario) => (
-    <div className="sd-tab-stack">
-      <FormGrid columns={3}>
-        <Field label="Weather">
-          <select
-            value={scn.environment.weather}
-            onChange={(e) => updateEnvironment({ weather: e.target.value as ScenarioEnvironment["weather"] })}
-          >
-            <option value="clear">Clear</option>
-            <option value="overcast">Overcast</option>
-            <option value="storm">Storm</option>
-          </select>
-        </Field>
-        <Field label="Sea state (Douglas scale)">
-          <select value={String(scn.environment.seaState)} onChange={(e) => updateEnvironment({ seaState: Number(e.target.value) })}>
-            {SEA_STATE_LABELS.map((label, index) => (
-              <option key={label} value={String(index)}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Visibility (km)">
-          <input
-            type="number"
-            min={0}
-            max={80}
-            value={scn.environment.visibilityKm}
-            onChange={(e) => updateEnvironment({ visibilityKm: clampNum(e.target.value, 0, 80) })}
-          />
-        </Field>
-        <Field label="EMCON posture">
-          <select
-            value={scn.environment.emcon}
-            onChange={(e) => updateEnvironment({ emcon: e.target.value as ScenarioEnvironment["emcon"] })}
-          >
-            <option value="free">Free, unrestricted emissions</option>
-            <option value="restricted">Restricted, mission-essential only</option>
-            <option value="silent">Silent, passive sensors only</option>
-          </select>
-        </Field>
-        <Field label="Cyber threat condition">
-          <select
-            value={scn.environment.cyberThreat}
-            onChange={(e) => updateEnvironment({ cyberThreat: e.target.value as ScenarioEnvironment["cyberThreat"] })}
-          >
-            <option value="low">Low</option>
-            <option value="elevated">Elevated</option>
-            <option value="severe">Severe</option>
-          </select>
-        </Field>
-        <Field label="Exercise duration (hours)">
-          <input
-            type="number"
-            min={6}
-            max={240}
-            step={6}
-            value={scn.durationHours}
-            onChange={(e) =>
-              mutateWorking((draft) => {
-                draft.durationHours = clampNum(e.target.value, 6, 240);
-              })
-            }
-          />
-        </Field>
-      </FormGrid>
-      <p className="sd-env-note">
-        <CloudSun size={16} />
-        <span>
-          Environment settings drive adjudication modifiers during deduction: storm conditions and sea state 6 or above
-          degrade detection ranges and small-craft speed, EMCON silent lowers own-force detectability at the cost of
-          sensor coverage, and a severe cyber threat raises the likelihood of C2 disruption events. Duration bounds the
-          simulation clock for every run started from this scenario.
-        </span>
-      </p>
-    </div>
-  );
+  const renderEnvironment = (scn: Scenario) => {
+    const locked = scenarioIsLocked(scn);
+    return (
+      <div className={`sd-tab-stack${locked ? " sd-readonly-form" : ""}`}>
+        <FormGrid columns={3}>
+          <Field label="Weather">
+            <select
+              value={scn.environment.weather}
+              disabled={locked}
+              onChange={(e) => updateEnvironment({ weather: e.target.value as ScenarioEnvironment["weather"] })}
+            >
+              <option value="clear">Clear</option>
+              <option value="overcast">Overcast</option>
+              <option value="storm">Storm</option>
+            </select>
+          </Field>
+          <Field label="Sea state (Douglas scale)">
+            <select
+              value={String(scn.environment.seaState)}
+              disabled={locked}
+              onChange={(e) => updateEnvironment({ seaState: Number(e.target.value) })}
+            >
+              {SEA_STATE_LABELS.map((label, index) => (
+                <option key={label} value={String(index)}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Visibility (km)">
+            <input
+              type="number"
+              min={0}
+              max={80}
+              value={scn.environment.visibilityKm}
+              disabled={locked}
+              onChange={(e) => updateEnvironment({ visibilityKm: clampNum(e.target.value, 0, 80) })}
+            />
+          </Field>
+          <Field label="EMCON posture">
+            <select
+              value={scn.environment.emcon}
+              disabled={locked}
+              onChange={(e) => updateEnvironment({ emcon: e.target.value as ScenarioEnvironment["emcon"] })}
+            >
+              <option value="free">Free, unrestricted emissions</option>
+              <option value="restricted">Restricted, mission-essential only</option>
+              <option value="silent">Silent, passive sensors only</option>
+            </select>
+          </Field>
+          <Field label="Cyber threat condition">
+            <select
+              value={scn.environment.cyberThreat}
+              disabled={locked}
+              onChange={(e) => updateEnvironment({ cyberThreat: e.target.value as ScenarioEnvironment["cyberThreat"] })}
+            >
+              <option value="low">Low</option>
+              <option value="elevated">Elevated</option>
+              <option value="severe">Severe</option>
+            </select>
+          </Field>
+          <Field label="Exercise duration (hours)">
+            <input
+              type="number"
+              min={6}
+              max={240}
+              step={6}
+              value={scn.durationHours}
+              disabled={locked}
+              onChange={(e) =>
+                mutateWorking((draft) => {
+                  draft.durationHours = clampNum(e.target.value, 6, 240);
+                })
+              }
+            />
+          </Field>
+        </FormGrid>
+        <p className="sd-env-note">
+          <span>
+            Environment settings drive adjudication modifiers during deduction: storm conditions and sea state 6 or above
+            degrade detection ranges and small-craft speed, EMCON silent lowers own-force detectability at the cost of
+            sensor coverage, and a severe cyber threat raises the likelihood of C2 disruption events. Duration bounds the
+            simulation clock for every run started from this scenario.
+          </span>
+        </p>
+      </div>
+    );
+  };
 
   const renderValidation = (report: ValidationReport) => (
     <Panel
-      icon={ShieldCheck}
       title="Validation report"
       action={<StatusPill label={report.ok ? "pass" : "issues found"} tone={report.ok ? "good" : "warn"} />}
     >
@@ -1371,6 +1443,8 @@ export default function ScenarioDesign(props: PageProps) {
   );
 
   const renderWorkspace = (scn: Scenario) => {
+    const locked = scenarioIsLocked(scn);
+    const stageIndex = Math.max(0, SCENARIO_STAGES.findIndex((stage) => stage.status === scn.status));
     const blueCount = scn.units.filter((u) => u.side === "blue").length;
     const redCount = scn.units.filter((u) => u.side === "red").length;
     const blueObjectives = scn.objectives.filter((o) => o.side === "blue").length;
@@ -1378,7 +1452,6 @@ export default function ScenarioDesign(props: PageProps) {
     return (
       <>
         <Panel
-          icon={Compass}
           title={scn.name}
           action={
             <ActionRow>
@@ -1387,13 +1460,62 @@ export default function ScenarioDesign(props: PageProps) {
               <Button variant="secondary" icon={ShieldCheck} onClick={handleValidate} disabled={validating}>
                 {validating ? "Validating…" : "Validate"}
               </Button>
-              <Button icon={Save} onClick={handleSave} disabled={!dirty || saving}>
-                {saving ? "Saving…" : "Save scenario"}
-              </Button>
+              {!locked ? (
+                <Button icon={Save} onClick={handleSave} disabled={!dirty || saving}>
+                  {saving ? "Saving…" : "Save scenario"}
+                </Button>
+              ) : null}
             </ActionRow>
           }
         >
           <p className="sd-desc">{scn.description}</p>
+          <div className="sd-artifact-control">
+            <div className="sd-artifact-facts">
+              <div>
+                <span>Artifact owner</span>
+                <strong>{scn.createdBy || "Plans Cell (J5)"}</strong>
+              </div>
+              <div>
+                <span>Control state</span>
+                <strong>{locked ? "Locked baseline" : "Editable working copy"}</strong>
+              </div>
+              <div>
+                <span>Artifact ID</span>
+                <strong>{scn.id}</strong>
+              </div>
+              <div>
+                <span>Revision</span>
+                <strong>Updated {timeAgo(scn.updatedAt)}</strong>
+              </div>
+            </div>
+            <div className="sd-lifecycle" aria-label={`Scenario lifecycle, ${SCENARIO_STAGES[stageIndex].label}`}>
+              {SCENARIO_STAGES.map((stage, index) => (
+                <span
+                  key={stage.status}
+                  className={`${index < stageIndex ? "is-complete" : ""}${index === stageIndex ? " is-current" : ""}`}
+                  aria-current={index === stageIndex ? "step" : undefined}
+                >
+                  <i />
+                  {stage.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className={`sd-control-notice${locked ? " is-locked" : ""}`}>
+            <div>
+              <strong>{locked ? "BASELINE PROTECTED" : "CONTROLLED WORKING COPY"}</strong>
+              <span>
+                {locked
+                  ? `This ${scn.status} scenario is view-only. Create a planning copy to change the ORBAT, objectives or environment.`
+                  : "Changes remain local until saved. Validate the saved revision before it is handed forward to COA development."}
+              </span>
+            </div>
+            {locked ? (
+              <Button variant="secondary" onClick={handleForkScenario} disabled={forking}>
+                {forking ? "Creating copy…" : "Create planning copy"}
+              </Button>
+            ) : null}
+          </div>
           <div className="sd-meta-grid">
             <DetailGrid>
               <Detail label="Theater" value={scn.theater} />
@@ -1466,7 +1588,6 @@ export default function ScenarioDesign(props: PageProps) {
     <PageBody>
       <div className="sd-lib-grid" style={{ "--sd-lib": `${libWidth}px` } as CSSProperties}>
         <Panel
-          icon={MapIcon}
           title="Scenario library"
           action={
             <span className="sd-lib-actions">
@@ -1521,7 +1642,7 @@ export default function ScenarioDesign(props: PageProps) {
           {working ? (
             renderWorkspace(working)
           ) : (
-            <Panel icon={Compass} title="No scenario selected">
+            <Panel title="No scenario selected">
               <EmptyState
                 icon={Compass}
                 title="Select or create a scenario"

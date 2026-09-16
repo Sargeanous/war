@@ -7,6 +7,73 @@
   flex-wrap: wrap;
 }
 
+.asm-command-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s5) var(--s7);
+  padding: var(--s4) var(--s1);
+  border-block: 1px solid var(--line-strong);
+}
+
+.asm-decision-basis {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.asm-decision-basis > span,
+.asm-sage-provenance > span {
+  color: var(--muted);
+  font: 700 var(--t-xs) var(--mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.asm-decision-basis > strong,
+.asm-sage-provenance > strong {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.asm-decision-basis > small,
+.asm-sage-provenance > small,
+.asm-sage-authority {
+  color: var(--muted);
+  font-size: var(--t-sm);
+  line-height: 1.45;
+}
+
+.asm-command-bar .action-row {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
+.asm-sage-provenance {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 3px var(--s3);
+  padding-bottom: var(--s4);
+  border-bottom: 1px solid var(--line);
+}
+
+.asm-sage-provenance > small {
+  grid-column: 2;
+}
+
+.asm-sage-authority {
+  margin: 0;
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.asm-section-anchor {
+  min-width: 0;
+  scroll-margin-top: 112px;
+}
+
 .asm-replay-controls {
   display: flex;
   align-items: center;
@@ -91,6 +158,23 @@
 @media (max-width: 900px) {
   .asm-compare-radar {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .asm-command-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .asm-command-bar .action-row {
+    justify-content: flex-start;
+  }
+
+  .asm-sage-provenance {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .asm-sage-provenance > small {
+    grid-column: 1;
   }
 }
 

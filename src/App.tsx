@@ -1,38 +1,24 @@
 import {
-  BarChart3,
-  Bot,
-  Compass,
-  BrainCircuit,
+  ChartNoAxesCombined,
   ChevronRight,
-  Database,
-  Globe2,
-  LayoutDashboard,
-  LockKeyhole,
-  LogOut,
-  Map as MapIcon,
-  PanelLeftClose,
-  PanelLeftOpen,
+  Map,
   MessageSquare,
   Moon,
   Radar,
-  Satellite,
-  Scale,
   Send,
-  Swords,
-  SlidersHorizontal,
+  ServerCog,
   ShieldCheck,
-  ScrollText,
-  Split,
   Sun,
-  UserRound,
   X,
   type LucideIcon,
 } from "lucide-react";
-import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { askCopilot, fetchClassification, CLASSIFICATION_CHANGED } from "./api";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { askCopilot, fetchBootstrap, fetchClassification, CLASSIFICATION_CHANGED } from "./api";
 import BrandMark from "./BrandMark";
 import { Toast } from "./components";
-import type { PageId, PageProps, Profile } from "./shell";
+import type { PageId, PageProps, Profile, WorkspaceMode } from "./shell";
+import type { Bootstrap } from "./types";
+import WorkspaceTabs, { WORKSPACE_LABELS } from "./WorkspaceTabs";
 import CommandDashboard from "./pages/CommandDashboard";
 import Intel from "./pages/Intel";
 import ScenarioDesign from "./pages/ScenarioDesign";
@@ -44,17 +30,6 @@ import Assessment from "./pages/Assessment";
 import AiLayer from "./pages/AiLayer";
 import Foundation from "./pages/Foundation";
 import Admin from "./pages/Admin";
-
-interface NavItem {
-  id: PageId;
-  label: string;
-  icon: LucideIcon;
-}
-
-interface NavGroup {
-  label: string;
-  pages: PageId[];
-}
 
 const profiles: Profile[] = [
   {
@@ -76,7 +51,7 @@ const profiles: Profile[] = [
     name: "Simulation Control",
     role: "Exercise control / umpire",
     organization: "Wargame Center",
-    pages: ["dashboard", "deduction", "orders", "rules", "foundation"],
+    pages: ["dashboard", "deduction", "orders", "rules", "assessment", "foundation"],
   },
   {
     id: "analyst",
@@ -88,42 +63,42 @@ const profiles: Profile[] = [
   {
     id: "admin",
     name: "Platform Admin",
-    role: "Platform governance",
+    role: "Users, permissions, engines and data",
     organization: "Wargame Center",
     pages: ["dashboard", "intel", "scenario", "coa", "orders", "rules", "deduction", "assessment", "ailayer", "foundation", "admin"],
   },
 ];
 
-// Role identity on the access screen: its own icon, plus the scope of access it
-// grants. Privileged scopes get the accent treatment.
-const PROFILE_META: Record<string, { icon: LucideIcon; scope: string; privileged: boolean }> = {
-  commander: { icon: Swords, scope: "Command authority", privileged: true },
-  planner: { icon: Compass, scope: "Planning", privileged: false },
-  operator: { icon: SlidersHorizontal, scope: "Exercise control", privileged: true },
-  analyst: { icon: BarChart3, scope: "Analysis", privileged: false },
-  admin: { icon: ShieldCheck, scope: "Full platform", privileged: true },
+const PROFILE_META: Record<string, { description: string; scope: string }> = {
+  commander: {
+    description: "Review the operational picture and decide when command input is required.",
+    scope: "Decision points & issued orders",
+  },
+  planner: {
+    description: "Build scenarios, compare COAs and prepare the execution package.",
+    scope: "Scenario through rule package",
+  },
+  operator: {
+    description: "Launch runs, control exercise state and apply umpire interventions.",
+    scope: "Authorized runs & interventions",
+  },
+  analyst: {
+    description: "Compare outcomes and turn run evidence into after-action findings.",
+    scope: "Replay, scoring & AAR",
+  },
+  admin: {
+    description: "Manage access, engines, data health and audit records.",
+    scope: "Users, services & audit",
+  },
 };
 
-const navItems: Record<PageId, NavItem> = {
-  dashboard: { id: "dashboard", label: "Command Overview", icon: LayoutDashboard },
-  intel: { id: "intel", label: "Intelligence Feed", icon: Satellite },
-  scenario: { id: "scenario", label: "Scenario Design", icon: MapIcon },
-  coa: { id: "coa", label: "Data & COA Generation", icon: Split },
-  orders: { id: "orders", label: "Orders & Staff Products", icon: ScrollText },
-  rules: { id: "rules", label: "Simulation Rules", icon: Scale },
-  deduction: { id: "deduction", label: "Full-Process Deduction", icon: Radar },
-  assessment: { id: "assessment", label: "Assessment & Replay", icon: BarChart3 },
-  ailayer: { id: "ailayer", label: "AI Command Layer", icon: BrainCircuit },
-  foundation: { id: "foundation", label: "Platform Foundation", icon: Database },
-  admin: { id: "admin", label: "Administration", icon: ShieldCheck },
+const PROFILE_ICONS: Record<string, LucideIcon> = {
+  commander: ShieldCheck,
+  planner: Map,
+  operator: Radar,
+  analyst: ChartNoAxesCombined,
+  admin: ServerCog,
 };
-
-const navGroups: NavGroup[] = [
-  { label: "Command", pages: ["dashboard"] },
-  { label: "Intelligence", pages: ["intel", "ailayer"] },
-  { label: "Planning & Simulation", pages: ["scenario", "coa", "rules", "deduction", "orders", "assessment"] },
-  { label: "Platform", pages: ["foundation", "admin"] },
-];
 
 const pageComponents: Record<PageId, (props: PageProps) => JSX.Element> = {
   dashboard: CommandDashboard,
@@ -141,24 +116,47 @@ const pageComponents: Record<PageId, (props: PageProps) => JSX.Element> = {
 
 type Theme = "light" | "dark";
 
+function routeState() {
+  const params = new URLSearchParams(window.location.search);
+  const profile = profiles.find((item) => item.id === params.get("profile")) ?? null;
+  const requested = params.get("workspace") as PageId | null;
+  const page = profile && requested && profile.pages.includes(requested) ? requested : profile?.pages[0] ?? "dashboard";
+  return { profile, page };
+}
+
+function writeRoute(profile: Profile | null, page?: PageId, mode: "push" | "replace" = "push") {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("profile");
+  url.searchParams.delete("workspace");
+  if (page !== "deduction" && page !== "assessment") {
+    url.searchParams.delete("run");
+    url.searchParams.delete("branch");
+  }
+  if (profile) {
+    url.searchParams.set("profile", profile.id);
+    url.searchParams.set("workspace", page ?? profile.pages[0]);
+  }
+  window.history[mode === "push" ? "pushState" : "replaceState"]({}, "", url);
+}
+
 function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }) {
+  const label = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
   return (
-    <button className="icon-button" type="button" onClick={onToggle}>
-      {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-      {theme === "dark" ? "Light" : "Dark"}
+    <button className="icon-button theme-toggle" type="button" onClick={onToggle} aria-label={label} title={label}>
+      {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
     </button>
   );
 }
 
 export default function App() {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [page, setPage] = useState<PageId>("dashboard");
+  const initialRoute = useMemo(routeState, []);
+  const [profile, setProfile] = useState<Profile | null>(initialRoute.profile);
+  const [page, setPage] = useState<PageId>(initialRoute.page);
   const [toast, setToast] = useState("");
-  // The platform marking. Read once at entry and carried at the head and foot of
-  // every workspace, because a headquarters reads the marking before the page.
   const [marking, setMarking] = useState("");
+  const [operationalData, setOperationalData] = useState<Bootstrap | null>(null);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("standard");
   const [theme, setTheme] = useState<Theme>(() => (window.localStorage.getItem("sandtable-theme") === "light" ? "light" : "dark"));
-  const [navCollapsed, setNavCollapsed] = useState(() => window.localStorage.getItem("sandtable-nav") === "collapsed");
   const toastTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -167,16 +165,29 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
+    const onHistory = () => {
+      const next = routeState();
+      setWorkspaceMode("standard");
+      setProfile(next.profile);
+      setPage(next.page);
+    };
+    window.addEventListener("popstate", onHistory);
+    return () => window.removeEventListener("popstate", onHistory);
+  }, []);
+
+  useEffect(() => {
+    const workspaceTitle = profile ? WORKSPACE_LABELS[page] : "Access Profile";
+    document.title = `${workspaceTitle} | SANDTABLE`;
+  }, [page, profile]);
+
+  useEffect(() => {
     let alive = true;
     fetchClassification()
       .then((result) => alive && setMarking(result.marking))
       .catch(() => undefined);
-    // A marking change anywhere in the app repaints the banner at once. A shell
-    // that keeps saying RESTRICTED while the documents inside it read SECRET is
-    // under-marking the page, which is the one direction that actually matters.
     const onChanged = (event: Event) => {
       const next = (event as CustomEvent<{ marking?: string }>).detail;
-      if (alive && next && next.marking) setMarking(next.marking);
+      if (alive && next?.marking) setMarking(next.marking);
     };
     window.addEventListener(CLASSIFICATION_CHANGED, onChanged);
     return () => {
@@ -185,15 +196,26 @@ export default function App() {
     };
   }, [profile]);
 
-  const toggleTheme = useCallback(() => setTheme((current) => (current === "dark" ? "light" : "dark")), []);
+  useEffect(() => {
+    if (!profile) {
+      setOperationalData(null);
+      return;
+    }
+    let alive = true;
+    const refreshOperationalData = () => {
+      fetchBootstrap()
+        .then((boot) => alive && setOperationalData(boot))
+        .catch(() => undefined);
+    };
+    refreshOperationalData();
+    const refreshTimer = window.setInterval(refreshOperationalData, page === "deduction" ? 1800 : 5000);
+    return () => {
+      alive = false;
+      window.clearInterval(refreshTimer);
+    };
+  }, [page, profile]);
 
-  const toggleNav = useCallback(() => {
-    setNavCollapsed((current) => {
-      const next = !current;
-      window.localStorage.setItem("sandtable-nav", next ? "collapsed" : "open");
-      return next;
-    });
-  }, []);
+  const toggleTheme = useCallback(() => setTheme((current) => (current === "dark" ? "light" : "dark")), []);
 
   const notify = useCallback((message: string) => {
     setToast(message);
@@ -202,8 +224,10 @@ export default function App() {
   }, []);
 
   function chooseProfile(next: Profile) {
+    setWorkspaceMode("standard");
     setProfile(next);
     setPage(next.pages[0]);
+    writeRoute(next, next.pages[0]);
   }
 
   const goTo = useCallback(
@@ -212,7 +236,9 @@ export default function App() {
         notify("This workspace is not available for the active profile");
         return;
       }
+      setWorkspaceMode("standard");
       setPage(next);
+      writeRoute(profile, next);
     },
     [profile, notify]
   );
@@ -222,35 +248,46 @@ export default function App() {
   }
 
   const Page = pageComponents[page];
+  const isWorkspaceFocus = workspaceMode === "focus";
+
+  const switchProfile = () => {
+    setWorkspaceMode("standard");
+    setProfile(null);
+    setOperationalData(null);
+    writeRoute(null);
+  };
+
+  const productNavigation = <WorkspaceTabs profile={profile} page={page} goTo={goTo} />;
 
   return (
-    <div className={`app${navCollapsed ? " nav-collapsed" : ""}`}>
-      <Sidebar
-        profile={profile}
-        page={page}
-        goTo={goTo}
-        onSwitch={() => setProfile(null)}
-        collapsed={navCollapsed}
-        onToggleCollapse={toggleNav}
-      />
+    <div className={`app command-shell${isWorkspaceFocus ? " workspace-focus" : ""}`}>
       <main className="workspace">
-        <ClassificationBanner marking={marking} where="top" />
-        <Topbar profile={profile} page={page} theme={theme} onToggleTheme={toggleTheme} />
-        <Page notify={notify} goTo={goTo} profile={profile} />
-        <ClassificationBanner marking={marking} where="bottom" />
+        {!isWorkspaceFocus ? (
+          <>
+            <Topbar
+              profile={profile}
+              page={page}
+              theme={theme}
+              marking={marking}
+              onToggleTheme={toggleTheme}
+              onSwitch={switchProfile}
+            />
+            {productNavigation}
+          </>
+        ) : null}
+        <Page
+          notify={notify}
+          goTo={goTo}
+          profile={profile}
+          classificationMarking={marking}
+          setWorkspaceMode={setWorkspaceMode}
+          workspaceNavigation={productNavigation}
+        />
       </main>
-      <Copilot />
+      {!isWorkspaceFocus ? <Copilot page={page} boot={operationalData} /> : null}
       {toast ? <Toast>{toast}</Toast> : null}
     </div>
   );
-}
-
-// The platform marking, carried at the head and the foot of every workspace.
-// A headquarters reads the marking before it reads the page, so the banner is
-// part of the shell rather than something each page remembers to render.
-function ClassificationBanner({ marking, where }: { marking: string; where: "top" | "bottom" }) {
-  if (!marking) return null;
-  return <div className={`classification-banner ${where}`}>{marking}</div>;
 }
 
 function LoginScreen({
@@ -266,41 +303,57 @@ function LoginScreen({
 }) {
   return (
     <main className="login-screen">
-      <section className="login-panel">
-        <div className="login-brand">
-          <div className="brand-mark">
-            <BrandMark size={72} />
+      <header className="access-masthead">
+        <div className="access-masthead-inner">
+          <div className="access-brand-lockup">
+            <div className="access-brand-mark">
+              <BrandMark size={58} />
+            </div>
+            <span className="access-brand-divider" aria-hidden="true" />
+            <div className="access-brand-copy">
+              <strong>SANDTABLE</strong>
+              <span>Wargame platform</span>
+            </div>
           </div>
-          <div className="login-brand-text">
-            <h1>Access profile</h1>
-            <p>SANDTABLE - Scenario simulation and strategic planning</p>
+          <div className="access-masthead-meta">
+            <span className="access-context">Wargame Center</span>
+            <ThemeToggle theme={theme} onToggle={onToggleTheme} />
           </div>
-          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
         </div>
-        <p className="login-intro">
-          Select how you are accessing the platform. Each duty position carries its own workspaces, permissions and
-          decision authority.
-        </p>
+      </header>
+
+      <section className="login-panel">
+        <section className="access-briefing" aria-labelledby="access-heading">
+          <h1 id="access-heading">Choose your duty position</h1>
+          <p>Select the workspace that matches the role you are representing in this exercise.</p>
+        </section>
+
         <div className="profile-grid">
           {profiles.map((item) => {
-            const meta = PROFILE_META[item.id] ?? { icon: UserRound, scope: "", privileged: false };
-            const Icon = meta.icon;
+            const meta = PROFILE_META[item.id];
+            const ProfileIcon = PROFILE_ICONS[item.id] ?? ShieldCheck;
             return (
-              <button key={item.id} className="profile-card" type="button" onClick={() => onChoose(item)}>
-                <span className="profile-icon">
-                  <Icon size={20} />
+              <button
+                key={item.id}
+                className="profile-card"
+                data-profile={item.id}
+                type="button"
+                aria-label={`Open ${item.name} workspace`}
+                onClick={() => onChoose(item)}
+              >
+                <span className="profile-card-mark" aria-hidden="true">
+                  <ProfileIcon size={32} strokeWidth={1.7} />
                 </span>
                 <span className="profile-card-body">
                   <strong>{item.name}</strong>
-                  <small>{item.role}</small>
-                  <em>{item.organization}</em>
+                  <span className="profile-card-description">{meta.description}</span>
                 </span>
-                <span className="profile-card-aside">
-                  {meta.scope ? (
-                    <span className={`profile-scope${meta.privileged ? " is-privileged" : ""}`}>{meta.scope}</span>
-                  ) : null}
+                <span className="profile-card-scope">
+                  <span>{meta.scope}</span>
+                </span>
+                <span className="profile-card-footer">
                   <span className="profile-card-cue">
-                    Enter <ChevronRight size={15} />
+                    Open workspace <ChevronRight size={15} />
                   </span>
                 </span>
               </button>
@@ -312,111 +365,49 @@ function LoginScreen({
   );
 }
 
-function Sidebar({
-  profile,
-  page,
-  goTo,
-  onSwitch,
-  collapsed,
-  onToggleCollapse,
-}: {
-  profile: Profile;
-  page: PageId;
-  goTo: (page: PageId) => void;
-  onSwitch: () => void;
-  collapsed: boolean;
-  onToggleCollapse: () => void;
-}) {
-  const allowed = new Set(profile.pages);
-  return (
-    <aside className={`sidebar${collapsed ? " collapsed" : ""}`}>
-      <div className="sidebar-brand">
-        <div className="brand-mark">
-          <BrandMark size={collapsed ? 28 : 40} />
-        </div>
-        <div>
-          <strong>SANDTABLE</strong>
-          <span>Wargame Platform</span>
-        </div>
-        <button
-          type="button"
-          className="nav-collapse"
-          onClick={onToggleCollapse}
-          aria-expanded={!collapsed}
-          title={collapsed ? "Expand the navigation" : "Collapse the navigation"}
-        >
-          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-          <span className="sr-only">{collapsed ? "Expand the navigation" : "Collapse the navigation"}</span>
-        </button>
-      </div>
-      <div className="current-profile">
-        <small>Access profile</small>
-        <strong>{profile.name}</strong>
-        <span>{profile.role}</span>
-      </div>
-      <nav className="nav-groups" aria-label="Primary">
-        {navGroups.map((group) => {
-          const items = group.pages.filter((id) => allowed.has(id));
-          if (!items.length) return null;
-          return (
-            <section key={group.label} className="nav-group">
-              <p>{group.label}</p>
-              {items.map((id) => {
-                const item = navItems[id];
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={id}
-                    className={page === id ? "active" : ""}
-                    type="button"
-                    onClick={() => goTo(id)}
-                    title={collapsed ? item.label : undefined}
-                  >
-                    <Icon size={18} />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </section>
-          );
-        })}
-      </nav>
-      <button className="switch-profile" type="button" onClick={onSwitch} title={collapsed ? "Switch profile" : undefined}>
-        <LogOut size={17} />
-        <span>Switch profile</span>
-      </button>
-    </aside>
-  );
-}
-
 function Topbar({
   profile,
   page,
   theme,
+  marking,
   onToggleTheme,
+  onSwitch,
 }: {
   profile: Profile;
   page: PageId;
   theme: Theme;
+  marking: string;
   onToggleTheme: () => void;
+  onSwitch: () => void;
 }) {
-  const meta = navItems[page];
+  const shortMarking = marking.split("//")[0]?.trim();
   return (
-    <header className="topbar">
-      <div>
-        <p>{profile.organization}</p>
-        <h1>{meta.label}</h1>
+    <header className="command-topbar">
+      <div className="command-brand">
+        <div className="command-brand-mark">
+          <BrandMark size={30} />
+        </div>
+        <div className="command-brand-copy">
+          <strong>SANDTABLE</strong>
+          <span>Wargame platform</span>
+        </div>
       </div>
-      <div className="topbar-actions">
-        <span className="session-pill">
-          <LockKeyhole size={15} />
-          {profile.role}
-        </span>
-        <span className="session-pill">
-          <Globe2 size={15} />
-          Meridian Archipelago (fictional)
-        </span>
+      <div className="command-context">
+        <span>{profile.organization}</span>
+        <strong>{WORKSPACE_LABELS[page]}</strong>
+      </div>
+      <div className="command-identity">
+        <span>Active role</span>
+        <strong>{profile.name}</strong>
+      </div>
+      <div className="command-actions">
+        {shortMarking ? (
+          <span className="command-classification" title={marking}>
+            {shortMarking}
+          </span>
+        ) : null}
         <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+        <button type="button" onClick={onSwitch}>Switch profile</button>
       </div>
     </header>
   );
@@ -429,7 +420,7 @@ interface ChatMessage {
   source?: string;
 }
 
-function Copilot() {
+function Copilot({ page, boot }: { page: PageId; boot: Bootstrap | null }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -441,6 +432,27 @@ function Copilot() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const nextId = useRef(1);
+  const params = new URLSearchParams(window.location.search);
+  const requestedRunId = page === "deduction" || page === "assessment" ? params.get("run") : null;
+  const run = (requestedRunId ? boot?.runs.find((item) => item.id === requestedRunId) : undefined)
+    ?? boot?.runs.find((item) => item.status === "awaiting-decision" || item.status === "running" || item.status === "paused");
+  const scenario = (run ? boot?.scenarios.find((item) => item.id === run.scenarioId) : undefined)
+    ?? boot?.scenarios.find((item) => item.status === "running")
+    ?? boot?.scenarios[0];
+  const requestedBranchId = page === "deduction" || page === "assessment" ? params.get("branch") : null;
+  const ruleSet = boot?.ruleSets.find((item) => item.status === "active");
+  const groundingLabel = run
+    ? `${run.label} · T+${run.simTimeH.toFixed(1)}h · ${run.status.replace(/-/g, " ")}`
+    : scenario
+      ? `${scenario.codename} · ${WORKSPACE_LABELS[page]}`
+      : WORKSPACE_LABELS[page];
+  const groundingContext = [
+    `Workspace: ${WORKSPACE_LABELS[page]}`,
+    scenario ? `Scenario: ${scenario.name} (${scenario.id}, ${scenario.status})` : null,
+    ruleSet ? `Rule set: ${ruleSet.name} (${ruleSet.id}, ${ruleSet.status}, updated ${ruleSet.updatedAt})` : null,
+    run ? `Run: ${run.label} (${run.id}, ${run.status}, T+${run.simTimeH.toFixed(1)}h)` : null,
+    requestedBranchId ? `Branch: ${requestedBranchId}` : null,
+  ].filter(Boolean).join("\n");
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -449,7 +461,7 @@ function Copilot() {
     setDraft("");
     setMessages((list) => [...list, { id: nextId.current++, from: "user", text: question }]);
     setBusy(true);
-    const result = await askCopilot(question);
+    const result = await askCopilot(question, groundingContext);
     setMessages((list) => [
       ...list,
       {
@@ -464,9 +476,9 @@ function Copilot() {
 
   if (!open) {
     return (
-      <button className="chat-fab" type="button" onClick={() => setOpen(true)}>
+      <button className="chat-fab" type="button" onClick={() => setOpen(true)} aria-expanded="false" title={`Open SAGE · ${groundingLabel}`}>
         <MessageSquare size={19} />
-        SAGE
+        <span>SAGE</span>
       </button>
     );
   }
@@ -475,10 +487,10 @@ function Copilot() {
     <section className="chat-panel">
       <header>
         <div>
-          <Bot size={18} />
           <strong>SAGE - Strategy Advisor</strong>
+          <small>Grounded in {groundingLabel}</small>
         </div>
-        <button type="button" onClick={() => setOpen(false)}>
+        <button type="button" onClick={() => setOpen(false)} aria-label="Close SAGE" title="Close SAGE">
           <X size={16} />
         </button>
       </header>
@@ -495,6 +507,11 @@ function Copilot() {
           </article>
         ) : null}
       </div>
+      <div className="chat-grounding">
+        <span>CONTEXT SNAPSHOT</span>
+        <strong>{scenario?.codename ?? "Platform state"}</strong>
+        <small>Current workspace, active rules, run state and available evidence · advisory only</small>
+      </div>
       <form className="chat-input" onSubmit={submit}>
         <input
           value={draft}
@@ -502,7 +519,7 @@ function Copilot() {
           placeholder="Ask about the situation…"
           aria-label="Ask SAGE"
         />
-        <button type="submit" disabled={busy || !draft.trim()}>
+        <button type="submit" disabled={busy || !draft.trim()} aria-label="Send to SAGE" title="Send to SAGE">
           <Send size={16} />
         </button>
       </form>
@@ -510,4 +527,4 @@ function Copilot() {
   );
 }
 
-export type { PageProps, PageId, Profile } from "./shell";
+export type { PageProps, PageId, Profile, WorkspaceMode } from "./shell";

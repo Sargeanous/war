@@ -170,7 +170,7 @@ export default function Admin({ notify, profile }: PageProps) {
         <Metric label="Session policy" value="MFA | 12h" helper="Hardware token + revalidation" tone="good" />
       </MetricGrid>
 
-      <Panel icon={Stamp} title="Classification">
+      <Panel title="Classification">
         <div className="detail-stack">
           <p className="adm-policy-lead">
             One marking for the platform. Every order, fragmentary order and after-action report inherits it, paragraphs carry their own
@@ -247,7 +247,7 @@ export default function Admin({ notify, profile }: PageProps) {
         </div>
       </Panel>
 
-      <Panel icon={BotMessageSquare} title="Autonomy policy">
+      <Panel title="Autonomy policy">
         <div className="detail-stack">
           <p className="adm-policy-lead">
             What the platform may do on its own, per action. This is the control, not a description of one: an action set to human
@@ -258,8 +258,9 @@ export default function Admin({ notify, profile }: PageProps) {
             <>
               <CompactTable
                 columns={["Action", "What it does", "Autonomy", "Refused", ""]}
+                widths={["24%", "36%", "14%", "10%", "16%"]}
                 rows={governance.actions.map((action) => [
-                  <span key="l" className="adm-policy-name">
+                  <span key="l" className="adm-policy-action">
                     <strong>{action.label}</strong>
                     <small>{action.group}</small>
                   </span>,
@@ -303,7 +304,7 @@ export default function Admin({ notify, profile }: PageProps) {
         </div>
       </Panel>
 
-      <Panel icon={Users} title="Users">
+      <Panel title="Users">
         <CompactTable
           columns={["Name", "Role", "Organization", "Last active", "Status", "Permissions", ""]}
           rows={users.map((user) => [
@@ -326,7 +327,7 @@ export default function Admin({ notify, profile }: PageProps) {
       </Panel>
 
       <div className="split-grid equal">
-        <Panel icon={LockKeyhole} title="Permission matrix">
+        <Panel title="Permission matrix">
           <CompactTable
             columns={["User", ...PAGE_IDS.map((p) => PAGE_SHORT[p])]}
             rows={users.map((user) => [
@@ -339,7 +340,7 @@ export default function Admin({ notify, profile }: PageProps) {
             ])}
           />
         </Panel>
-        <Panel icon={ShieldCheck} title="System parameters">
+        <Panel title="System parameters">
           <div className="detail-stack">
             <DetailGrid>
               <Detail label="Classification" value="EXERCISE / FICTIONAL" />
@@ -388,7 +389,6 @@ export default function Admin({ notify, profile }: PageProps) {
       </div>
 
       <Panel
-        icon={FileText}
         title="Audit log"
         action={
           <Field label="">

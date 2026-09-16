@@ -1,6 +1,23 @@
 :root {
   color-scheme: light;
-  font-family: "Manrope", "Inter", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  /* Two interface faces and one measurement face. Keeping this at the token level
+     stops cards, KPIs and shell chrome from drifting into separate typographic
+     personalities as new workspaces are added.
+
+     --sans is the working face: labels, tables, controls, running text. Manrope is
+     set here because it stays legible at 11px in a dense ORBAT table, which is most
+     of this interface.
+
+     --display is the voice: page and panel titles, the wordmark, and any number big
+     enough to be read across a room. Plus Jakarta Sans carries more character at
+     those sizes, and it is the face the client deck is set in, so the platform and
+     the paperwork sound like the same organisation.
+
+     Both go to 800 and no further. ExtraBold is the heaviest weight either family
+     ships, so nothing asks for 900 and gets a synthetic approximation. */
+  --sans: "Manrope", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --display: "Plus Jakarta Sans", "Manrope", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  font-family: var(--sans);
   --bg: #f5f7f8;
   --surface: #ffffff;
   --surface-2: #eef3f1;
@@ -49,8 +66,8 @@
   --t-h2: 14.5px;
   --t-body: 13px;
   --t-sm: 12.5px;
-  --t-xs: 11.5px;
-  --t-kicker: 10.5px;
+  --t-xs: 12px;
+  --t-kicker: 12px;
 
   /* Radii, elevation, control sizing, motion. */
   --radius: 3px;
@@ -76,7 +93,21 @@ body {
   min-width: 320px;
   background: var(--bg);
   color: var(--ink);
-  font-family: "Manrope", "Inter", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  font-family: var(--sans);
+}
+
+/* The display face. Page and panel titles, the wordmark, and figures meant to be
+   read at a glance. Everything else stays on the working face, so the split is a
+   decision about role rather than about size. Tracking is left to the rules that
+   already set it; this only changes which face renders. */
+h1,
+h2,
+h3,
+h4,
+.metric strong,
+.command-brand-copy strong,
+.access-brand-copy strong {
+  font-family: var(--display);
 }
 
 button,
@@ -104,6 +135,24 @@ button:disabled {
   display: grid;
   grid-template-columns: var(--sidebar) minmax(0, 1fr);
   min-height: 100vh;
+}
+
+.app.workspace-focus {
+  grid-template-columns: minmax(0, 1fr);
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app.workspace-focus .workspace {
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.app.workspace-focus .workspace > * {
+  max-width: none;
+  margin-inline: 0;
 }
 
 .login-screen {
@@ -160,9 +209,8 @@ button:disabled {
   overflow: visible;
 }
 
-/* A supplied customer emblem is reproduced as issued: contained so it is never
-   stretched or cropped, and never recoloured. Supply a transparent PNG or an
-   SVG so it sits on the dark shell without a white plate behind it. */
+/* The official eagle is reproduced as issued: contained so it is never
+   stretched, cropped or recoloured on any platform surface. */
 .brand-emblem {
   display: block;
   width: 100%;
@@ -225,12 +273,6 @@ button:disabled {
   transform: translateY(-1px);
 }
 
-.profile-card span:nth-child(2) {
-  display: grid;
-  gap: 5px;
-  flex: 1;
-}
-
 .profile-card strong {
   font-size: 18px;
 }
@@ -239,18 +281,6 @@ button:disabled {
 .profile-card em {
   color: var(--muted);
   font-style: normal;
-}
-
-.profile-icon,
-.panel-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: var(--radius);
-  display: grid;
-  place-items: center;
-  background: var(--primary-soft);
-  color: var(--primary);
-  flex: 0 0 auto;
 }
 
 .sidebar {
@@ -374,6 +404,232 @@ button:disabled {
   justify-content: flex-end;
 }
 
+/* One command shell across every workspace. Navigation is deliberately
+   icon-free and remains the same tab strip inside an active deduction run. */
+.app.command-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.command-shell:not(.workspace-focus) .workspace {
+  --command-shell-gutter: 26px;
+  padding-top: 0;
+}
+
+.command-shell:not(.workspace-focus) .command-topbar,
+.command-shell:not(.workspace-focus) .workspace-navigation {
+  width: calc(100% + (var(--command-shell-gutter) * 2));
+  max-width: none;
+  margin-inline: calc(var(--command-shell-gutter) * -1);
+}
+
+.command-shell:not(.workspace-focus) .workspace-navigation + * {
+  margin-top: 8px;
+}
+
+.command-topbar {
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 220px minmax(260px, 1fr) auto auto;
+  align-items: stretch;
+  border-bottom: 1px solid #4b5055;
+  background: #1f2124;
+  color: #e4e6e9;
+  font-family: var(--sans);
+}
+
+.command-brand,
+.command-context,
+.command-identity,
+.command-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-right: 1px solid #373a3d;
+}
+
+.command-brand {
+  gap: 9px;
+}
+
+.command-brand-mark {
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+
+.command-brand-copy,
+.command-context {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.command-brand-copy strong {
+  font-size: 14px;
+  letter-spacing: 0.015em;
+}
+
+.command-brand-copy span,
+.command-context span,
+.command-identity span {
+  color: #92979c;
+  font-size: 12px;
+}
+
+.command-context strong {
+  overflow: hidden;
+  color: #e4e6e9;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-identity {
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.command-identity strong {
+  color: #e4e6e9;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.command-actions {
+  gap: 6px;
+  border-right: 0;
+  white-space: nowrap;
+}
+
+.command-classification {
+  padding: 2px 5px;
+  border: 1px solid #4b5055;
+  color: #aeb2b6;
+  font: 700 9px var(--mono);
+  letter-spacing: 0.08em;
+}
+
+.command-actions button {
+  min-height: 26px;
+  padding: 3px 8px;
+  border: 1px solid #4b5055;
+  border-radius: 1px;
+  background: transparent;
+  color: #aeb2b6;
+  font-size: 12px;
+}
+
+.command-actions button:hover {
+  border-color: #747b81;
+  color: #e4e6e9;
+}
+
+.command-actions .theme-toggle {
+  width: 28px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.workspace-navigation {
+  min-width: 0;
+  background: #1f2124;
+}
+
+.workspace-tabs {
+  min-width: 0;
+  min-height: 36px;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid #373a3d;
+  background: #1f2124;
+  scrollbar-width: none;
+}
+
+.workspace-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.workspace-tabs button {
+  min-height: 35px;
+  flex: 0 0 auto;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #aeb2b6;
+  font-family: var(--sans);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.workspace-tabs button:hover {
+  color: #e4e6e9;
+}
+
+.workspace-tabs button.active {
+  border-bottom-color: #6f9fc7;
+  background: #24282c;
+  color: #e4e6e9;
+}
+
+.workspace-subtabs {
+  min-width: 0;
+  min-height: 30px;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 0 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid #4b5055;
+  background: #17191c;
+  scrollbar-width: none;
+}
+
+.workspace-subtabs::-webkit-scrollbar {
+  display: none;
+}
+
+.workspace-subtabs button {
+  min-height: 29px;
+  flex: 0 0 auto;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #92979c;
+  font-family: var(--sans);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.workspace-subtabs button:hover {
+  color: #d1d4d7;
+}
+
+.workspace-subtabs button.active {
+  background: #22262a;
+  color: #e4e6e9;
+  font-weight: 600;
+}
+
+.workspace-tabs button:focus-visible,
+.workspace-subtabs button:focus-visible,
+.command-actions button:focus-visible {
+  outline: 2px solid #6f9fc7;
+  outline-offset: -2px;
+}
+
 .session-pill,
 .status-pill {
   display: inline-flex;
@@ -389,6 +645,20 @@ button:disabled {
   font-size: 13px;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.classification-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--muted);
+  font: 700 10px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .icon-button {
@@ -758,7 +1028,7 @@ button:disabled {
   background: var(--surface-2);
   color: var(--ink-2);
   font-style: normal;
-  font-weight: 900;
+  font-weight: 800;
 }
 
 .object-list article {
@@ -919,8 +1189,8 @@ button:disabled {
   .compact-table td::before {
     content: attr(data-label);
     color: var(--muted);
-    font-size: 10px;
-    font-weight: 900;
+    font-size: 12px;
+    font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.06em;
   }
@@ -974,7 +1244,7 @@ button:disabled {
   min-height: 0;
   max-width: 100%;
   padding: 2px 7px;
-  font-size: 10.5px;
+  font-size: 12px;
   white-space: normal;
   overflow-wrap: break-word;
 }
@@ -991,7 +1261,7 @@ button:disabled {
 }
 
 .compact-table th {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.05em;
 }
 
@@ -1012,7 +1282,7 @@ th {
   color: var(--muted);
   background: var(--surface-3);
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -1104,7 +1374,7 @@ select:focus {
   background: var(--primary);
   color: #fff;
   box-shadow: var(--shadow);
-  font-weight: 900;
+  font-weight: 800;
 }
 
 .chat-panel {
@@ -1270,6 +1540,19 @@ select:focus {
     padding: 18px 16px 96px;
   }
 
+  .command-shell:not(.workspace-focus) .workspace {
+    --command-shell-gutter: 16px;
+    padding-top: 0;
+  }
+
+  .command-topbar {
+    grid-template-columns: 190px minmax(180px, 1fr) auto;
+  }
+
+  .command-identity {
+    display: none;
+  }
+
   .topbar {
     align-items: flex-start;
     flex-direction: column;
@@ -1383,7 +1666,7 @@ select:focus {
     content: attr(data-label);
     color: var(--muted);
     font-size: 12px;
-    font-weight: 900;
+    font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
@@ -1397,7 +1680,7 @@ select:focus {
 }
 
 /* MediaGPT chat: live-answer badge + thinking state */
-.chat-live { display: inline-block; font-size: 9px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #15803d; background: #e7f4ec; border-radius: 999px; padding: 1px 7px; margin-bottom: 4px; }
+.chat-live { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--primary-dark); background: var(--primary-soft); border-radius: var(--radius-sm); padding: 1px 7px; margin-bottom: 4px; }
 .chat-log article.pending p { color: var(--muted, #64748b); font-style: italic; }
 .chat-log article.pending p::after { content: ""; animation: chatDots 1.2s steps(4, end) infinite; }
 @keyframes chatDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
@@ -1418,7 +1701,7 @@ select:focus {
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   color: var(--ink-2);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
   background: var(--surface);
@@ -1548,7 +1831,7 @@ select:focus {
 
 .field > span {
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -1634,7 +1917,7 @@ select:focus {
 
 .svg-radar .radar-label {
   fill: var(--muted);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1697,7 +1980,7 @@ select:focus {
   box-shadow: none;
   color: #9fb3a9;
   font-weight: 700;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .map-unit-icon {
@@ -1754,14 +2037,14 @@ select:focus {
   place-items: center;
   color: #fff;
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 800;
 }
 
 /* Hex board coordinate labels (visible at high zoom) */
 .hex-coord-label {
   color: rgba(214, 233, 240, 0.42);
   font-family: var(--mono);
-  font-size: 8.5px;
+  font-size: 10px;
   letter-spacing: 0.05em;
   text-align: center;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
@@ -1799,7 +2082,7 @@ select:focus {
 
 .sim-clock small {
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 400;
   letter-spacing: 0.05em;
 }
@@ -1823,8 +2106,8 @@ select:focus {
 .chat-panel form.chat-input button {
   border: 0;
   border-radius: var(--radius);
-  background: var(--primary);
-  color: #fff;
+  background: var(--ink);
+  color: var(--surface);
   display: grid;
   place-items: center;
 }
@@ -1965,7 +2248,7 @@ select:focus {
 .topbar p,
 .nav-group p,
 .login-brand p {
-  font-size: 10.5px;
+  font-size: 12px;
   letter-spacing: 0.09em;
 }
 
@@ -1986,7 +2269,7 @@ select:focus {
 }
 
 .metric span {
-  font-size: 10.5px;
+  font-size: 12px;
 }
 
 /* --- Chrome density ----------------------------------------------------------- */
@@ -2011,19 +2294,6 @@ select:focus {
 
 .metric-grid {
   gap: var(--s5);
-}
-
-.panel-icon,
-.profile-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-}
-
-.panel-icon svg,
-.profile-icon svg {
-  width: 15px;
-  height: 15px;
 }
 
 .panel-header > div:first-child {
@@ -2053,7 +2323,7 @@ select:focus {
 .status-pill {
   min-height: 24px;
   padding: 3px 10px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -2064,7 +2334,7 @@ td {
 }
 
 th {
-  font-size: 10.5px;
+  font-size: 12px;
 }
 
 /* --- Sidebar ------------------------------------------------------------------- */
@@ -2083,7 +2353,7 @@ th {
 }
 
 .sidebar-brand span {
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .brand-mark {
@@ -2101,7 +2371,7 @@ th {
 }
 
 .current-profile span {
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .nav-groups {
@@ -2132,7 +2402,7 @@ th {
 .tag {
   border-color: transparent;
   background: var(--surface-2);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .session-pill {
@@ -2340,6 +2610,13 @@ th {
   display: flex;
   align-items: center;
   gap: 7px;
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .metric > span:first-of-type::before {
@@ -2482,10 +2759,10 @@ th {
   gap: 11px;
 }
 
-/* --- The card: icon | body | scope + cue ------------------------------------- */
+/* --- The card: duty-position text | scope + cue ----------------------------- */
 .profile-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 18px;
   min-height: 88px;
@@ -2508,25 +2785,6 @@ th {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 28%, transparent);
-}
-
-/* Bare outline glyph, not a filled tile. */
-.profile-card .profile-icon {
-  width: 40px;
-  height: 40px;
-  flex: none;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--primary);
-  display: grid;
-  place-items: center;
-}
-
-.profile-card .profile-icon svg {
-  width: 29px;
-  height: 29px;
-  stroke-width: 1.7;
 }
 
 .profile-card-body {
@@ -2552,7 +2810,7 @@ th {
 .profile-card-body em {
   color: var(--muted);
   font-style: normal;
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.02em;
 }
 
@@ -2569,17 +2827,11 @@ th {
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 16px;
   font-weight: 600;
   letter-spacing: 0.02em;
   white-space: nowrap;
-}
-
-.profile-scope.is-privileged {
-  background: color-mix(in srgb, var(--primary) 12%, transparent);
-  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
-  color: var(--primary);
 }
 
 /* Hover cue: appears and settles, so the card feels answerable. */
@@ -2643,7 +2895,7 @@ th {
   border: 1px solid transparent;
   background: var(--surface-2);
   color: var(--ink-2);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0;
 }
@@ -2865,35 +3117,6 @@ th {
   background: #0d1a24;
 }
 
-/* --- Classification banner ---------------------------------------------------
-   The platform marking sits at the head and foot of every workspace. A
-   headquarters reads the marking before it reads the page. */
-
-.classification-banner {
-  padding: 4px var(--s5);
-  background: var(--red);
-  color: #fff;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-align: center;
-  overflow-wrap: break-word;
-  flex: 0 0 auto;
-}
-
-.classification-banner.top {
-  position: sticky;
-  top: 0;
-  /* Above Leaflet's own panes, which run to 700 and put a map over the marking.
-     A banner a map can hide is not a marking. */
-  z-index: 1200;
-}
-
-.classification-banner.bottom {
-  margin-top: auto;
-}
-
 /* =============================================================================
    Collapsible navigation
    The sidebar is 246px of chrome sitting beside every screen. On a war room
@@ -2999,4 +3222,667 @@ th {
 .sidebar.collapsed .brand-mark {
   width: 32px;
   height: 32px;
+}
+
+/* =============================================================================
+   OPERATIONAL VISUAL SYSTEM
+   A final shared layer for the shell: neutral selection, readable metadata,
+   and a real assistant rail. Semantic colours remain reserved for state and
+   affiliation; simply choosing an item no longer paints it green or blue.
+   ============================================================================= */
+
+body,
+button,
+input,
+textarea,
+select {
+  font-family: var(--sans);
+  font-synthesis: none;
+}
+
+.metric strong,
+.sim-clock strong,
+th,
+td,
+.status-pill,
+.command-context strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Selected is a location, not a success state. Use structure and contrast;
+   green/amber/red remain available for confirmed health, attention and harm. */
+.submission-list button.selected,
+.asset-registry button.selected,
+.package-grid button.selected {
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--ink) 5%, var(--surface));
+  color: var(--ink);
+  box-shadow: inset 2px 0 0 var(--ink-2);
+}
+
+.submission-list button:hover:not(.selected),
+.asset-registry button:hover:not(.selected),
+.package-grid button:hover:not(.selected),
+.zone-list button:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+}
+
+tr.selected-row {
+  background: color-mix(in srgb, var(--ink) 5%, var(--surface));
+  box-shadow: inset 2px 0 0 var(--ink-2);
+}
+
+.segmented button.active,
+.subsidebar button.active {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  box-shadow: inset 0 -2px 0 var(--ink-2);
+}
+
+.workspace-tabs button.active {
+  border-bottom-color: #d1d4d7;
+  background: #24282c;
+}
+
+/* A command is not a health signal. Primary actions use neutral command ink;
+   green stays available for ready/online/achieved state. */
+.button.primary {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.button.primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+[data-theme="dark"] .button.primary {
+  border-color: #d8d3c9;
+  background: #d8d3c9;
+  color: #151310;
+}
+
+/* Closed SAGE is a reserved command rail, not a floating lozenge over the last
+   line of a decision. Focus mode intentionally omits the global assistant. */
+.app.command-shell:not(.workspace-focus):has(> .chat-fab) {
+  grid-template-columns: minmax(0, 1fr) 38px;
+}
+
+.chat-fab {
+  right: 0;
+  bottom: 32px;
+  width: 38px;
+  height: 92px;
+  min-height: 92px;
+  justify-content: center;
+  gap: 0;
+  padding: 10px 7px;
+  border: 1px solid #4b5055;
+  border-inline-end: 0;
+  border-radius: var(--radius) 0 0 var(--radius);
+  background: #1f2124;
+  color: #d7dade;
+  box-shadow: -8px 10px 20px -14px rgba(0, 0, 0, 0.8);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+}
+
+.chat-fab svg {
+  display: none;
+}
+
+.chat-fab:hover {
+  border-color: #747b81;
+  background: #292d31;
+  color: #ffffff;
+}
+
+/* Once opened, SAGE occupies its own docked column instead of covering the
+   current evidence. It therefore also participates in responsive reflow. */
+.app.command-shell:not(.workspace-focus):has(> .chat-panel) {
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+}
+
+.app.command-shell:has(> .chat-panel) > .workspace {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.chat-panel,
+.chat-panel.expanded {
+  position: sticky;
+  inset: 0 auto auto 0;
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  border-block: 0;
+  border-inline-end: 0;
+  border-radius: 0;
+  box-shadow: -12px 0 28px -24px rgba(0, 0, 0, 0.9);
+}
+
+.chat-panel header > div {
+  min-width: 0;
+  display: grid;
+  align-items: start;
+  gap: 4px;
+  color: inherit;
+}
+
+.chat-panel header > div strong {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.chat-panel header > div small {
+  overflow: hidden;
+  color: var(--muted);
+  font: 12px/1.4 var(--mono);
+  text-overflow: ellipsis;
+}
+
+.chat-grounding {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-3);
+}
+
+.chat-grounding > span {
+  color: var(--muted);
+  font: 600 12px/1.35 var(--mono);
+  letter-spacing: 0.05em;
+}
+
+.chat-grounding > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-grounding > small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+[dir="rtl"] .chat-fab {
+  right: auto;
+  left: 0;
+  border-inline-start: 0;
+  border-inline-end: 1px solid #4b5055;
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+@media (max-width: 1180px) {
+  .command-topbar {
+    grid-template-columns: minmax(184px, 220px) minmax(180px, 1fr) auto;
+  }
+
+  .command-identity {
+    display: none;
+  }
+
+  .page-body,
+  .panel,
+  .table-card,
+  .split-grid > *,
+  .metric-grid > * {
+    min-width: 0;
+  }
+
+}
+
+@media (max-width: 820px) {
+  .command-topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .command-brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .command-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .command-context {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-height: 36px;
+    border-top: 1px solid #373a3d;
+  }
+
+  .workspace-tabs,
+  .workspace-subtabs {
+    scroll-snap-type: x proximity;
+  }
+
+  .workspace-tabs button,
+  .workspace-subtabs button {
+    scroll-snap-align: start;
+  }
+
+  /* On compact screens the assistant becomes the workspace while open. This
+     keeps both surfaces usable instead of squeezing the command view to 400px. */
+  .app.command-shell:not(.workspace-focus):has(> .chat-panel) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app.command-shell:has(> .chat-panel) > .workspace {
+    display: none;
+  }
+
+  .chat-panel,
+  .chat-panel.expanded {
+    position: relative;
+    grid-column: 1;
+    width: 100%;
+    min-height: 100dvh;
+  }
+}
+
+/* =============================================================================
+   ACCESS / RBAC
+   A restrained duty-position selector. The official platform lockup carries
+   the identity; the content is deliberately limited to one instruction and
+   a flat set of operational workspaces.
+   ============================================================================= */
+
+.login-screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: 0;
+  overflow-x: hidden;
+  background: var(--bg);
+}
+
+.login-screen::before {
+  content: none;
+}
+
+[data-theme="dark"] .login-screen {
+  background: var(--bg);
+}
+
+.access-masthead {
+  flex: none;
+  width: 100%;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.access-masthead-inner {
+  width: min(var(--rail), 100%);
+  min-height: 80px;
+  margin-inline: auto;
+  padding: 11px clamp(20px, 3vw, 48px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+}
+
+.access-brand-lockup {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.access-brand-mark {
+  width: 58px;
+  height: 58px;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+.access-brand-divider {
+  width: 1px;
+  height: 44px;
+  flex: none;
+  background: var(--line-strong);
+}
+
+.access-brand-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.access-brand-copy strong {
+  color: var(--ink);
+  font-size: 25px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: 0.035em;
+}
+
+.access-brand-copy span {
+  color: var(--muted);
+  font: 600 12px/1.35 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.access-masthead-meta {
+  display: flex;
+  align-items: stretch;
+  margin-inline-start: auto;
+}
+
+.access-context {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 20px;
+  border-inline-start: 1px solid var(--line);
+  color: var(--muted);
+  font: 600 12px/1.3 var(--mono);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.access-masthead-meta .theme-toggle {
+  align-self: center;
+  margin-inline-start: 16px;
+}
+
+.login-panel {
+  flex: 1;
+  width: min(1440px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: clamp(38px, 4vw, 60px) 0 48px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.access-briefing {
+  display: grid;
+  gap: 10px;
+  max-width: 760px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.access-briefing h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(31px, 2.6vw, 42px);
+  font-weight: 720;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+.access-briefing p {
+  max-width: 68ch;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 15.5px;
+  line-height: 1.55;
+}
+
+.profile-grid {
+  margin-top: clamp(28px, 3vw, 40px);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+
+.profile-card {
+  --profile-mark: #8b7440;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 232px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 21px 22px 17px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: start;
+  box-shadow: none;
+  transform: none;
+  transition: border-color var(--ease), background var(--ease);
+}
+
+.profile-card[data-profile="commander"],
+.profile-card[data-profile="planner"] {
+  --profile-mark: #a48230;
+}
+
+.profile-card[data-profile="operator"] {
+  --profile-mark: #68756e;
+}
+
+.profile-card[data-profile="analyst"] {
+  --profile-mark: #456f5c;
+}
+
+.profile-card[data-profile="admin"] {
+  --profile-mark: #756d58;
+}
+
+.profile-card:hover {
+  border-color: color-mix(in srgb, var(--ink-2) 68%, var(--line-strong));
+  background: var(--surface);
+  box-shadow: none;
+  transform: none;
+}
+
+.profile-card:focus-visible {
+  border-color: var(--ink-2);
+  outline: 2px solid color-mix(in srgb, var(--ink-2) 45%, transparent);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.profile-card-mark {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 15px;
+  display: grid;
+  place-items: center;
+  color: var(--profile-mark);
+}
+
+.profile-card-mark::before {
+  content: "";
+  position: absolute;
+  inset: 9px 3px 2px 11px;
+  background: currentColor;
+  opacity: 0.16;
+  filter: blur(6px);
+  transform: rotate(-8deg);
+}
+
+.profile-card-mark svg {
+  position: relative;
+  z-index: 1;
+  fill: color-mix(in srgb, currentColor 10%, transparent);
+  filter: drop-shadow(1px 2px 1px rgba(0, 0, 0, 0.2));
+}
+
+.profile-card-body {
+  min-width: 0;
+  margin: 0;
+  display: grid;
+  gap: 0;
+}
+
+.profile-card-body strong {
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.28;
+  letter-spacing: -0.012em;
+}
+
+.profile-card-description {
+  max-width: 54ch;
+  margin-top: 10px;
+  color: var(--ink-2);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.profile-card-scope {
+  width: fit-content;
+  max-width: 100%;
+  margin-top: auto;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--surface-3);
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-2);
+  font: 550 11.5px/1.35 var(--mono);
+  letter-spacing: 0.015em;
+}
+
+.profile-card-footer {
+  margin-top: 13px;
+  padding-top: 0;
+  border-top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.profile-card-cue {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  opacity: 1;
+  transform: none;
+}
+
+.profile-card-cue svg {
+  transition: transform var(--ease);
+}
+
+.profile-card:hover .profile-card-cue svg,
+.profile-card:focus-visible .profile-card-cue svg {
+  transform: translateX(3px);
+}
+
+@media (max-width: 1180px) {
+  .profile-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .access-masthead-inner {
+    min-height: 78px;
+  }
+
+  .access-briefing {
+    padding: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .access-masthead-inner {
+    padding-inline: 16px;
+  }
+
+  .access-brand-lockup {
+    gap: 11px;
+  }
+
+  .access-brand-mark {
+    width: 48px;
+    height: 48px;
+  }
+
+  .access-brand-divider {
+    height: 36px;
+  }
+
+  .access-brand-copy strong {
+    font-size: 20px;
+  }
+
+  .access-context {
+    display: none;
+  }
+
+  .access-masthead-meta .theme-toggle {
+    margin-inline-start: 0;
+  }
+
+  .login-panel {
+    width: min(100% - 24px, var(--rail));
+    padding-top: 20px;
+  }
+
+  .access-briefing {
+    gap: 9px;
+    padding: 0;
+  }
+
+  .profile-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .profile-card {
+    min-height: 0;
+    padding: 18px 17px 15px;
+  }
+
+}
+
+@media (max-width: 430px) {
+  .access-brand-copy span {
+    display: none;
+  }
+
+  .profile-card-footer {
+    align-items: flex-end;
+  }
 }

@@ -3,7 +3,7 @@
 .adm-perm-cell {
   text-align: center;
   color: var(--primary-dark);
-  font-weight: 900;
+  font-weight: 800;
 }
 
 .adm-perm-cell.off {
@@ -56,19 +56,26 @@
   overflow-wrap: break-word;
 }
 
-.adm-policy-name {
+.adm-policy-action {
   display: grid;
-  gap: 1px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 3px;
   min-width: 0;
 }
 
-.adm-policy-name strong {
+.adm-policy-action strong {
+  display: block;
+  min-width: 0;
   color: var(--ink);
   overflow-wrap: break-word;
 }
 
-.adm-policy-name small {
+.adm-policy-action small {
+  display: block;
+  min-width: 0;
   font-size: var(--t-kicker);
+  line-height: 1.25;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);

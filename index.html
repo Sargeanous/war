@@ -2,16 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/mod-emblem.png" />
-    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="255x255" href="/mod-emblem.png?v=eagle-1" />
+    <link rel="shortcut icon" type="image/png" href="/mod-emblem.png?v=eagle-1" />
+    <link rel="apple-touch-icon" href="/mod-emblem.png?v=eagle-1" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SANDTABLE - Scenario Simulation &amp; Strategic Planning</title>
-    <!-- Origen UI kit type (same load as project-start); degrades to Segoe UI offline. -->
+    <title>Access Profile | SANDTABLE</title>
+    <!-- Origen UI kit type; degrades to Segoe UI offline.
+         Both families are loaded as variable fonts across 200..800, because the interface
+         asks for weights the old fixed load did not carry (550, 650, 720, 760, 800) and the
+         browser was faking those. 800 is ExtraBold and is the heaviest either family has. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=DM+Mono:wght@400;500&display=swap"
     />
     <!-- Leaflet (real map tiles). Loaded from CDN; the app degrades gracefully to an SVG chart if offline. -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />

@@ -358,7 +358,7 @@ function LeafletTheaterMap(props: TheaterMapProps) {
   const overlaySigRef = useRef<string>("");
   // Persistent unit markers (diffed per tick so positions glide) and one-shot FX.
   const unitsLayerRef = useRef<any>(null);
-  const unitRegRef = useRef<Map<string, { marker: any; iconKey: string }>>(new Map());
+  const unitRegRef = useRef<Map<string, { marker: any; iconKey: string; selected: boolean }>>(new Map());
   const prevVitalsRef = useRef<Map<string, { status: string; strength: number }>>(new Map());
   const prevWorldKeyRef = useRef<string | undefined>(undefined);
   const fxTimersRef = useRef<Set<number>>(new Set());
@@ -436,10 +436,16 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     });
     // Permanent unit labels pile into an unreadable stack once the board
     // shrinks below its design zoom; gate them the way hex labels are gated.
-    // The same handler tracks the live zoom for counter sizing.
+    // Scale classes also let map furniture step back at theater overview while
+    // keeping the selected counter discoverable through its tooltip.
     const syncZoomUi = () => {
-      if (containerRef.current) containerRef.current.classList.toggle("map-labels-off", map.getZoom() < 7);
-      setMapZoom(map.getZoom());
+      const z = map.getZoom();
+      if (containerRef.current) {
+        containerRef.current.classList.toggle("map-labels-off", z < 8);
+        containerRef.current.classList.toggle("map-overview", z < 8);
+        containerRef.current.classList.toggle("map-detail", z >= 10);
+      }
+      setMapZoom(z);
     };
     syncZoomUi();
     // .map-no-glide is set by the camera-flight effect (flyTo repositions
@@ -459,8 +465,15 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     unitRegRef.current = new Map();
     prevVitalsRef.current = new Map();
     prevWorldKeyRef.current = undefined;
+    // The tactical workspace can enter focus mode after this map mounts, and
+    // side panels can change its width without a window resize. Leaflet only
+    // measures its host during construction, so keep the camera and tiles
+    // fitted to the actual panel size whenever that host changes.
+    const resizeObserver = new ResizeObserver(() => map.invalidateSize({ pan: false }));
+    resizeObserver.observe(containerRef.current);
     if ((import.meta as any).env?.DEV) (window as any).__sandtableMap = map; // browser-QA hook, dev builds only
     return () => {
+      resizeObserver.disconnect();
       if (graticuleRef.current) {
         graticuleRef.current.destroy();
         graticuleRef.current = null;
@@ -800,19 +813,30 @@ function LeafletTheaterMap(props: TheaterMapProps) {
     // tries a ladder of vertical offsets beside its counter and hides
     // (falling back to a hover tooltip) when no rung is clear. Stable id
     // order keeps the same labels winning between ticks.
-    const LABEL_H = 17; // rendered height incl. padding and border
+    const LABEL_H = 19; // rendered height incl. padding and border
     const labelPlan = new Map<string, number | null>();
     const planMap = mapRef.current;
-    if (showLabels && planMap) {
+    const effectiveShowLabels = Boolean(showLabels) && mapZoom >= 8;
+    if (effectiveShowLabels && planMap) {
       const placedLabels: Array<{ x: number; y: number; w: number; h: number }> = [];
       const clash = (r: { x: number; y: number; w: number; h: number }) =>
         placedLabels.some((b) => r.x < b.x + b.w + 4 && b.x < r.x + r.w + 4 && r.y < b.y + b.h + 3 && b.y < r.y + r.h + 3);
       const xOff = Math.round((symbolSize + 8) / 2) + 3; // matches the tooltip offset
-      for (const u of [...visibleUnits].sort((a, b) => (a.id < b.id ? -1 : 1))) {
+      // Selection wins, then actionable units, then strength. Previously the
+      // arbitrary id order could hide the track the operator had just chosen.
+      const statusRank = (status: MapUnit["status"]) => (status === "active" ? 0 : status === "damaged" ? 1 : 2);
+      for (const u of [...visibleUnits].sort((a, b) => {
+        const selectedDelta = Number(b.id === selectedUnitId) - Number(a.id === selectedUnitId);
+        if (selectedDelta) return selectedDelta;
+        const stateDelta = statusRank(a.status) - statusRank(b.status);
+        if (stateDelta) return stateDelta;
+        const strengthDelta = b.strength - a.strength;
+        return strengthDelta || a.id.localeCompare(b.id);
+      })) {
         const p = planMap.latLngToLayerPoint([u.position.lat, u.position.lng]);
-        const w = Math.min(u.name.length, 22) * 6.5 + 14;
+        const w = Math.min(u.name.length, 22) * 7.25 + 16;
         let dy: number | null = null;
-        for (const cand of [0, 21, -21, 42, -42]) {
+        for (const cand of [0, 23, -23, 46, -46]) {
           const rect = { x: p.x + xOff, y: p.y + cand - LABEL_H / 2, w, h: LABEL_H };
           if (!clash(rect)) {
             dy = cand;
@@ -838,8 +862,8 @@ function LeafletTheaterMap(props: TheaterMapProps) {
       const selected = unit.id === selectedUnitId;
       // Distinguish "no plan entry" (0) from a deliberate null (= hide this
       // label, the cluster is full); ?? would erase the null.
-      const plan: number | null = showLabels ? (labelPlan.has(unit.id) ? labelPlan.get(unit.id)! : 0) : 0;
-      const labelOn = Boolean(showLabels) && plan !== null;
+      const plan: number | null = effectiveShowLabels ? (labelPlan.has(unit.id) ? labelPlan.get(unit.id)! : 0) : 0;
+      const labelOn = effectiveShowLabels && plan !== null;
       const iconKey = [
         unit.side,
         unit.affiliation ?? "",
@@ -863,7 +887,8 @@ function LeafletTheaterMap(props: TheaterMapProps) {
         });
         layer.addLayer(marker);
         suppressGlide(marker);
-        entry = { marker, iconKey };
+        if (selected && !labelOn) marker.openTooltip();
+        entry = { marker, iconKey, selected };
         reg.set(unit.id, entry);
       } else {
         const at = entry.marker.getLatLng();
@@ -877,12 +902,14 @@ function LeafletTheaterMap(props: TheaterMapProps) {
           entry.marker.setLatLng([unit.position.lat, unit.position.lng]);
         }
         if (entry.iconKey !== iconKey) {
+          const wasSelected = entry.selected;
           entry.iconKey = iconKey;
+          entry.selected = selected;
           const { icon, sym } = makeUnitIcon(L, unit, selected, symbolSize);
-          const hadOpenTooltip = !labelOn && entry.marker.isTooltipOpen && entry.marker.isTooltipOpen();
+          const hadOpenTooltip = !labelOn && !wasSelected && entry.marker.isTooltipOpen && entry.marker.isTooltipOpen();
           entry.marker.setIcon(icon);
           bindUnitTooltip(entry.marker, unit, sym.width, labelOn, plan ?? 0);
-          if (hadOpenTooltip) entry.marker.openTooltip(); // keep a hovered readout alive across the rebind
+          if (selected || hadOpenTooltip) entry.marker.openTooltip();
           suppressGlide(entry.marker);
         }
       }

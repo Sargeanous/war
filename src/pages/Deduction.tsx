@@ -1,15 +1,14 @@
 import {
   AlertTriangle,
-  BrainCircuit,
   CheckCircle2,
   ChevronLeft,
   ListChecks,
+  MessageSquareText,
   PanelLeftClose,
   PanelLeftOpen,
   Pause,
   Play,
   Radar,
-  Rocket,
   ScrollText,
   ShieldAlert,
   SkipForward,
@@ -21,6 +20,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./deduction.css";
+import BrandMark from "../BrandMark";
 import {
   ApiError,
   controlRun,
@@ -85,19 +85,30 @@ const errMsg = (error: unknown) => (error instanceof ApiError ? error.message : 
 
 type ViewSide = "all" | "blue" | "red";
 type DrawerId = "score" | "events" | "adjudication" | "decisions" | "sage" | "seats" | "opfor";
+type InspectorTab = "decision" | "adjudication" | "score" | "more";
+type MoreView = "decisions" | "sage" | "opfor" | "seats";
 
-export default function Deduction({ notify, goTo, profile }: PageProps) {
+export default function Deduction({
+  notify,
+  goTo,
+  profile,
+  classificationMarking,
+  setWorkspaceMode,
+  workspaceNavigation,
+}: PageProps) {
   const [boot, setBoot] = useState<Bootstrap | null>(null);
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [ruleSets, setRuleSets] = useState<RuleSet[]>([]);
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("run"));
   const [run, setRun] = useState<SimRun | null>(null);
-  const [branchId, setBranchId] = useState<string>("");
+  const [branchId, setBranchId] = useState<string>(() => new URLSearchParams(window.location.search).get("branch") ?? "");
   const [rationale, setRationale] = useState("");
   const [showIntervene, setShowIntervene] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
-  const [viewSide, setViewSide] = useState<ViewSide>("all");
+  const [viewSide, setViewSide] = useState<ViewSide>(() =>
+    profile.id === "operator" || profile.id === "admin" ? "all" : "blue"
+  );
   const [drawer, setDrawer] = useState<DrawerId | null>("score");
   const [orbatSide, setOrbatSide] = useState<"blue" | "red">("blue");
   const [orbatOpen, setOrbatOpen] = useState(true);
@@ -106,6 +117,10 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
   const [agents, setAgents] = useState<AgentDef[]>([]);
   const [seatBusy, setSeatBusy] = useState<string | null>(null);
   const [mapFocus, setMapFocus] = useState<MapFocus | null>(null);
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>("score");
+  const [moreView, setMoreView] = useState<MoreView>("decisions");
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedDecisionOptionId, setSelectedDecisionOptionId] = useState<string | null>(null);
   // Id of a decision that opened live while watching (drives the alarm pulse
   // and the auto-scroll; decisions that were already open when the page or
   // run was entered get neither).
@@ -114,8 +129,14 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
   const prevOpenDecisionsRef = useRef<Set<string> | null>(null);
   const branchIdRef = useRef<string>("");
   const decisionBlockRef = useRef<HTMLDivElement | null>(null);
-  const canIntervene = profile.id === "operator" || profile.id === "admin";
+  const canDecide = profile.id === "commander";
+  const canControl = profile.id === "operator";
+  const canIntervene = profile.id === "operator";
   branchIdRef.current = branchId;
+
+  useEffect(() => {
+    if (!canControl && viewSide !== "blue") setViewSide("blue");
+  }, [canControl, viewSide]);
 
   // Launcher state
   const [scenarioId, setScenarioId] = useState("");
@@ -143,7 +164,9 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
         setRuleSetId(active ? active.id : rs[0]?.id ?? "");
         const ready = b.scenarios.find((s) => s.status === "ready");
         setScenarioId(ready ? ready.id : b.scenarios[0]?.id ?? "");
-        const live = r.find((x) => x.status === "running" || x.status === "awaiting-decision" || x.status === "paused");
+        const requestedRunId = new URLSearchParams(window.location.search).get("run");
+        const live = r.find((x) => x.id === requestedRunId)
+          ?? r.find((x) => x.status === "running" || x.status === "awaiting-decision" || x.status === "paused");
         if (live) setActiveRunId(live.id);
         setLoading(false);
       })
@@ -158,6 +181,15 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (activeRunId) url.searchParams.set("run", activeRunId);
+    else url.searchParams.delete("run");
+    if (activeRunId && branchId) url.searchParams.set("branch", branchId);
+    else url.searchParams.delete("branch");
+    window.history.replaceState({}, "", url);
+  }, [activeRunId, branchId]);
 
   // Agent library, for crewing seats.
   useEffect(() => {
@@ -205,7 +237,11 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
   const applyRun = useCallback(
     (next: SimRun) => {
       setRun(next);
-      setBranchId((current) => (next.branches.some((b) => b.id === current) ? current : next.branches[0]?.id ?? ""));
+      setBranchId((current) => {
+        if (next.branches.some((candidate) => candidate.id === current)) return current;
+        const waiting = next.branches.find((candidate) => candidate.decisions.some((decision) => decision.status === "open"));
+        return waiting?.id ?? next.branches[0]?.id ?? "";
+      });
       for (const branch of next.branches) {
         for (const unit of branch.units) {
           const key = `${branch.id}:${unit.id}`;
@@ -284,9 +320,32 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
     [boot, run, scenarioId]
   );
   const branch = run?.branches.find((b) => b.id === branchId) ?? run?.branches[0];
+  const boundRuleSet = run ? ruleSets.find((item) => item.id === run.ruleSetId) : undefined;
+  const openDecisionId = branch?.decisions.find((decision) => decision.status === "open")?.id ?? null;
+  const focusActive = Boolean(run && activeRunId);
+
+  useEffect(() => {
+    setWorkspaceMode(focusActive ? "focus" : "standard");
+    return () => setWorkspaceMode("standard");
+  }, [focusActive, setWorkspaceMode]);
+
+  useEffect(() => {
+    setSelectedDecisionOptionId(null);
+    setSelectedEventId(null);
+    setRationale("");
+    if (openDecisionId) {
+      setInspectorTab("decision");
+    } else {
+      setInspectorTab((current) => (current === "decision" ? "adjudication" : current));
+    }
+  }, [branchId, openDecisionId]);
 
   async function doControl(action: "pause" | "resume" | "speed" | "abort" | "step", value?: number) {
     if (!run) return;
+    if (!canControl) {
+      notify("Run controls are reserved for Simulation Control");
+      return;
+    }
     if (action === "abort" && !window.confirm("Abort this deduction run? Branch states will be frozen.")) return;
     try {
       applyRun(await controlRun(run.id, action, value));
@@ -303,8 +362,16 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
   }
 
   async function doLaunch() {
+    if (!canControl) {
+      notify("Run launch is reserved for Simulation Control");
+      return;
+    }
     if (!scenarioId || !pickedCoaIds.length || !ruleSetId) {
       notify("Pick a scenario, at least one COA and a rule set");
+      return;
+    }
+    if (!ruleSets.some((item) => item.id === ruleSetId && item.status === "active")) {
+      notify("Only a published active rule snapshot can be released to execution");
       return;
     }
     try {
@@ -334,6 +401,10 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
   // backend signs it with a name rather than accepting an anonymous reveal.
   async function doRevealAdversary() {
     if (!run) return;
+    if (!canIntervene) {
+      notify("OPFOR reveal authority is reserved for Simulation Control");
+      return;
+    }
     if (!window.confirm("Reveal the OPFOR plan to the players? Once shown it cannot be hidden again for this run.")) return;
     setRevealBusy(true);
     try {
@@ -348,6 +419,10 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
 
   async function doDecide(decisionId: string, optionId: string) {
     if (!run || !branch) return;
+    if (!canDecide) {
+      notify("Decision authority is reserved for the Joint Force Commander");
+      return;
+    }
     try {
       applyRun(
         await decideBranch(run.id, branch.id, {
@@ -408,6 +483,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
         setPickedCoaIds={setPickedCoaIds}
         ruleSets={ruleSets}
         ruleSetId={ruleSetId}
+        canLaunch={canControl}
         whiteCell={canIntervene}
         adversaryPlans={adversaryPlans}
         redPlanId={redPlanId}
@@ -420,6 +496,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
         label={label}
         setLabel={setLabel}
         onLaunch={doLaunch}
+        onRequestPackage={() => notify("COA package release requested from Plans Cell (J5)")}
         onOpen={(id) => {
           trailsRef.current = {};
           setActiveRunId(id);
@@ -454,6 +531,570 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
   const roster = (branch?.units ?? []).filter((u) => u.side === orbatSide && rosterVisible(u));
   const selectedUnit = branch?.units.find((u) => u.id === selectedUnitId && rosterVisible(u)) ?? null;
   const adjudicated = (branch?.recentEvents ?? []).filter((e) => e.adjudication);
+
+  if (branch && scenario) {
+    const selectedDecisionOption = openDecision?.options.find((option) => option.id === selectedDecisionOptionId) ?? null;
+    const selectedEvent = branch.recentEvents.find((event) => event.id === selectedEventId) ?? null;
+    const evidenceEvents = selectedEvent ? [selectedEvent] : adjudicated.slice(0, 8);
+    const recentEvents = branch.recentEvents.slice(0, 5);
+    const rosterGroups = roster.reduce<Array<{ name: string; units: Unit[] }>>((groups, unit) => {
+      const name = unit.taskForce ?? `${unit.domain.toUpperCase()} elements`;
+      const group = groups.find((candidate) => candidate.name === name);
+      if (group) group.units.push(unit);
+      else groups.push({ name, units: [unit] });
+      return groups;
+    }, []);
+    const missionName = scenario.name.startsWith(`${scenario.codename} -`)
+      ? scenario.name.slice(scenario.codename.length + 2).trim()
+      : scenario.name;
+    const exitRun = () => {
+      setActiveRunId(null);
+      setRun(null);
+      setSelectedUnitId(null);
+      setSelectedEventId(null);
+      setMapFocus(null);
+      setFreshDecisionId(null);
+      prevOpenDecisionsRef.current = null;
+      fetchRuns().then(setRuns).catch(() => undefined);
+    };
+
+    const chooseEvent = (event: (typeof branch.recentEvents)[number]) => {
+      setSelectedEventId(event.id);
+      if (event.position) {
+        setMapFocus({ lat: event.position.lat, lng: event.position.lng, zoom: 9, token: Date.now() });
+      }
+      setInspectorTab(event.type === "decision" && openDecision ? "decision" : "adjudication");
+    };
+
+    const chooseUnit = (unitId: string | null) => {
+      setSelectedEventId(null);
+      setSelectedUnitId(unitId);
+      const unit = branch.units.find((candidate) => candidate.id === unitId);
+      if (!unit) return;
+      if (unit.side === "blue" || unit.side === "red") setOrbatSide(unit.side);
+      setMapFocus({ lat: unit.position.lat, lng: unit.position.lng, zoom: Math.max(scenario.mapZoom, 8), token: Date.now() });
+    };
+
+    return (
+      <div className="ded-live-page">
+        <header className="ded-live-commandbar">
+          <div className="ded-live-brand">
+            <div className="ded-live-brand-mark">
+              <BrandMark size={28} />
+            </div>
+            <div className="ded-live-brand-copy">
+              <strong>SANDTABLE</strong>
+              <span>Wargame platform</span>
+            </div>
+          </div>
+          <div className="ded-live-operation">
+            <button
+              type="button"
+              className="ded-live-back"
+              title="Return to the run list without changing this run"
+              onClick={exitRun}
+            >
+              <ChevronLeft size={14} />
+              Back to run list
+            </button>
+            <strong>
+              {scenario.codename} — {missionName}
+            </strong>
+            <span>{run.label}</span>
+            {classificationMarking ? (
+              <small className="ded-live-classification" title={classificationMarking}>
+                {classificationMarking.split("//")[0]?.trim()}
+              </small>
+            ) : null}
+          </div>
+          <div className="ded-live-time">
+            <span>Simulation time</span>
+            <strong>{simClock(simTimeH)}</strong>
+          </div>
+          <div className="ded-live-duty">
+            <span>Active role</span>
+            <strong>{profile.name}</strong>
+          </div>
+        </header>
+
+        <div className="ded-live-runstate">
+          <div className="ded-live-branches" aria-label="COA branch">
+            {run.branches.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={item.id === branch.id ? "active" : ""}
+                aria-label={`${item.name}${item.decisions.some((decision) => decision.status === "open") ? ", decision required" : ""}`}
+                onClick={() => setBranchId(item.id)}
+              >
+                {item.name}
+                {item.decisions.some((decision) => decision.status === "open") ? (
+                  <span className="ded-live-branch-alert" aria-hidden="true" />
+                ) : null}
+              </button>
+            ))}
+          </div>
+          <span className="ded-live-separator" />
+          <span>{phaseName}</span>
+          <span className="ded-live-separator" />
+          <span className="ded-live-mono">tick {run.clock.tick}</span>
+          {env ? (
+            <>
+              <span className="ded-live-separator" />
+              <span>
+                {env.weather} · Sea state {env.seaState} · EMCON {env.emcon} · {daylight ? "Day" : "Night"}
+              </span>
+            </>
+          ) : null}
+          <span className="ded-live-separator" />
+          <label className="ded-live-engine">
+            <span>{run.engine === "realtime" ? "Real-time engine" : "Turn-based engine"}</span>
+            <select
+              value={String(run.clock.speed)}
+              aria-label="Simulation speed"
+              disabled={!canControl || run.status === "completed" || run.status === "aborted"}
+              onChange={(event) => doControl("speed", Number(event.target.value))}
+            >
+              <option value="1">1×</option>
+              <option value="2">2×</option>
+              <option value="4">4×</option>
+            </select>
+          </label>
+          <strong className={`ded-live-status status-${run.status}`}>{run.status.replace(/-/g, " ")}</strong>
+          <div className="ded-live-perspective" aria-label="Fog-of-war perspective">
+            <span>Perspective · fog of war {viewSide === "all" ? "off" : "on"}</span>
+            {(
+              canControl ? [
+                { id: "blue", label: "BLUE" },
+                { id: "all", label: "UMPIRE" },
+                { id: "red", label: "RED" },
+              ] as const : [{ id: "blue", label: "BLUE" }] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={viewSide === item.id ? "active" : ""}
+                aria-pressed={viewSide === item.id}
+                onClick={() => setViewSide(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="ded-live-controls">
+            {canControl && run.status === "paused" ? (
+              <button type="button" onClick={() => doControl("resume")}>Resume</button>
+            ) : canControl && isLive ? (
+              <button type="button" onClick={() => doControl("pause")}>Pause</button>
+            ) : null}
+            {canControl && run.engine === "turn-based" && isLive ? (
+              <button type="button" onClick={() => doControl("step")}>Step</button>
+            ) : null}
+            {canIntervene && (isLive || run.status === "paused") ? (
+              <button type="button" onClick={() => setShowIntervene(true)}>Intervene</button>
+            ) : null}
+            {canControl && (isLive || run.status === "paused") ? (
+              <button className="danger" type="button" onClick={() => doControl("abort")}>Abort</button>
+            ) : null}
+          </div>
+        </div>
+
+        {workspaceNavigation}
+
+        <div className="ded-live-workspace">
+          <aside className="ded-live-orbat" aria-label="Order of battle">
+            <div className="ded-live-section-head">
+              <strong>Order of battle</strong>
+              <div className="ded-live-side-toggle">
+                <button
+                  type="button"
+                  className={orbatSide === "blue" ? "active blue" : ""}
+                  onClick={() => setOrbatSide("blue")}
+                >
+                  BLUE
+                </button>
+                <button
+                  type="button"
+                  className={orbatSide === "red" ? "active red" : ""}
+                  onClick={() => setOrbatSide("red")}
+                >
+                  RED
+                </button>
+              </div>
+            </div>
+            <p className="ded-live-force-label">{orbatSide === "blue" ? "Coalition Task Force" : "OPFOR contacts"}</p>
+            <div className="ded-live-roster">
+              {roster.length ? (
+                rosterGroups.map((group) => (
+                  <section key={group.name} className="ded-live-roster-group">
+                    <header><span>{group.name}</span><small>{group.units.length}</small></header>
+                    {group.units.map((unit) => (
+                      <button
+                        key={unit.id}
+                        type="button"
+                        className={`${unit.id === selectedUnitId ? "active" : ""}${unit.status === "destroyed" ? " dead" : ""}`}
+                        onClick={() => chooseUnit(unit.id === selectedUnitId ? null : unit.id)}
+                      >
+                        <i style={{ background: sideColors[unit.side] }} />
+                        <span>{unit.name}</span>
+                        {Math.round(unit.strength) < 100 || unit.status !== "active" ? <small>{Math.round(unit.strength)}%</small> : null}
+                      </button>
+                    ))}
+                  </section>
+                ))
+              ) : (
+                <p className="ded-live-empty">No contacts held in this perspective.</p>
+              )}
+            </div>
+            {selectedUnit ? (
+              <div className="ded-live-unit-detail">
+                <strong>{selectedUnit.name}</strong>
+                <dl>
+                  <div><dt>Status</dt><dd>{selectedUnit.status}</dd></div>
+                  <div><dt>Strength</dt><dd>{Math.round(selectedUnit.strength)}%</dd></div>
+                  <div><dt>Supply</dt><dd>{Math.round(selectedUnit.supply)}%</dd></div>
+                  <div><dt>Speed</dt><dd>{Math.round(selectedUnit.speedKts)} kt</dd></div>
+                </dl>
+                <small>
+                  {selectedUnit.taskForce ?? selectedUnit.domain} · {selectedUnit.position.lat.toFixed(2)}, {selectedUnit.position.lng.toFixed(2)}
+                </small>
+              </div>
+            ) : (
+              <p className="ded-live-orbat-note">
+                {viewSide === "blue"
+                  ? "OPFOR order of battle is limited to detected contacts while BLUE fog of war is enabled."
+                  : "Select a formation to inspect its current state."}
+              </p>
+            )}
+          </aside>
+
+          <section className="ded-live-center" aria-label="Theater and event ledger">
+            <div className="ded-live-map-head">
+              <strong>Theater situation</strong>
+              <span title={`Execution baseline: ${boundRuleSet?.name ?? run.ruleSetId}${branch.seed !== undefined ? ` · common seed ${branch.seed}` : ""}`}>
+                Live pieces — {scenario.codename} · {missionName} · {boundRuleSet?.name ?? run.ruleSetId}
+                {branch.seed !== undefined ? ` · seed ${branch.seed}` : ""}
+              </span>
+              <small>{viewSide === "all" ? "Umpire" : `${viewSide.toUpperCase()} view`} · fog of war {viewSide === "all" ? "off" : "on"}</small>
+            </div>
+            <div className="ded-live-map">
+              <TheaterMap
+                center={scenario.mapCenter}
+                zoom={scenario.mapZoom}
+                units={branch.units}
+                theater={boot?.theater ?? []}
+                objectives={scenario.objectives}
+                trails={trails}
+                events={branch.recentEvents.filter((event) => event.position).slice(0, 6)}
+                selectedUnitId={selectedUnitId}
+                onSelectUnit={chooseUnit}
+                fogSide={fogSide}
+                weather={env?.weather}
+                daylight={daylight}
+                focusOn={mapFocus}
+                worldKey={`${run.id}:${branchId}:${viewSide}`}
+                height={500}
+              />
+            </div>
+
+            <section className="ded-live-ledger" aria-label="Event ledger">
+              <header>
+                <strong>Event ledger</strong>
+                <span>{branch.name} · latest {recentEvents.length} events · select a row for evidence</span>
+              </header>
+              <div className="ded-live-ledger-row heading" aria-hidden="true">
+                <span>Tick</span><span>Time</span><span>Force</span><span>Event</span><span>Result</span>
+              </div>
+              {recentEvents.map((event) => {
+                const actor = branch.units.find((unit) => unit.id === event.actorId);
+                const force = actor?.side?.toUpperCase() ?? "—";
+                const result = event.adjudication
+                  ? `${event.adjudication.result}${event.adjudication.result === "hit" ? ` · ${event.adjudication.damage}%` : ""}`
+                  : event.type === "decision"
+                    ? "open"
+                    : "—";
+                return (
+                  <button
+                    key={event.id}
+                    type="button"
+                    className={`ded-live-ledger-row${selectedEventId === event.id ? " active" : ""}`}
+                    onClick={() => chooseEvent(event)}
+                  >
+                    <span className="ded-live-mono">{event.tick}</span>
+                    <span className="ded-live-mono">{simClock(event.simTimeH)}</span>
+                    <span className={`force-${actor?.side ?? "neutral"}`}>{force}</span>
+                    <span>{event.title}</span>
+                    <span className="ded-live-mono">{result}</span>
+                  </button>
+                );
+              })}
+            </section>
+          </section>
+
+          <aside className="ded-live-inspector" ref={decisionBlockRef} aria-label="Inspector">
+            <header className="ded-live-inspector-head">
+              <div><strong>Inspector</strong>{openDecision ? <span>Decision required</span> : null}</div>
+              <small>{selectedEvent?.title ?? selectedUnit?.name ?? branch.name}</small>
+            </header>
+            <div className="ded-live-inspector-tabs" role="tablist" aria-label="Inspector views">
+              {(
+                [
+                  { id: "decision", label: "Decision" },
+                  { id: "adjudication", label: "Adjudication" },
+                  { id: "score", label: "Score" },
+                  { id: "more", label: "More" },
+                ] as const
+              ).map((item) => (
+                <button
+                  key={item.id}
+                  id={`ded-inspector-tab-${item.id}`}
+                  type="button"
+                  role="tab"
+                  aria-controls="ded-inspector-panel"
+                  aria-selected={inspectorTab === item.id}
+                  className={inspectorTab === item.id ? "active" : ""}
+                  onClick={() => setInspectorTab(item.id)}
+                >
+                  {item.label}
+                  {item.id === "decision" && openDecision ? <i /> : null}
+                </button>
+              ))}
+            </div>
+
+            <div
+              id="ded-inspector-panel"
+              className="ded-live-inspector-body"
+              role="tabpanel"
+              aria-labelledby={`ded-inspector-tab-${inspectorTab}`}
+            >
+              {inspectorTab === "decision" ? (
+                openDecision ? (
+                  <div className="ded-live-decision">
+                    <div className="ded-live-decision-title">
+                      <h2>{openDecision.title}</h2>
+                      <span>
+                        Raised {simClock(openDecision.simTimeH)} · tick {openDecision.tick} · branch {branch.name}
+                      </span>
+                    </div>
+                    <p>{openDecision.situation}</p>
+                    <div className="ded-live-option-list" role="radiogroup" aria-label="Decision options">
+                      {openDecision.options.map((option, index) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={selectedDecisionOptionId === option.id}
+                          className={selectedDecisionOptionId === option.id ? "active" : ""}
+                          disabled={!canDecide}
+                          onClick={() => setSelectedDecisionOptionId(option.id)}
+                        >
+                          <span>{index + 1}</span>
+                          <strong>{option.label}</strong>
+                        </button>
+                      ))}
+                    </div>
+                    {selectedDecisionOption ? (
+                      <div className="ded-live-option-evidence">
+                        <span>Projected effect</span>
+                        <p>{selectedDecisionOption.projectedEffect}</p>
+                        <span>Risk</span>
+                        <strong>{selectedDecisionOption.risk}</strong>
+                      </div>
+                    ) : (
+                      <p className="ded-live-selection-hint">Select an option to inspect its projected effect and risk.</p>
+                    )}
+                    <label className="ded-live-rationale">
+                      <span>Commander rationale</span>
+                      <textarea
+                        value={rationale}
+                        onChange={(event) => setRationale(event.target.value)}
+                        placeholder="Recorded with the decision."
+                        disabled={!canDecide}
+                      />
+                    </label>
+                    {!canDecide ? (
+                      <p className="ded-live-authority-note">Decision authority: Joint Force Commander. This view is read-only for the active role.</p>
+                    ) : null}
+                    <button
+                      className="ded-live-issue"
+                      type="button"
+                      disabled={!canDecide || !selectedDecisionOption}
+                      onClick={() => selectedDecisionOption && doDecide(openDecision.id, selectedDecisionOption.id)}
+                    >
+                      Issue decision
+                    </button>
+
+                    <section className="ded-live-sage-note">
+                      <header><strong>Planning aide note</strong><span>SAGE · advisory only</span></header>
+                      <small>Recommendation</small>
+                      <p>{openDecision.options.find((option) => option.id === openDecision.aiRecommendationId)?.label}</p>
+                      <small>Rationale</small>
+                      <p>{openDecision.aiRationale}</p>
+                      <small>Supporting observations</small>
+                      <ul>
+                        {branch.recentEvents.slice(0, 3).map((event) => <li key={event.id}>{event.title}</li>)}
+                      </ul>
+                    </section>
+                  </div>
+                ) : (
+                  <div className="ded-live-inspector-empty"><strong>No open decision</strong><p>The branch is continuing under the last issued commander intent.</p></div>
+                )
+              ) : null}
+
+              {inspectorTab === "adjudication" ? (
+                <div className="ded-live-adjudications">
+                  {evidenceEvents.length ? (
+                    evidenceEvents.map((event) => {
+                      const item = event.adjudication;
+                      if (!item) {
+                        const actor = branch.units.find((unit) => unit.id === event.actorId);
+                        const target = branch.units.find((unit) => unit.id === event.targetId);
+                        return (
+                          <article key={event.id} className="evidence">
+                            <header><strong>{event.title}</strong><span>{event.type}</span></header>
+                            <p>{event.detail}</p>
+                            <dl>
+                              <div><dt>Actor</dt><dd>{actor?.name ?? "—"}</dd></div>
+                              <div><dt>Target</dt><dd>{target?.name ?? "—"}</dd></div>
+                              <div><dt>Tick</dt><dd>{event.tick}</dd></div>
+                              <div><dt>Severity</dt><dd>{event.severity}</dd></div>
+                            </dl>
+                            <small>{simClock(event.simTimeH)}</small>
+                          </article>
+                        );
+                      }
+                      return (
+                        <article key={event.id} className={item.result}>
+                          <header><strong>{item.attacker} → {item.target}</strong><span>{item.result}</span></header>
+                          <p>{event.title}</p>
+                          <dl>
+                            <div><dt>Weapon</dt><dd>{item.weapon}</dd></div>
+                            <div><dt>Range</dt><dd>{item.rangeKm} km</dd></div>
+                            <div><dt>Base Pk</dt><dd>{item.basePk.toFixed(2)}</dd></div>
+                            <div><dt>Final Pk</dt><dd>{item.finalPk.toFixed(2)}</dd></div>
+                            <div><dt>Roll</dt><dd>{item.roll.toFixed(2)}</dd></div>
+                            <div><dt>Damage</dt><dd>{item.result === "hit" ? `${item.damage}%` : "—"}</dd></div>
+                          </dl>
+                          {item.modifiers.length ? (
+                            <ul>{item.modifiers.map((modifier) => <li key={modifier.rule}>{modifier.rule} · ×{modifier.factor}</li>)}</ul>
+                          ) : null}
+                          <small>{simClock(event.simTimeH)}</small>
+                        </article>
+                      );
+                    })
+                  ) : (
+                    <div className="ded-live-inspector-empty"><strong>No adjudicated engagement yet</strong><p>Weapon, range, modifiers, probability and result will appear here.</p></div>
+                  )}
+                </div>
+              ) : null}
+
+              {inspectorTab === "score" ? <ScoreDrawer branch={branch} decidedCount={decidedDecisions.length} /> : null}
+
+              {inspectorTab === "more" ? (
+                <div className="ded-live-more">
+                  <div className="ded-live-more-tabs">
+                    {(
+                      [
+                        { id: "decisions", label: "History" },
+                        { id: "sage", label: "Ask SAGE" },
+                        { id: "opfor", label: "OPFOR" },
+                        { id: "seats", label: "Seats" },
+                      ] as const
+                    ).map((item) => (
+                      <button key={item.id} type="button" className={moreView === item.id ? "active" : ""} onClick={() => setMoreView(item.id)}>
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                  {moreView === "decisions" ? (
+                    decidedDecisions.length ? (
+                      <div className="ded-live-history">
+                        {decidedDecisions.map((decision) => (
+                          <article key={decision.id}>
+                            <strong>{decision.title}</strong>
+                            <span>→ {decision.options.find((option) => option.id === decision.decidedOptionId)?.label}</span>
+                            <small>{simClock(decision.simTimeH)} · {decision.decidedBy ?? "Commander"}</small>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="ded-live-inspector-empty"><strong>No decisions recorded</strong><p>Issued choices and commander rationale will appear here.</p></div>
+                    )
+                  ) : null}
+                  {moreView === "sage" ? (
+                    <div className="ded-live-sage-tools">
+                      <div>
+                        {(
+                          [
+                            { topic: "adjudication" as const, label: "Why this adjudication?" },
+                            { topic: "risk" as const, label: "Biggest risk?" },
+                            { topic: "next-step" as const, label: "Suggest next step" },
+                            { topic: "enemy" as const, label: "Explain RED" },
+                          ]
+                        ).map((chip) => (
+                          <button key={chip.topic} type="button" disabled={sageBusy !== null} onClick={() => doExplain(chip.topic, chip.label)}>
+                            {sageBusy === chip.topic ? "Working…" : chip.label}
+                          </button>
+                        ))}
+                      </div>
+                      {sageLog.map((entry, index) => (
+                        <article key={`${entry.topic}-${index}`}><strong>{entry.label}</strong><p>{entry.answer}</p><small>{entry.source}</small></article>
+                      ))}
+                    </div>
+                  ) : null}
+                  {moreView === "opfor" ? (
+                    <AdversaryPanel
+                      adversary={branch.adversary ?? null}
+                      canReveal={canIntervene && run.status !== "completed" && run.status !== "aborted"}
+                      busy={revealBusy}
+                      onReveal={doRevealAdversary}
+                    />
+                  ) : null}
+                  {moreView === "seats" ? (
+                    <div className="ded-live-seats">
+                      {(run.seats ?? []).map((seat) => (
+                        <article key={seat.id}>
+                          <div><strong>{seat.name}</strong><span>{seat.side.toUpperCase()} · {seat.rank}</span></div>
+                          <Segmented
+                            value={seat.mode}
+                            onChange={(value) => doSeat(seat.id, { mode: value as "human" | "ai" })}
+                            items={[{ id: "human", label: "Human" }, { id: "ai", label: "Agent" }]}
+                          />
+                          {seat.mode === "ai" ? (
+                            <select value={seat.agentId ?? ""} disabled={seatBusy === seat.id} onChange={(event) => doSeat(seat.id, { mode: "ai", agentId: event.target.value })}>
+                              {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+                            </select>
+                          ) : (
+                            <small>{seat.participant ?? "Unassigned"}</small>
+                          )}
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </aside>
+        </div>
+
+        {showIntervene ? (
+          <InterventionModal
+            branchUnits={branch.units.filter((unit) => unit.status === "active" || unit.status === "damaged")}
+            onClose={() => setShowIntervene(false)}
+            onSubmit={async (type, params) => {
+              try {
+                applyRun(await intervene(run.id, branch.id, { type, params, requestedBy: profile.name }));
+                setShowIntervene(false);
+                notify("Intervention applied to the world state");
+              } catch (error) {
+                notify(errMsg(error));
+              }
+            }}
+          />
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="page-body">
@@ -492,21 +1133,21 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
         <StatusPill label={run.status} tone={statusTone(run.status)} />
         <Tag label={`${run.engine} | ${run.clock.speed}x`} />
         <span className="spacer" />
-        {run.status === "paused" ? (
+        {canControl && run.status === "paused" ? (
           <Button icon={Play} onClick={() => doControl("resume")}>
             Resume
           </Button>
-        ) : isLive ? (
+        ) : canControl && isLive ? (
           <Button icon={Pause} variant="secondary" onClick={() => doControl("pause")}>
             Pause
           </Button>
         ) : null}
-        {run.engine === "turn-based" && isLive ? (
+        {canControl && run.engine === "turn-based" && isLive ? (
           <Button icon={SkipForward} variant="secondary" onClick={() => doControl("step")}>
             Step
           </Button>
         ) : null}
-        {isLive || run.status === "paused" ? (
+        {canControl && (isLive || run.status === "paused") ? (
           <>
             <Segmented
               value={String(run.clock.speed) as "1" | "2" | "4"}
@@ -577,7 +1218,6 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
           </div>
           <p className="ded-situation">{openDecision.situation}</p>
           <p className="ded-sage-quote">
-            <BrainCircuit size={14} style={{ verticalAlign: "-2px" }} />{" "}
             <strong>SAGE recommends “{openDecision.options.find((o) => o.id === openDecision.aiRecommendationId)?.label}”.</strong>{" "}
             {openDecision.aiRationale}
           </p>
@@ -587,6 +1227,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
                 key={option.id}
                 type="button"
                 className={`ded-option${option.id === openDecision.aiRecommendationId ? " recommended" : ""}`}
+                disabled={!canDecide}
                 onClick={() => doDecide(openDecision.id, option.id)}
               >
                 <strong>{option.label}</strong>
@@ -597,8 +1238,9 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
               </button>
             ))}
           </div>
+          {!canDecide ? <p className="ded-live-authority-note">Decision authority: Joint Force Commander. This view is read-only for the active role.</p> : null}
           <Field label="Commander rationale (retained with the decision record)">
-            <textarea value={rationale} onChange={(e) => setRationale(e.target.value)} placeholder="Optional, why this option…" />
+            <textarea value={rationale} onChange={(e) => setRationale(e.target.value)} placeholder="Optional, why this option…" disabled={!canDecide} />
           </Field>
         </div>
       ) : null}
@@ -730,11 +1372,13 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
               <Segmented
                 value={viewSide}
                 onChange={(v) => setViewSide(v as ViewSide)}
-                items={[
-                  { id: "blue", label: "BLUE view" },
-                  { id: "all", label: "Umpire" },
-                  { id: "red", label: "RED view" },
-                ]}
+                items={canControl
+                  ? [
+                      { id: "blue", label: "BLUE view" },
+                      { id: "all", label: "Umpire" },
+                      { id: "red", label: "RED view" },
+                    ]
+                  : [{ id: "blue", label: "BLUE view" }]}
               />
             </div>
             <div className="ded-hintbar">
@@ -909,7 +1553,6 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
                       ))
                     ) : (
                       <EmptyState
-                        icon={BrainCircuit}
                         title="Ask SAGE about the battle"
                         hint="Answers are grounded in this branch's live state: the latest adjudication, metrics, supply, detections and doctrine."
                       />
@@ -932,7 +1575,6 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
                       </div>
                     ) : (
                       <EmptyState
-                        icon={BrainCircuit}
                         title="No decisions yet"
                         hint="Decision points pause the branch and surface options with a SAGE recommendation. Intent and decision are retained by the commander."
                       />
@@ -948,7 +1590,7 @@ export default function Deduction({ notify, goTo, profile }: PageProps) {
                   { id: "events" as const, label: "Orders", icon: ScrollText },
                   { id: "adjudication" as const, label: "Adjudication", icon: Swords },
                   { id: "decisions" as const, label: "Decisions", icon: ListChecks },
-                  { id: "sage" as const, label: "SAGE", icon: BrainCircuit },
+                  { id: "sage" as const, label: "SAGE", icon: MessageSquareText },
                   { id: "opfor" as const, label: "OPFOR", icon: ShieldAlert },
                   { id: "seats" as const, label: "Seats", icon: Users },
                 ] as Array<{ id: DrawerId; label: string; icon: typeof Trophy }>
@@ -1176,6 +1818,7 @@ function Launcher({
   ruleSets,
   ruleSetId,
   setRuleSetId,
+  canLaunch,
   whiteCell,
   adversaryPlans,
   redPlanId,
@@ -1187,6 +1830,7 @@ function Launcher({
   label,
   setLabel,
   onLaunch,
+  onRequestPackage,
   onOpen,
   goToAssessment,
 }: {
@@ -1200,6 +1844,7 @@ function Launcher({
   ruleSets: RuleSet[];
   ruleSetId: string;
   setRuleSetId: (v: string) => void;
+  canLaunch: boolean;
   whiteCell: boolean;
   adversaryPlans: AdversaryPlanSummary[];
   redPlanId: string;
@@ -1211,6 +1856,7 @@ function Launcher({
   label: string;
   setLabel: (v: string) => void;
   onLaunch: () => void;
+  onRequestPackage: () => void;
   onOpen: (id: string) => void;
   goToAssessment: () => void;
 }) {
@@ -1218,15 +1864,22 @@ function Launcher({
   const openRuns = runs.filter((r) => r.status !== "completed" && r.status !== "aborted");
   const doneRuns = runs.filter((r) => r.status === "completed" || r.status === "aborted");
   const activePlan = adversaryPlans.find((p) => p.id === redPlanId) ?? null;
+  const operationalRuleSets = ruleSets.filter((item) => item.status === "active");
 
   return (
     <div className="page-body">
       <div className="split-grid wide-left">
-        <Panel icon={Rocket} title="Launch a deduction run">
+        <Panel title="Launch a deduction run">
           <div className="detail-stack">
+            {!canLaunch ? (
+              <div className="ded-launch-authority" role="note">
+                <strong>SIMULATION CONTROL AUTHORITY</strong>
+                <span>This profile can review run packages and enter active runs, but cannot launch or control execution.</span>
+              </div>
+            ) : null}
             <FormGrid columns={2}>
               <Field label="Scenario">
-                <select value={scenarioId} onChange={(e) => setScenarioId(e.target.value)}>
+                <select value={scenarioId} onChange={(e) => setScenarioId(e.target.value)} disabled={!canLaunch}>
                   {scenarios.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.codename}, {s.name}
@@ -1235,10 +1888,10 @@ function Launcher({
                 </select>
               </Field>
               <Field label="Rule set">
-                <select value={ruleSetId} onChange={(e) => setRuleSetId(e.target.value)}>
-                  {ruleSets.map((rs) => (
+                <select value={ruleSetId} onChange={(e) => setRuleSetId(e.target.value)} disabled={!canLaunch}>
+                  {operationalRuleSets.map((rs) => (
                     <option key={rs.id} value={rs.id}>
-                      {rs.name} ({rs.status})
+                      {rs.name} (published snapshot)
                     </option>
                   ))}
                 </select>
@@ -1254,6 +1907,7 @@ function Launcher({
                         <input
                           type="checkbox"
                           checked={checked}
+                          disabled={!canLaunch}
                           onChange={() =>
                             setPickedCoaIds(checked ? pickedCoaIds.filter((x) => x !== coa.id) : [...pickedCoaIds, coa.id])
                           }
@@ -1268,11 +1922,16 @@ function Launcher({
                     );
                   })
                 ) : (
-                  <EmptyState
-                    icon={Radar}
-                    title="No selected COAs for this scenario"
-                    hint="Select or generate COAs in Data & COA Generation first, only selected or previously simulated COAs can be committed to deduction."
-                  />
+                  <div className="ded-package-handoff">
+                    <span>PACKAGE STATUS</span>
+                    <strong>{whiteCell ? "No COA package released" : "Awaiting Plans Cell release"}</strong>
+                    <p>
+                      {whiteCell
+                        ? "Select and release at least one simulated COA before committing a new run."
+                        : "The commander does not need planning-workspace access to resolve this. Request a governed package handoff from J5."}
+                    </p>
+                    <Button variant="secondary" onClick={onRequestPackage}>Request COA package</Button>
+                  </div>
                 )}
               </div>
             </Field>
@@ -1280,7 +1939,7 @@ function Launcher({
               <div className="ded-advplan">
                 {whiteCell ? (
                   <>
-                    <select value={redPlanId} onChange={(e) => setRedPlanId(e.target.value)}>
+                    <select value={redPlanId} onChange={(e) => setRedPlanId(e.target.value)} disabled={!canLaunch}>
                       {adversaryPlans.map((plan) => (
                         <option key={plan.id} value={plan.id}>
                           {plan.codename}, {plan.name}
@@ -1311,43 +1970,50 @@ function Launcher({
             </Field>
             <FormGrid columns={3}>
               <Field label="Engine">
-                <select value={engine} onChange={(e) => setEngine(e.target.value as EngineKind)}>
+                <select value={engine} onChange={(e) => setEngine(e.target.value as EngineKind)} disabled={!canLaunch}>
                   <option value="realtime">Real-time engine</option>
                   <option value="turn-based">Turn-based engine</option>
                 </select>
               </Field>
               <Field label="Speed">
-                <select value={speed} onChange={(e) => setSpeed(e.target.value as "1" | "2" | "4")}>
+                <select value={speed} onChange={(e) => setSpeed(e.target.value as "1" | "2" | "4")} disabled={!canLaunch}>
                   <option value="1">1x</option>
                   <option value="2">2x</option>
                   <option value="4">4x</option>
                 </select>
               </Field>
               <Field label="Run label">
-                <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Strait rehearsal 3" />
+                <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Strait rehearsal 3" disabled={!canLaunch} />
               </Field>
             </FormGrid>
             <ActionRow>
-              <Button icon={Play} onClick={onLaunch} disabled={!pickedCoaIds.length}>
-                Start deduction
+              <Button icon={Play} onClick={onLaunch} disabled={!canLaunch || !pickedCoaIds.length || !operationalRuleSets.length}>
+                {canLaunch ? "Start deduction" : "Launch restricted"}
               </Button>
             </ActionRow>
           </div>
         </Panel>
 
-        <Panel icon={Radar} title="Runs">
+        <Panel title="Runs">
           <div className="detail-stack">
             {openRuns.length ? (
-              <ObjectList
-                rows={openRuns.map((r) => ({
-                  id: r.id,
-                  title: r.label,
-                  meta: `${r.scenarioName} | ${plural(r.branchCount, "branch", "branches")} | T+${Math.round(r.simTimeH)}h`,
-                  tone: statusTone(r.status),
-                  status: r.status,
-                }))}
-                onSelect={onOpen}
-              />
+              <>
+                <ObjectList
+                  rows={openRuns.map((r) => ({
+                    id: r.id,
+                    title: r.label,
+                    meta: `${r.scenarioName} | ${plural(r.branchCount, "branch", "branches")} | T+${Math.round(r.simTimeH)}h`,
+                    tone: statusTone(r.status),
+                    status: r.status,
+                  }))}
+                  onSelect={onOpen}
+                />
+                <ActionRow>
+                  <Button onClick={() => onOpen(openRuns[0].id)}>
+                    {openRuns[0].status === "awaiting-decision" ? "Review decision" : "Continue run"}
+                  </Button>
+                </ActionRow>
+              </>
             ) : (
               <EmptyState icon={Radar} title="No live runs" hint="Start a deduction on the left, branches run in parallel, one per COA." />
             )}

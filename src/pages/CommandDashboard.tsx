@@ -1,28 +1,22 @@
 // CommandDashboard, the commander's landing view for Exercise AZURE HORIZON.
 // Metrics row, live theater picture of the focus deduction run, per-branch
-// telemetry, the platform layer cards and the recent-activity stream.
+// telemetry and the recent-activity stream.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
-  BrainCircuit,
-  Database,
-  History,
   Layers,
-  Map as MapIcon,
   PlayCircle,
   Radar,
   RefreshCw,
 } from "lucide-react";
 import type { PageId, PageProps } from "../shell";
-import type { Bootstrap, SimEvent, SimRun, Unit } from "../types";
+import type { Bootstrap, SimRun, Unit } from "../types";
 import { fetchBootstrap, fetchRun } from "../api";
 import {
   ActionRow,
   Button,
-  Detail,
-  DetailGrid,
   EmptyState,
   Metric,
   MetricGrid,
@@ -43,21 +37,27 @@ const DEFAULT_CENTER = { lat: 23.85, lng: 61.1 };
 const DEFAULT_ZOOM = 7;
 
 const PAGE_LABELS: Partial<Record<PageId, string>> = {
-  scenario: "Scenario Design",
   deduction: "Full-Process Deduction",
   assessment: "Assessment & Replay",
-  ailayer: "AI Command Layer",
-  foundation: "Platform Foundation",
 };
-
-function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
-}
 
 function isLiveStatus(status: string): boolean {
   return status === "running" || status === "awaiting-decision";
+}
+
+type WorkPriority = "critical" | "priority" | "monitor";
+
+interface WorkItem {
+  id: string;
+  priority: WorkPriority;
+  label: string;
+  title: string;
+  changed: string;
+  risk: string;
+  owner: string;
+  due: string;
+  target: PageId;
+  action: string;
 }
 
 export default function CommandDashboard(props: PageProps) {
@@ -174,18 +174,219 @@ export default function CommandDashboard(props: PageProps) {
     return run.branches.reduce((n, b) => n + b.decisions.filter((d) => d.status === "open").length, 0);
   }, [run]);
 
-  // Recent activity: merged event tails across all branches, newest first.
-  const activity = useMemo(() => {
-    if (!run) return [];
-    const rows: Array<{ key: string; event: SimEvent; branchName: string }> = [];
-    for (const branch of run.branches) {
-      for (const event of branch.recentEvents) {
-        rows.push({ key: `${branch.id}:${event.id}`, event, branchName: branch.name });
+  const workItems = useMemo<WorkItem[]>(() => {
+    if (!boot) return [];
+    const items: WorkItem[] = [];
+    const openDecisionRows = run
+      ? run.branches.flatMap((branch) =>
+          branch.decisions
+            .filter((decision) => decision.status === "open")
+            .map((decision) => ({ branch, decision }))
+        )
+      : [];
+    const liveRun = boot.runs.find((candidate) => isLiveStatus(candidate.status));
+    const completedRun = [...boot.runs]
+      .filter((candidate) => candidate.status === "completed")
+      .sort(
+        (a, b) =>
+          new Date(b.completedAt ?? b.startedAt).getTime() -
+          new Date(a.completedAt ?? a.startedAt).getTime()
+      )[0];
+    const draftScenario = boot.scenarios.find((scenario) => scenario.status === "draft");
+    const runningScenario = boot.scenarios.find((scenario) => scenario.status === "running");
+    const selectedCoas = boot.coas.filter((coa) => coa.status === "selected");
+    const offlineAgents = boot.agents.filter((agent) => agent.status === "offline");
+    const degradedDomains = boot.platform.dataDomains.filter((domain) => domain.health === "degraded");
+
+    if (props.profile.id === "commander") {
+      for (const { branch, decision } of openDecisionRows.slice(0, 2)) {
+        items.push({
+          id: decision.id,
+          priority: "critical",
+          label: "COMMAND DECISION",
+          title: decision.title,
+          changed: `${branch.name} opened a decision at ${simClock(decision.simTimeH)}, tick ${decision.tick}.`,
+          risk: "The branch is held until command authority records a decision and rationale.",
+          owner: props.profile.name,
+          due: "Now",
+          target: "deduction",
+          action: "Decide",
+        });
+      }
+      if (items.length === 0 && liveRun) {
+        items.push({
+          id: `watch-${liveRun.id}`,
+          priority: "monitor",
+          label: "COMMAND WATCH",
+          title: `${liveRun.label} is in execution`,
+          changed: `${liveRun.branchCount} branches are advancing at ${simClock(liveRun.simTimeH)}.`,
+          risk: "No command decision is open; continue monitoring branch divergence and force preservation.",
+          owner: "Simulation Control",
+          due: "Continuous",
+          target: "deduction",
+          action: "Open run",
+        });
+      }
+    } else if (props.profile.id === "planner") {
+      if (draftScenario) {
+        items.push({
+          id: `validate-${draftScenario.id}`,
+          priority: "priority",
+          label: "PLANNING PACKAGE",
+          title: `${draftScenario.name} requires validation`,
+          changed: `The scenario remains in draft with ${draftScenario.units.length} units and ${draftScenario.objectives.length} objectives.`,
+          risk: "COA development should not proceed from an unvalidated baseline.",
+          owner: draftScenario.createdBy || props.profile.name,
+          due: "Before COA generation",
+          target: "scenario",
+          action: "Review scenario",
+        });
+      }
+      if (selectedCoas.length > 0) {
+        items.push({
+          id: `handoff-${selectedCoas[0].id}`,
+          priority: "priority",
+          label: "HANDOFF READY",
+          title: `${selectedCoas.length} selected COA${selectedCoas.length === 1 ? "" : "s"} require execution rules`,
+          changed: `${selectedCoas[0].name} is selected for the scenario package.`,
+          risk: "The run package remains incomplete until adjudication rules are confirmed.",
+          owner: "Plans Cell (J5)",
+          due: "Before run authorization",
+          target: "rules",
+          action: "Configure rules",
+        });
+      } else if (!draftScenario) {
+        items.push({
+          id: "develop-coas",
+          priority: "priority",
+          label: "NEXT PLANNING ACTION",
+          title: "Develop and select a COA package",
+          changed: "A validated scenario is available; no COA is selected for execution.",
+          risk: "Run control cannot assemble a launch package without a selected COA.",
+          owner: "Plans Cell (J5)",
+          due: "Before run authorization",
+          target: "coa",
+          action: "Open COA development",
+        });
+      }
+      if (runningScenario) {
+        items.push({
+          id: `locked-${runningScenario.id}`,
+          priority: "monitor",
+          label: "BASELINE CONTROL",
+          title: `${runningScenario.name} is locked in execution`,
+          changed: "The active scenario baseline is now view-only.",
+          risk: "Any planning change must be made in a traceable copy, not against the live baseline.",
+          owner: runningScenario.createdBy || "Plans Cell (J5)",
+          due: "Before next revision",
+          target: "scenario",
+          action: "Review baseline",
+        });
+      }
+    } else if (props.profile.id === "operator") {
+      if (openDecisionRows.length > 0 && liveRun) {
+        items.push({
+          id: `hold-${liveRun.id}`,
+          priority: "critical",
+          label: "RUN HELD",
+          title: `${liveRun.label} is awaiting command authority`,
+          changed: `${openDecisionRows.length} decision point${openDecisionRows.length === 1 ? " is" : "s are"} open.`,
+          risk: "Simulation time is held; interventions should remain controlled until the decision is issued.",
+          owner: "Joint Force Commander",
+          due: "Now",
+          target: "deduction",
+          action: "Open run control",
+        });
+      } else if (liveRun) {
+        items.push({
+          id: `control-${liveRun.id}`,
+          priority: "monitor",
+          label: "RUN CONTROL",
+          title: `${liveRun.label} is active`,
+          changed: `${liveRun.branchCount} branches are live at ${simClock(liveRun.simTimeH)}.`,
+          risk: "Monitor engine health, inject discipline and branch synchronization.",
+          owner: props.profile.name,
+          due: "Continuous",
+          target: "deduction",
+          action: "Open run control",
+        });
+      }
+    } else if (props.profile.id === "analyst") {
+      if (completedRun) {
+        items.push({
+          id: `aar-${completedRun.id}`,
+          priority: "priority",
+          label: "ASSESSMENT DUE",
+          title: `${completedRun.label} is ready for after-action review`,
+          changed: `The run completed ${timeAgo(completedRun.completedAt ?? completedRun.startedAt)} with ${completedRun.branchCount} branches.`,
+          risk: "Findings and recommendations have not yet been released to the next planning cycle.",
+          owner: props.profile.name,
+          due: "Post-run",
+          target: "assessment",
+          action: "Open assessment",
+        });
+      }
+      if (liveRun) {
+        items.push({
+          id: `observe-${liveRun.id}`,
+          priority: "monitor",
+          label: "EVIDENCE WATCH",
+          title: `${liveRun.label} is producing assessment evidence`,
+          changed: `Live telemetry is available from ${liveRun.branchCount} branches.`,
+          risk: "Capture decision and adjudication context before the run closes.",
+          owner: "Analysis Cell (J8)",
+          due: "During execution",
+          target: "orders",
+          action: "Review decision record",
+        });
+      }
+    } else {
+      if (offlineAgents.length > 0) {
+        items.push({
+          id: "agent-health",
+          priority: "priority",
+          label: "SERVICE DEGRADATION",
+          title: `${offlineAgents.length} mission agent${offlineAgents.length === 1 ? " is" : "s are"} offline`,
+          changed: offlineAgents.map((agent) => agent.name).join(", "),
+          risk: "Agent-backed planning and advisory actions may fall back or become unavailable.",
+          owner: props.profile.name,
+          due: "Before next run",
+          target: "ailayer",
+          action: "Review agents",
+        });
+      }
+      if (degradedDomains.length > 0) {
+        items.push({
+          id: "data-health",
+          priority: "critical",
+          label: "DATA HEALTH",
+          title: `${degradedDomains.length} data domain${degradedDomains.length === 1 ? " is" : "s are"} degraded`,
+          changed: degradedDomains.map((domain) => domain.name).join(", "),
+          risk: "Derived planning and assessment products may be incomplete or stale.",
+          owner: props.profile.name,
+          due: "Now",
+          target: "foundation",
+          action: "Inspect foundation",
+        });
+      }
+      if (items.length === 0) {
+        items.push({
+          id: "platform-watch",
+          priority: "monitor",
+          label: "PLATFORM WATCH",
+          title: "Operational services are within declared limits",
+          changed: `${boot.platform.engines.filter((engine) => engine.status === "online").length}/${boot.platform.engines.length} simulation engines online.`,
+          risk: "No immediate platform exception is reported.",
+          owner: props.profile.name,
+          due: "Continuous",
+          target: "foundation",
+          action: "View service status",
+        });
       }
     }
-    rows.sort((a, b) => b.event.tick - a.event.tick || b.event.simTimeH - a.event.simTimeH);
-    return rows.slice(0, 10);
-  }, [run]);
+
+    return items.slice(0, 3);
+  }, [boot, props.profile.id, props.profile.name, run]);
 
   const canOpen = (page: PageId) => props.profile.pages.includes(page);
 
@@ -236,25 +437,93 @@ export default function CommandDashboard(props: PageProps) {
   }
 
   const scenariosReady = boot.scenarios.filter((s) => s.status === "ready").length;
+  const scenariosRunning = boot.scenarios.filter((s) => s.status === "running").length;
   const activeRuns = boot.runs.filter(
     (r) => r.status === "initializing" || r.status === "running" || r.status === "paused" || r.status === "awaiting-decision"
   ).length;
   const agentsReady = boot.agents.filter((a) => a.status === "ready").length;
   const agentsTraining = boot.agents.filter((a) => a.status === "training").length;
   const agentsOffline = boot.agents.filter((a) => a.status === "offline").length;
-  const enginesOnline = boot.platform.engines.filter((e) => e.status === "online").length;
-  const totalRecords = boot.platform.dataDomains.reduce((n, d) => n + d.records, 0);
-  const lowCodeAssets =
-    boot.platform.lowCode.maps + boot.platform.lowCode.pieces + boot.platform.lowCode.rules + boot.platform.lowCode.scenarios;
+  const actionWork = workItems.filter((item) => item.priority !== "monitor").length;
+  const atRiskBranches = run
+    ? run.branches.filter(
+        (branch) =>
+          branch.metrics.blueStrength < 70 ||
+          branch.metrics.supplyLevel < 55 ||
+          branch.status === "awaiting-decision"
+      ).length
+    : 0;
 
   return (
     <PageBody>
+      <Panel
+        title="My work / decision queue"
+        action={<span className="cmd-work-role">{props.profile.name}</span>}
+      >
+        <div className="cmd-work-summary" aria-label="Command attention summary">
+          <div>
+            <span>Needs me</span>
+            <strong>{actionWork}</strong>
+          </div>
+          <div>
+            <span>Changed</span>
+            <strong>
+              {run && ["commander", "operator", "analyst"].includes(props.profile.id)
+                ? `Run at tick ${run.clock.tick}`
+                : `${workItems.length} queue update${workItems.length === 1 ? "" : "s"}`}
+            </strong>
+          </div>
+          <div>
+            <span>At risk</span>
+            <strong>
+              {atRiskBranches > 0
+                ? `${atRiskBranches} branch${atRiskBranches === 1 ? "" : "es"}`
+                : actionWork > 0
+                  ? `${actionWork} package${actionWork === 1 ? "" : "s"}`
+                  : "None declared"}
+            </strong>
+          </div>
+        </div>
+        <div className="cmd-work-list">
+          {workItems.map((item) => (
+            <article key={item.id} className={`cmd-work-item is-${item.priority}`}>
+              <div className="cmd-work-main">
+                <span className="cmd-work-label">{item.label}</span>
+                <strong>{item.title}</strong>
+                <p>{item.changed}</p>
+              </div>
+              <div className="cmd-work-risk">
+                <span>Operational effect</span>
+                <p>{item.risk}</p>
+              </div>
+              <dl className="cmd-work-meta">
+                <div>
+                  <dt>Owner</dt>
+                  <dd>{item.owner}</dd>
+                </div>
+                <div>
+                  <dt>Due</dt>
+                  <dd>{item.due}</dd>
+                </div>
+              </dl>
+              <Button
+                variant={item.priority === "critical" ? "primary" : "secondary"}
+                onClick={() => openPage(item.target)}
+                disabled={!canOpen(item.target)}
+              >
+                {item.action}
+              </Button>
+            </article>
+          ))}
+        </div>
+      </Panel>
+
       <MetricGrid>
         <Metric
-          label="Scenarios ready"
-          value={String(scenariosReady)}
-          helper={`${boot.scenarios.length} in library`}
-          tone={scenariosReady > 0 ? "good" : "neutral"}
+          label="Scenario library"
+          value={String(boot.scenarios.length)}
+          helper={`${scenariosRunning} in execution | ${scenariosReady} ready`}
+          tone={scenariosRunning > 0 || scenariosReady > 0 ? "good" : "neutral"}
         />
         <Metric
           label="Active runs"
@@ -278,7 +547,6 @@ export default function CommandDashboard(props: PageProps) {
 
       <div className="split-grid wide-left">
         <Panel
-          icon={MapIcon}
           title="Theater situation"
           action={
             <Button icon={RefreshCw} variant="secondary" onClick={handleRefresh}>
@@ -325,9 +593,33 @@ export default function CommandDashboard(props: PageProps) {
         </Panel>
 
         <Panel
-          icon={Activity}
           title="Live deduction"
-          action={run ? <StatusPill label={run.status.replace(/-/g, " ")} tone={statusTone(run.status)} /> : undefined}
+          action={
+            run ? (
+              <div className="cmd-panel-actions">
+                <StatusPill label={run.status.replace(/-/g, " ")} tone={statusTone(run.status)} />
+                {run.status === "completed" ? (
+                  <Button
+                    icon={Layers}
+                    variant="secondary"
+                    onClick={() => openPage("assessment")}
+                    disabled={!canOpen("assessment")}
+                  >
+                    Open assessment
+                  </Button>
+                ) : (
+                  <Button
+                    icon={PlayCircle}
+                    variant="secondary"
+                    onClick={() => openPage("deduction")}
+                    disabled={!canOpen("deduction")}
+                  >
+                    Open deduction
+                  </Button>
+                )}
+              </div>
+            ) : undefined
+          }
         >
           {run ? (
             <div className="cmd-live-stack">
@@ -338,7 +630,9 @@ export default function CommandDashboard(props: PageProps) {
                     tick {run.clock.tick} | {run.engine === "realtime" ? `×${run.clock.speed}` : "turn-based"}
                   </small>
                 </div>
-                <span className="cmd-map-source">started {timeAgo(run.startedAt)}</span>
+                <span className="cmd-map-source">
+                  started {new Date(run.startedAt).toISOString().replace("T", " ").slice(0, 16)}Z · {timeAgo(run.startedAt)}
+                </span>
               </div>
               <div className="cmd-run-meta">
                 <strong>{run.label}</strong>
@@ -374,21 +668,6 @@ export default function CommandDashboard(props: PageProps) {
               ) : (
                 <EmptyState icon={Radar} title="No events yet" hint="The engine has not emitted events for this branch." />
               )}
-              <ActionRow>
-                <Button
-                  icon={PlayCircle}
-                  variant="secondary"
-                  onClick={() => openPage("deduction")}
-                  disabled={!canOpen("deduction")}
-                >
-                  Open deduction
-                </Button>
-                {run.status === "completed" ? (
-                  <Button icon={Layers} variant="secondary" onClick={() => openPage("assessment")} disabled={!canOpen("assessment")}>
-                    Open assessment
-                  </Button>
-                ) : null}
-              </ActionRow>
             </div>
           ) : focusSummary ? (
             <EmptyState
@@ -413,89 +692,6 @@ export default function CommandDashboard(props: PageProps) {
         </Panel>
       </div>
 
-      <div className="cmd-layer-grid">
-        <section className="panel cmd-layer-card">
-          <header className="cmd-layer-head">
-            <h3>Planning &amp; Simulation</h3>
-          </header>
-          <p className="cmd-layer-sub">From scenario to assessment, design, generate COAs, configure rules, deduce, assess.</p>
-          <DetailGrid>
-            <Detail label="Scenarios" value={String(boot.scenarios.length)} />
-            <Detail label="COA candidates" value={String(boot.coas.length)} />
-            <Detail label="Rule sets" value={String(boot.ruleSets.length)} />
-            <Detail label="Deduction runs" value={String(boot.runs.length)} />
-          </DetailGrid>
-          <ActionRow>
-            <Button icon={MapIcon} variant="secondary" onClick={() => openPage("scenario")} disabled={!canOpen("scenario")}>
-              Scenario design
-            </Button>
-          </ActionRow>
-        </section>
-
-        <section className="panel cmd-layer-card">
-          <header className="cmd-layer-head">
-            <h3>AI Command</h3>
-          </header>
-          <p className="cmd-layer-sub">
-            Strategic task decomposition, tactical agent library and human-AI collaborative decision over the OODA loop.
-          </p>
-          <DetailGrid>
-            <Detail label="Agents ready" value={String(agentsReady)} />
-            <Detail label="Training" value={String(agentsTraining)} />
-            <Detail label="Offline" value={String(agentsOffline)} />
-            <Detail label="Open decisions" value={String(openDecisions)} />
-          </DetailGrid>
-          <ActionRow>
-            <Button icon={BrainCircuit} variant="secondary" onClick={() => openPage("ailayer")} disabled={!canOpen("ailayer")}>
-              AI Command Layer
-            </Button>
-          </ActionRow>
-        </section>
-
-        <section className="panel cmd-layer-card">
-          <header className="cmd-layer-head">
-            <h3>Platform Foundation</h3>
-          </header>
-          <p className="cmd-layer-sub">
-            One platform, multiple simulation engines and a unified data foundation with ontology-backed low-code design.
-          </p>
-          <DetailGrid>
-            <Detail label="Engines online" value={`${enginesOnline} / ${boot.platform.engines.length}`} />
-            <Detail label="Data records" value={formatCount(totalRecords)} />
-            <Detail label="Data domains" value={String(boot.platform.dataDomains.length)} />
-            <Detail label="Low-code assets" value={formatCount(lowCodeAssets)} />
-          </DetailGrid>
-          <ActionRow>
-            <Button icon={Database} variant="secondary" onClick={() => openPage("foundation")} disabled={!canOpen("foundation")}>
-              Foundation
-            </Button>
-          </ActionRow>
-        </section>
-      </div>
-
-      <Panel
-        icon={History}
-        title="Recent activity"
-        action={run ? <span className="cmd-map-source">{run.label}</span> : undefined}
-      >
-        {activity.length > 0 ? (
-          <ObjectList
-            rows={activity.map((row) => ({
-              id: row.key,
-              title: row.event.title,
-              meta: `${simClock(row.event.simTimeH)} | ${row.branchName} | ${row.event.detail}`,
-              tone: eventTones[row.event.type] ?? "neutral",
-              status: row.event.type,
-            }))}
-          />
-        ) : (
-          <EmptyState
-            icon={History}
-            title="No recent activity"
-            hint="Deduction events will appear here as soon as an engine starts adjudicating a run."
-          />
-        )}
-      </Panel>
     </PageBody>
   );
 }

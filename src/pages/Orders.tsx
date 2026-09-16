@@ -16,7 +16,7 @@ import {
   ScrollText,
 } from "lucide-react";
 import "./orders.css";
-import { ApiError, fetchBootstrap, fetchClassification, fetchCoaOrders, fetchRunFragos, fetchRuns } from "../api";
+import { ApiError, fetchBootstrap, fetchCoaOrders, fetchRunFragos, fetchRuns } from "../api";
 import {
   ActionRow,
   Button,
@@ -36,7 +36,6 @@ import type { PageProps } from "../shell";
 import type {
   Bootstrap,
   Coa,
-  ClassificationState,
   Frago,
   OpordParagraph,
   OrdersResult,
@@ -58,7 +57,6 @@ const SOURCE_LABEL: Record<string, string> = {
 export default function Orders({ notify, profile }: PageProps) {
   const [boot, setBoot] = useState<Bootstrap | null>(null);
   const [runs, setRuns] = useState<RunSummary[]>([]);
-  const [classification, setClassification] = useState<ClassificationState | null>(null);
   const [scenarioId, setScenarioId] = useState("");
   const [coaId, setCoaId] = useState("");
   const [orders, setOrders] = useState<OrdersResult | null>(null);
@@ -76,12 +74,11 @@ export default function Orders({ notify, profile }: PageProps) {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([fetchBootstrap(), fetchRuns(), fetchClassification()])
-      .then(([b, r, c]) => {
+    Promise.all([fetchBootstrap(), fetchRuns()])
+      .then(([b, r]) => {
         if (!alive) return;
         setBoot(b);
         setRuns(r);
-        setClassification(c);
         const ready = b.scenarios.find((s) => s.status === "ready") ?? b.scenarios[0];
         setScenarioId(ready ? ready.id : "");
         const done = r.find((x) => x.status === "completed") ?? r[0];
@@ -191,21 +188,18 @@ export default function Orders({ notify, profile }: PageProps) {
   if (loading) {
     return (
       <div className="page-body">
-        <EmptyState icon={ScrollText} title="Loading staff products" hint="Fetching scenarios, courses of action and the platform marking." />
+        <EmptyState icon={ScrollText} title="Loading staff products" hint="Fetching scenarios and courses of action." />
       </div>
     );
   }
 
-  const marking = classification ? classification.marking : "MARKING UNAVAILABLE";
   const scenarios = boot?.scenarios ?? [];
   const syncRows: SyncRow[] = orders ? (syncBy === "formation" ? orders.sync.rows : orders.sync.unitRows) : [];
   const idle = orders ? (syncBy === "formation" ? orders.sync.idle : orders.sync.idleUnits) : [];
 
   return (
     <div className="page-body ord-page">
-      <div className="ord-marking top">{marking}</div>
-
-      <Panel icon={FileText} title="Plan products">
+      <Panel title="Plan products">
         <div className="detail-stack">
           <FormGrid columns={2}>
             <Field label="Scenario">
@@ -254,7 +248,7 @@ export default function Orders({ notify, profile }: PageProps) {
       </Panel>
 
       {tab === "order" ? (
-        <Panel icon={ScrollText} title={orders ? orders.opord.title : "Operation order"}>
+        <Panel title={orders ? orders.opord.title : "Operation order"}>
           {orders ? (
             <div className="detail-stack">
               <ActionRow>
@@ -315,7 +309,7 @@ export default function Orders({ notify, profile }: PageProps) {
       ) : null}
 
       {tab === "sync" ? (
-        <Panel icon={Grid3x3} title="Synchronisation matrix">
+        <Panel title="Synchronisation matrix">
           {orders && orders.sync.phases.length ? (
             <div className="detail-stack">
               <div className="ord-sync-controls">
@@ -385,7 +379,7 @@ export default function Orders({ notify, profile }: PageProps) {
       ) : null}
 
       {tab === "dsm" ? (
-        <Panel icon={ListChecks} title="Decision support matrix">
+        <Panel title="Decision support matrix">
           {orders ? (
             <div className="detail-stack">
               <p className="ord-lead">
@@ -444,7 +438,7 @@ export default function Orders({ notify, profile }: PageProps) {
       ) : null}
 
       {tab === "frago" ? (
-        <Panel icon={GitBranch} title="Fragmentary orders">
+        <Panel title="Fragmentary orders">
           <div className="detail-stack">
             <Field label="Run">
               <select value={runId} onChange={(e) => setRunId(e.target.value)}>
@@ -499,13 +493,12 @@ export default function Orders({ notify, profile }: PageProps) {
         </Panel>
       ) : null}
 
-      <div className="ord-marking bottom">{marking}</div>
     </div>
   );
 }
 
-// Paragraphs carry their own portion mark, so a reader can see which part of the
-// document earned the marking at the head and foot of it.
+// Paragraphs retain their own portion marks without surrounding the workspace
+// in high-salience classification banners.
 function Paragraph({ paragraph, depth = 0 }: { paragraph: OpordParagraph; depth?: number }) {
   return (
     <div className={`ord-para depth-${depth}`}>

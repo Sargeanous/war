@@ -13,7 +13,6 @@ import {
   Network,
   Plus,
   Route,
-  Sparkles,
   Target,
   X,
   FlaskConical,
@@ -27,6 +26,7 @@ import type {
   Domain,
   Mission,
   PlatformInfo,
+  RunSummary,
   Scenario,
   SubTask,
   CoaAnalysisStep,
@@ -39,6 +39,7 @@ import {
   fetchCoas,
   fetchMissions,
   fetchPlatform,
+  fetchRuns,
   fetchScenarios,
   generateCoas,
   silentEvalCoa,
@@ -60,12 +61,24 @@ import {
   SvgRadar,
   Tag,
   TimelineBar,
+  simClock,
   timeAgo,
 } from "../components";
 import { domainLabels, driveModeLabels, sideLabels, statusTone } from "../data";
 import "./coageneration.css";
 
 type CandidateCount = "2" | "3" | "4";
+
+interface NextPlanningAction {
+  status: string;
+  title: string;
+  detail: string;
+  owner: string;
+  due: string;
+  action: string;
+  disabled?: boolean;
+  run: () => void;
+}
 
 const domainColors: Record<Domain, string> = {
   land: "#a16207",
@@ -82,6 +95,12 @@ const healthColors: Record<DataDomainInfo["health"], string> = {
 };
 
 const RADAR_AXES = ["Feasibility", "Acceptability", "Safety", "Cost efficiency", "Effect"];
+const ACTIVE_RUN_STATUSES = new Set<RunSummary["status"]>([
+  "initializing",
+  "running",
+  "paused",
+  "awaiting-decision",
+]);
 
 const clamp01to100 = (v: number) => Math.max(0, Math.min(100, v));
 
@@ -109,6 +128,7 @@ export default function CoaGeneration(props: PageProps) {
   const [scenarioId, setScenarioId] = useState("");
   const [agents, setAgents] = useState<AgentDef[]>([]);
   const [platform, setPlatform] = useState<PlatformInfo | null>(null);
+  const [runs, setRuns] = useState<RunSummary[]>([]);
   const [missions, setMissions] = useState<Mission[]>([]);
   const [coas, setCoas] = useState<Coa[]>([]);
   const [scenarioLoading, setScenarioLoading] = useState(false);
@@ -135,12 +155,13 @@ export default function CoaGeneration(props: PageProps) {
   // Bootstrap: scenarios, agent library and platform data domains.
   useEffect(() => {
     let live = true;
-    Promise.all([fetchScenarios(), fetchAgents(), fetchPlatform()])
-      .then(([scenarioList, agentList, platformInfo]) => {
+    Promise.all([fetchScenarios(), fetchAgents(), fetchPlatform(), fetchRuns()])
+      .then(([scenarioList, agentList, platformInfo, runList]) => {
         if (!live) return;
         setScenarios(scenarioList);
         setAgents(agentList);
         setPlatform(platformInfo);
+        setRuns(runList);
         const preferred = scenarioList.find((s) => s.status === "ready") ?? scenarioList[0];
         if (preferred) setScenarioId(preferred.id);
       })
@@ -191,6 +212,15 @@ export default function CoaGeneration(props: PageProps) {
     [agents]
   );
   const comparable = useMemo(() => coas.filter((c) => c.status !== "rejected"), [coas]);
+  const selectedCoas = useMemo(() => coas.filter((c) => c.status === "selected"), [coas]);
+  const activeRun = useMemo(
+    () =>
+      [...runs]
+        .filter((run) => run.scenarioId === scenarioId && ACTIVE_RUN_STATUSES.has(run.status))
+        .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0] ?? null,
+    [runs, scenarioId]
+  );
+  const planningLocked = Boolean(activeRun);
 
   const subTasks = mission?.subTasks ?? [];
   const subTaskTotalH = Math.max(1, ...subTasks.map((t) => t.endH), scenario?.durationHours ?? 0);
@@ -214,6 +244,10 @@ export default function CoaGeneration(props: PageProps) {
   async function handleCreateMission(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!scenarioId) return;
+    if (activeRun) {
+      notify(`Planning package is locked while "${activeRun.label}" is ${activeRun.status}`);
+      return;
+    }
     const title = missionTitle.trim();
     const intent = missionIntent.trim();
     const endState = missionEndState.trim();
@@ -239,6 +273,10 @@ export default function CoaGeneration(props: PageProps) {
 
   async function handleDecompose() {
     if (!mission) return;
+    if (activeRun) {
+      notify(`Mission decomposition is locked while "${activeRun.label}" is ${activeRun.status}`);
+      return;
+    }
     setDecomposing(true);
     try {
       const updated = await decomposeMission(mission.id);
@@ -259,6 +297,10 @@ export default function CoaGeneration(props: PageProps) {
 
   async function handleGenerate() {
     if (!mission || !scenarioId) return;
+    if (activeRun) {
+      notify(`COA generation is locked while "${activeRun.label}" is ${activeRun.status}`);
+      return;
+    }
     setGenerating(true);
     try {
       const result = await generateCoas({
@@ -290,6 +332,10 @@ export default function CoaGeneration(props: PageProps) {
 
   async function handleSilentEval(coa: Coa) {
     if (evalBusyId) return;
+    if (activeRun) {
+      notify(`Silent deduction is locked because "${activeRun.label}" has released this package to execution`);
+      return;
+    }
     setEvalBusyId(coa.id);
     try {
       const updated = await silentEvalCoa(coa.id);
@@ -306,6 +352,10 @@ export default function CoaGeneration(props: PageProps) {
   }
 
   async function handleCoaStatus(coa: Coa, status: "selected" | "rejected") {
+    if (activeRun) {
+      notify(`COA selection is locked because "${activeRun.label}" has released this package to execution`);
+      return;
+    }
     setBusyCoaId(coa.id);
     try {
       const updated = await updateCoa(coa.id, { status });
@@ -338,6 +388,101 @@ export default function CoaGeneration(props: PageProps) {
       </span>
     );
   }
+
+  function scrollToWorkspace(id: string) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const nextAction: NextPlanningAction = scenarioLoading
+    ? {
+        status: "SYNCHRONIZING",
+        title: "Hold while the planning package is loaded",
+        detail: "Mission, task and COA records are being reconciled against the selected scenario.",
+        owner: "Platform services",
+        due: "In progress",
+        action: "Loading",
+        disabled: true,
+        run: () => undefined,
+      }
+    : activeRun
+      ? {
+          status: "RELEASED TO EXECUTION",
+          title: `${activeRun.label} is ${activeRun.status.replace(/-/g, " ")}`,
+          detail: `This planning package is locked at ${simClock(activeRun.simTimeH)} across ${activeRun.branchCount} branch${activeRun.branchCount === 1 ? "" : "es"}. Continue through the issued orders and command decision record.`,
+          owner: "Simulation Control",
+          due: activeRun.status === "awaiting-decision" ? "Decision required now" : "In execution",
+          action: "Open decision record",
+          run: () => {
+            notify(`Opening the decision record for "${activeRun.label}"`);
+            goTo("orders");
+          },
+        }
+      : !mission
+      ? {
+          status: "ACTION REQUIRED",
+          title: "File the commander's mission and desired end state",
+          detail: "COA development is blocked until a mission is owned and filed against this scenario.",
+          owner: "Plans Cell (J5)",
+          due: "Before decomposition",
+          action: "File mission",
+          run: () => scrollToWorkspace("coa-mission-workspace"),
+        }
+      : subTasks.length === 0
+        ? {
+            status: "ACTION REQUIRED",
+            title: "Decompose the mission into assigned sub-tasks",
+            detail: "The mission is filed, but domains, dependencies and mission-agent assignments are not yet established.",
+            owner: "Plans Cell (J5)",
+            due: "Before COA generation",
+            action: "Decompose mission",
+            disabled: decomposing,
+            run: () => void handleDecompose(),
+          }
+        : coas.length === 0
+          ? {
+              status: "READY",
+              title: "Generate candidate courses of action",
+              detail: `${subTasks.length} assigned sub-tasks are ready for candidate development and comparative scoring.`,
+              owner: "Plans Cell (J5)",
+              due: "Next planning action",
+              action: "Generate COAs",
+              disabled: generating,
+              run: () => void handleGenerate(),
+            }
+          : selectedCoas.length === 0
+            ? {
+                status: "DECISION REQUIRED",
+                title: "Select a COA for the execution package",
+                detail: `${coas.filter((coa) => coa.status !== "rejected").length} viable candidates remain; compare risk, effect and silent-deduction evidence before selection.`,
+                owner: "Plans Cell (J5)",
+                due: "Before run authorization",
+                action: "Review candidates",
+                run: () => scrollToWorkspace("coa-candidate-workspace"),
+              }
+            : {
+                status: "HANDOFF READY",
+                title: "Confirm adjudication rules for the selected COA package",
+                detail: `${selectedCoas.map((coa) => coa.name).join(", ")} ${selectedCoas.length === 1 ? "is" : "are"} selected and ready for controlled execution preparation.`,
+                owner: "Exercise Control",
+                due: "Before run authorization",
+                action: "Open adjudication rules",
+                run: () => {
+                  notify("Opening adjudication rules for the selected COA package");
+                  goTo("rules");
+                },
+              };
+
+  const planningStages = [
+    { label: "Scenario validated", complete: planningLocked || Boolean(scenario && scenario.status !== "draft") },
+    { label: "Mission filed", complete: planningLocked || Boolean(mission) },
+    { label: "Tasks assigned", complete: planningLocked || subTasks.length > 0 },
+    {
+      label: planningLocked ? "Released to execution" : "COA selected",
+      complete: planningLocked || selectedCoas.length > 0,
+    },
+  ];
+  const firstIncompleteStage = planningStages.findIndex((stage) => !stage.complete);
+  const currentPlanningStage = firstIncompleteStage === -1 ? planningStages.length - 1 : firstIncompleteStage;
 
   if (scenarios === null) {
     return (
@@ -402,26 +547,109 @@ export default function CoaGeneration(props: PageProps) {
         ) : null}
       </div>
 
-      <Panel
-        icon={Target}
-        title="Mission & decomposition"
-        action={
-          mission ? (
-            <Button
-              icon={Network}
-              variant="secondary"
-              onClick={handleDecompose}
-              disabled={decomposing || scenarioLoading}
-            >
-              {decomposing
-                ? "Decomposing…"
-                : subTasks.length > 0
-                  ? "Re-run decomposition"
-                  : "Decompose mission"}
-            </Button>
-          ) : undefined
-        }
-      >
+      {scenario ? (
+        <section className="coa-package-control" aria-label="Planning package control">
+          <div className="coa-package-head">
+            <div>
+              <span>PLANNING PACKAGE CONTROL</span>
+              <strong>{scenario.name}</strong>
+            </div>
+            <div className="coa-package-facts">
+              <span>
+                Owner <strong>{scenario.createdBy || "Plans Cell (J5)"}</strong>
+              </span>
+              <span>
+                Mission <strong>{mission?.status ?? "not filed"}</strong>
+              </span>
+              <span>
+                COA package{" "}
+                <strong>
+                  {activeRun
+                    ? "released to execution"
+                    : selectedCoas.length > 0
+                      ? "selected"
+                      : coas.length > 0
+                        ? "in review"
+                        : "not started"}
+                </strong>
+              </span>
+            </div>
+          </div>
+          <div className="coa-lifecycle">
+            {planningStages.map((stage, index) => (
+              <span
+                key={stage.label}
+                className={`${stage.complete ? "is-complete" : ""}${index === currentPlanningStage ? " is-current" : ""}`}
+                aria-current={index === currentPlanningStage ? "step" : undefined}
+              >
+                <i />
+                {stage.label}
+              </span>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="coa-next-action" aria-label="Next planning action">
+        <div className="coa-next-copy">
+          <span>{nextAction.status}</span>
+          <strong>{nextAction.title}</strong>
+          <p>{nextAction.detail}</p>
+        </div>
+        <dl>
+          <div>
+            <dt>Owner</dt>
+            <dd>{nextAction.owner}</dd>
+          </div>
+          <div>
+            <dt>Due</dt>
+            <dd>{nextAction.due}</dd>
+          </div>
+        </dl>
+        <Button onClick={nextAction.run} disabled={nextAction.disabled}>
+          {nextAction.action}
+        </Button>
+      </section>
+
+      {activeRun ? (
+        <section className="coa-execution-lock" aria-label="Released planning package">
+          <div>
+            <strong>PLANNING PACKAGE RELEASED</strong>
+            <span>
+              {activeRun.label} is {activeRun.status.replace(/-/g, " ")}. Mission decomposition, generation,
+              evaluation and COA disposition are locked to protect the execution baseline.
+            </span>
+          </div>
+          <span className="coa-execution-lock-meta">
+            {activeRun.id} | {simClock(activeRun.simTimeH)} | {activeRun.branchCount} branch
+            {activeRun.branchCount === 1 ? "" : "es"}
+          </span>
+        </section>
+      ) : null}
+
+      <div id="coa-mission-workspace" className="coa-workspace-anchor">
+        <Panel
+          title="Mission & decomposition"
+          action={
+            mission ? (
+              <Button
+                icon={Network}
+                variant="secondary"
+                onClick={handleDecompose}
+                disabled={decomposing || scenarioLoading || planningLocked}
+                title={activeRun ? `Locked while ${activeRun.label} is ${activeRun.status}` : undefined}
+              >
+                {planningLocked
+                  ? "Decomposition locked"
+                  : decomposing
+                  ? "Decomposing…"
+                  : subTasks.length > 0
+                    ? "Re-run decomposition"
+                    : "Decompose mission"}
+              </Button>
+            ) : undefined
+          }
+        >
         {scenarioLoading ? (
           <EmptyState
             icon={Compass}
@@ -434,7 +662,7 @@ export default function CoaGeneration(props: PageProps) {
               <div className="coa-mission-title">
                 <strong>{mission.title}</strong>
                 <small>
-                  {sideLabels[mission.side]} | updated {timeAgo(mission.updatedAt)}
+                  Owner: Plans Cell (J5) | {sideLabels[mission.side]} | {mission.id} | updated {timeAgo(mission.updatedAt)}
                 </small>
               </div>
               <StatusPill label={mission.status} tone={statusTone(mission.status)} />
@@ -495,6 +723,7 @@ export default function CoaGeneration(props: PageProps) {
             <Field label="Mission title">
               <input
                 value={missionTitle}
+                disabled={planningLocked}
                 onChange={(e) => setMissionTitle(e.target.value)}
                 placeholder="e.g. Secure the Meridian central strait"
               />
@@ -502,6 +731,7 @@ export default function CoaGeneration(props: PageProps) {
             <Field label="Commander's intent">
               <textarea
                 value={missionIntent}
+                disabled={planningLocked}
                 onChange={(e) => setMissionIntent(e.target.value)}
                 placeholder="Purpose, key tasks and acceptable risk for the coalition task force…"
               />
@@ -509,24 +739,31 @@ export default function CoaGeneration(props: PageProps) {
             <Field label="Desired end state">
               <textarea
                 value={missionEndState}
+                disabled={planningLocked}
                 onChange={(e) => setMissionEndState(e.target.value)}
                 placeholder="Conditions that must hold when the operation concludes…"
               />
             </Field>
             <ActionRow>
-              <Button icon={Plus} type="submit" disabled={creatingMission}>
-                {creatingMission ? "Filing mission…" : "Create BLUE mission"}
+              <Button
+                icon={Plus}
+                type="submit"
+                disabled={creatingMission || planningLocked}
+                title={activeRun ? `Locked while ${activeRun.label} is ${activeRun.status}` : undefined}
+              >
+                {planningLocked ? "Mission filing locked" : creatingMission ? "Filing mission…" : "Create BLUE mission"}
               </Button>
             </ActionRow>
           </form>
         )}
-      </Panel>
+        </Panel>
+      </div>
 
-      <Panel
-        icon={Route}
-        title="COA candidates"
-        action={
-          <ActionRow>
+      <div id="coa-candidate-workspace" className="coa-workspace-anchor">
+        <Panel
+          title="COA candidates"
+          action={
+            <ActionRow>
             <Segmented
               value={strategy}
               onChange={(v) => setStrategy(v as CoaStrategy)}
@@ -547,16 +784,21 @@ export default function CoaGeneration(props: PageProps) {
               ]}
             />
             <Button
-              icon={Sparkles}
               onClick={handleGenerate}
-              disabled={generating || scenarioLoading || !mission}
-              title={mission ? undefined : "File a mission before generating COAs"}
+              disabled={generating || scenarioLoading || !mission || planningLocked}
+              title={
+                activeRun
+                  ? `Locked while ${activeRun.label} is ${activeRun.status}`
+                  : mission
+                    ? undefined
+                    : "File a mission before generating COAs"
+              }
             >
-              {generating ? "Generating…" : "Generate COAs"}
+              {planningLocked ? "Generation locked" : generating ? "Generating…" : "Generate COAs"}
             </Button>
-          </ActionRow>
-        }
-      >
+            </ActionRow>
+          }
+        >
         {analysis.length ? (
           <div className="coa-analysis">
             <p className="coa-analysis-head">SAGE planning analysis</p>
@@ -615,12 +857,14 @@ export default function CoaGeneration(props: PageProps) {
                   </div>
                   <div className="coa-card-sub">
                     <p className="coa-approach">{coa.approach}</p>
+                    <span>Owner - Plans Cell (J5)</span>
                     <span>
-                      {coa.generatedBy === "agent"
-                        ? `Agent - ${generatorAgent?.name ?? "mission agent"}`
+                      Produced by - {coa.generatedBy === "agent"
+                        ? generatorAgent?.name ?? "mission agent"
                         : "Staff planner"}
                     </span>
-                    <span>{timeAgo(coa.createdAt)}</span>
+                    <span>Maturity - {coa.status}</span>
+                    <span>Created {timeAgo(coa.createdAt)}</span>
                   </div>
                   <p className="coa-summary">{coa.summary}</p>
                   <TimelineBar
@@ -660,15 +904,17 @@ export default function CoaGeneration(props: PageProps) {
                     <Button
                       icon={Check}
                       onClick={() => handleCoaStatus(coa, "selected")}
-                      disabled={busyCoaId === coa.id || coa.status === "selected"}
+                      disabled={planningLocked || busyCoaId === coa.id || coa.status === "selected"}
+                      title={activeRun ? `Selection locked by active run ${activeRun.label}` : undefined}
                     >
-                      Select
+                      {planningLocked && coa.status === "selected" ? "Released" : "Select"}
                     </Button>
                     <Button
                       icon={FlaskConical}
                       variant="secondary"
                       onClick={() => handleSilentEval(coa)}
-                      disabled={evalBusyId === coa.id}
+                      disabled={planningLocked || evalBusyId === coa.id}
+                      title={activeRun ? `Evaluation locked by active run ${activeRun.label}` : undefined}
                     >
                       {evalBusyId === coa.id ? "Deduction running…" : "Silent deduction"}
                     </Button>
@@ -676,7 +922,8 @@ export default function CoaGeneration(props: PageProps) {
                       icon={X}
                       variant="secondary"
                       onClick={() => handleCoaStatus(coa, "rejected")}
-                      disabled={busyCoaId === coa.id || coa.status === "rejected"}
+                      disabled={planningLocked || busyCoaId === coa.id || coa.status === "rejected"}
+                      title={activeRun ? `Disposition locked by active run ${activeRun.label}` : undefined}
                     >
                       Reject
                     </Button>
@@ -686,10 +933,11 @@ export default function CoaGeneration(props: PageProps) {
             })}
           </div>
         )}
-      </Panel>
+        </Panel>
+      </div>
 
       <div className="split-grid wide-left">
-        <Panel icon={GitCompare} title="COA comparison">
+        <Panel title="COA comparison">
           {comparable.length === 0 ? (
             <EmptyState
               icon={GitCompare}
@@ -749,7 +997,7 @@ export default function CoaGeneration(props: PageProps) {
           )}
         </Panel>
 
-        <Panel icon={Database} title="Data readiness">
+        <Panel title="Data readiness">
           {platform ? (
             <div className="coa-stack">
               <div className="coa-bars">

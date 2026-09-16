@@ -1,18 +1,12 @@
 import {
   ArrowDown,
   ArrowUp,
-  Crosshair,
-  Eye,
   FlaskConical,
-  Footprints,
   Gavel,
-  HeartPulse,
-  Package,
   Pencil,
   Plus,
   Scale,
   Trash2,
-  Trophy,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -81,13 +75,13 @@ const EFFECT_TYPES: RuleEffectType[] = [
   "request-decision",
 ];
 
-const CATEGORIES: Array<{ id: RuleCategory; label: string; icon: typeof Eye; hint: string }> = [
-  { id: "detection", label: "Detection", icon: Eye, hint: "Who sees whom, and when tracks are revealed" },
-  { id: "engagement", label: "Engagement", icon: Crosshair, hint: "Hit probability modifiers and fire discipline" },
-  { id: "movement", label: "Movement", icon: Footprints, hint: "Speed and maneuver modifiers" },
-  { id: "logistics", label: "Logistics", icon: Package, hint: "Supply consumption and sustainment reports" },
-  { id: "attrition", label: "Attrition", icon: HeartPulse, hint: "Progressive damage outside direct fire" },
-  { id: "victory", label: "Victory", icon: Trophy, hint: "Scoring and end-state emphasis" },
+const CATEGORIES: Array<{ id: RuleCategory; label: string; hint: string }> = [
+  { id: "detection", label: "Detection", hint: "Who sees whom, and when tracks are revealed" },
+  { id: "engagement", label: "Engagement", hint: "Hit probability modifiers and fire discipline" },
+  { id: "movement", label: "Movement", hint: "Speed and maneuver modifiers" },
+  { id: "logistics", label: "Logistics", hint: "Supply consumption and sustainment reports" },
+  { id: "attrition", label: "Attrition", hint: "Progressive damage outside direct fire" },
+  { id: "victory", label: "Victory", hint: "Scoring and end-state emphasis" },
 ];
 
 const SITUATIONS = [
@@ -138,6 +132,7 @@ export default function RuleConfig({ notify }: PageProps) {
   const [testing, setTesting] = useState(false);
 
   const selected = ruleSets.find((rs) => rs.id === selectedId) ?? ruleSets[0];
+  const locked = selected?.status === "active";
 
   useEffect(() => {
     let alive = true;
@@ -162,10 +157,40 @@ export default function RuleConfig({ notify }: PageProps) {
 
   async function save(patch: Partial<RuleSet>, message: string) {
     if (!selected) return;
+    if (selected.status === "active") {
+      notify("Active rule snapshots are locked. Create a working copy before changing adjudication.");
+      return;
+    }
     try {
       const updated = await updateRuleSet(selected.id, patch);
       setRuleSets((list) => list.map((rs) => (rs.id === updated.id ? updated : rs)));
       notify(message);
+    } catch (error) {
+      notify(errMsg(error));
+    }
+  }
+
+  async function forkRuleSet() {
+    if (!selected) return;
+    try {
+      const draft = await createRuleSet({
+        name: `${selected.name} - working copy`,
+        description: `Working copy of ${selected.name}. Changes do not affect operational runs until approved and activated.`,
+        domainFocus: selected.domainFocus,
+        author: selected.author,
+      });
+      const cloned = await updateRuleSet(draft.id, {
+        rules: selected.rules.map((rule) => ({
+          ...rule,
+          conditions: rule.conditions.map((condition) => ({ ...condition })),
+          effects: rule.effects.map((effect) => ({ ...effect, params: { ...effect.params } })),
+        })),
+        adjudication: { ...selected.adjudication, phaseOrder: [...selected.adjudication.phaseOrder] },
+        status: "draft",
+      });
+      setRuleSets((list) => [...list, cloned]);
+      setSelectedId(cloned.id);
+      notify(`Working copy created from ${selected.name}`);
     } catch (error) {
       notify(errMsg(error));
     }
@@ -229,15 +254,20 @@ export default function RuleConfig({ notify }: PageProps) {
           {selected ? (
             <>
               <Panel
-                icon={Scale}
                 title={selected.name}
                 action={
-                  <>
+                  <div className="rc-lifecycle-actions">
                     <Tag label={selected.domainFocus} />
                     <StatusPill label={selected.status} tone={statusTone(selected.status)} />
-                  </>
+                    {locked ? <Button variant="secondary" onClick={forkRuleSet}>Create working copy</Button> : null}
+                  </div>
                 }
               >
+                <div className={`rc-lifecycle-strip${locked ? " is-locked" : ""}`}>
+                  <span>ARTIFACT STATE</span>
+                  <strong>{locked ? "Published snapshot · locked for active runs" : "Draft workspace · changes are not operational"}</strong>
+                  <small>Owner {selected.author} · updated {new Date(selected.updatedAt).toISOString().replace("T", " ").slice(0, 16)}Z</small>
+                </div>
                 <p className="rc-set-desc">
                   {selected.description} <em>- {selected.author}, updated {timeAgo(selected.updatedAt)}</em>
                 </p>
@@ -249,8 +279,8 @@ export default function RuleConfig({ notify }: PageProps) {
                 </DetailGrid>
               </Panel>
 
-              <Panel icon={Gavel} title="Adjudication flow">
-                <div className="rc-adj-grid">
+              <Panel title="Adjudication flow">
+                <div className={`rc-adj-grid${locked ? " is-locked" : ""}`} aria-disabled={locked || undefined}>
                   <Field label="Mode">
                     <Segmented
                       value={selected.adjudication.mode}
@@ -277,6 +307,7 @@ export default function RuleConfig({ notify }: PageProps) {
                   <Field label="Random seed">
                     <input
                       type="number"
+                      disabled={locked}
                       defaultValue={selected.adjudication.seed}
                       key={`${selected.id}-seed`}
                       onBlur={(e) => {
@@ -293,13 +324,13 @@ export default function RuleConfig({ notify }: PageProps) {
                         <span key={phase} className="rc-phase-chip">
                           <em>{index + 1}</em>
                           <strong>{phase}</strong>
-                          <button className="rc-chip-btn" type="button" disabled={index === 0} onClick={() => movePhase(index, -1)}>
+                          <button className="rc-chip-btn" type="button" disabled={locked || index === 0} onClick={() => movePhase(index, -1)}>
                             <ArrowUp size={13} />
                           </button>
                           <button
                             className="rc-chip-btn"
                             type="button"
-                            disabled={index === selected.adjudication.phaseOrder.length - 1}
+                            disabled={locked || index === selected.adjudication.phaseOrder.length - 1}
                             onClick={() => movePhase(index, 1)}
                           >
                             <ArrowDown size={13} />
@@ -311,24 +342,21 @@ export default function RuleConfig({ notify }: PageProps) {
                 </div>
               </Panel>
 
-              <Panel icon={Gavel} title="Rules by category" action={<Tag label={`${selected.rules.length} rules`} />}>
+              <Panel title="Rules by category" action={<Tag label={`${selected.rules.length} rules`} />}>
                 <div className="rc-groups">
                   {CATEGORIES.map((category) => {
                     const rules = selected.rules
                       .filter((r) => r.category === category.id)
                       .sort((a, b) => a.priority - b.priority);
-                    const Icon = category.icon;
                     return (
                       <section key={category.id} className="rc-group">
                         <header className="rc-group-head">
-                          <span className="rc-group-icon">
-                            <Icon size={16} />
-                          </span>
                           <strong>{category.label}</strong>
                           <small>{category.hint}</small>
                           <button
                             className="rc-add-btn"
                             type="button"
+                            disabled={locked}
                             onClick={() => {
                               setNewRuleCategory(category.id);
                               setEditingRule("new");
@@ -345,6 +373,7 @@ export default function RuleConfig({ notify }: PageProps) {
                                 className="rc-rule-check"
                                 type="checkbox"
                                 checked={rule.enabled}
+                                disabled={locked}
                                 onChange={() => toggleRule(rule)}
                                 title={rule.enabled ? "Disable rule" : "Enable rule"}
                               />
@@ -370,7 +399,7 @@ export default function RuleConfig({ notify }: PageProps) {
                               </div>
                               <div className="rc-rule-side">
                                 <Tag label={`p${rule.priority}`} />
-                                <button className="rc-row-btn" type="button" onClick={() => setEditingRule(rule)}>
+                                <button className="rc-row-btn" type="button" disabled={locked} onClick={() => setEditingRule(rule)}>
                                   <Pencil size={13} />
                                   Edit
                                 </button>
@@ -392,7 +421,7 @@ export default function RuleConfig({ notify }: PageProps) {
         </div>
 
         <div className="rc-stack">
-          <Panel icon={Scale} title="Rule sets" action={<Button icon={Plus} variant="secondary" onClick={() => setShowNewSet(true)}>New</Button>}>
+          <Panel title="Rule sets" action={<Button icon={Plus} variant="secondary" onClick={() => setShowNewSet(true)}>New</Button>}>
             <div className="zone-list">
               {ruleSets.map((rs) => (
                 <button key={rs.id} type="button" onClick={() => { setSelectedId(rs.id); setTestResult(null); }}>
@@ -409,7 +438,7 @@ export default function RuleConfig({ notify }: PageProps) {
           </Panel>
 
           {selected ? (
-            <Panel icon={FlaskConical} title="Test the rule set">
+            <Panel title="Test the rule set">
               <div className="detail-stack">
                 <Field label="Canned situation">
                   <select value={situation} onChange={(e) => setSituation(e.target.value)}>

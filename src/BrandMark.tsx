@@ -1,9 +1,7 @@
 import { useState } from "react";
 
-// The platform mark. Where a customer emblem is supplied it takes the mark
-// position; the asset lives outside the repo, so the platform's own glyph
-// stands in until the file is present and the shell never shows a broken
-// image. Drop the emblem at public/mod-emblem.png (or .svg) to use it.
+// The official SANDTABLE platform mark. The same eagle asset is used by the
+// access-profile screen, the persistent shell and the browser tab.
 const EMBLEM_SRC = "/mod-emblem.png";
 
 interface BrandMarkProps {
@@ -21,7 +19,8 @@ export default function BrandMark({ size = 34, title = "SANDTABLE" }: BrandMarkP
         src={EMBLEM_SRC}
         width={size}
         height={size}
-        alt={title}
+        alt={`${title} eagle emblem`}
+        decoding="sync"
         onError={() => setEmblemFailed(true)}
       />
     );
@@ -30,11 +29,8 @@ export default function BrandMark({ size = 34, title = "SANDTABLE" }: BrandMarkP
   return <SandtableGlyph size={size} title={title} />;
 }
 
-// Drawn from the platform's own vocabulary rather than generic military
-// insignia: the hexagon is the board cell the engine reasons in, the ridge is
-// the terrain model the name refers to, and the delta is a piece standing on
-// it. Strokes use currentColor so the mark inherits whatever surface it sits
-// on; only the piece carries the brand accent.
+// A compact fallback keeps the shell usable if the official asset cannot load;
+// it is not presented as an alternative platform identity.
 function SandtableGlyph({ size, title }: { size: number; title: string }) {
   return (
     <svg

@@ -1,4 +1,4 @@
-import { Activity, Bot, BrainCircuit, Eye, GitBranch, Joystick, Landmark, Network, Target, Workflow } from "lucide-react";
+import { BrainCircuit } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import "./ailayer.css";
 import { ApiError, fetchAgentActivity, fetchBootstrap, fetchRun } from "../api";
@@ -119,7 +119,7 @@ export default function AiLayer({ notify }: PageProps) {
       <div className="ail-columns">
         {/* Column 1, strategic */}
         <div className="ail-col">
-          <Panel icon={Target} title="Strategic - Task decomposition">
+          <Panel title="Strategic - Task decomposition">
             <div className="detail-stack">
               <div className="ail-flow">
                 <span className="ail-flow-chip" style={{ borderColor: "var(--primary)", background: "var(--primary-soft)" }}>
@@ -137,7 +137,6 @@ export default function AiLayer({ notify }: PageProps) {
               {missions.map((mission) => (
                 <article key={mission.id} className="ail-mission-card">
                   <header>
-                    <Landmark size={15} />
                     <strong>{mission.title}</strong>
                     <StatusPill label={mission.status} tone={statusTone(mission.status)} />
                   </header>
@@ -146,14 +145,13 @@ export default function AiLayer({ notify }: PageProps) {
                     <div className="ail-task-mini">
                       {mission.subTasks.slice(0, 6).map((task) => (
                         <span key={task.id}>
-                          <GitBranch size={12} />
                           {task.title}
                           <em>{task.assignedAgentId ? task.assignedAgentId.replace("agt-", "").replace(/-\d+$/, "") : "unassigned"}</em>
                         </span>
                       ))}
                       {mission.subTasks.length > 6 ? (
                         <span>
-                          <GitBranch size={12} />… {plural(mission.subTasks.length - 6, "more sub-task")}
+                          … {plural(mission.subTasks.length - 6, "more sub-task")}
                         </span>
                       ) : null}
                     </div>
@@ -168,7 +166,7 @@ export default function AiLayer({ notify }: PageProps) {
 
         {/* Column 2, tactical agent library */}
         <div className="ail-col">
-          <Panel icon={Bot} title="Tactical - Agent library by drive mode">
+          <Panel title="Tactical - Agent library by drive mode">
             <div className="detail-stack">
               {DRIVE_ORDER.map((mode) => {
                 const group = agents.filter((a) => a.driveMode === mode);
@@ -183,7 +181,6 @@ export default function AiLayer({ notify }: PageProps) {
                       {group.map((agent) => (
                         <button key={agent.id} type="button" className="ail-agent-card" onClick={() => setInspecting(agent)}>
                           <header>
-                            <Bot size={15} />
                             <strong>{agent.name}</strong>
                             <StatusPill label={agent.status} tone={statusTone(agent.status)} />
                           </header>
@@ -204,7 +201,7 @@ export default function AiLayer({ notify }: PageProps) {
 
         {/* Column 3, human + AI decision */}
         <div className="ail-col">
-          <Panel icon={Workflow} title="Human + AI collaborative decision">
+          <Panel title="Human + AI collaborative decision">
             <div className="detail-stack">
               <div className="ail-flow">
                 <span className="ail-flow-chip">Situation analysis (O)</span>
@@ -220,7 +217,6 @@ export default function AiLayer({ notify }: PageProps) {
                 decisionRows.slice(0, 8).map(({ runLabel, branchName, decision }) => (
                   <article key={decision.id} className="ail-decision-row">
                     <header>
-                      <BrainCircuit size={14} />
                       <strong>{decision.title}</strong>
                       <Tag
                         label={decision.followedAi ? "Followed SAGE" : "Commander override"}
@@ -240,7 +236,7 @@ export default function AiLayer({ notify }: PageProps) {
             </div>
           </Panel>
 
-          <Panel icon={Network} title="Wargame system APIs">
+          <Panel title="Wargame system APIs">
             <div className="detail-stack">
               <DetailGrid>
                 <Detail label="Observation API" value={platform ? `${formatCount(platform.apiStats.observationCalls)} calls` : "-"} />
@@ -248,7 +244,7 @@ export default function AiLayer({ notify }: PageProps) {
                 <Detail label="Avg latency" value={platform ? `${platform.apiStats.avgLatencyMs} ms` : "-"} />
               </DetailGrid>
               <p className="ail-note">
-                <Eye size={13} style={{ verticalAlign: "-2px" }} /> Observation API ↑ sense | <Joystick size={13} style={{ verticalAlign: "-2px" }} /> Piece-drive API ↓ execute
+                Observation API — sense | Piece-drive API — execute
               </p>
             </div>
           </Panel>
@@ -286,7 +282,7 @@ export default function AiLayer({ notify }: PageProps) {
               ))
             ) : (
               <p className="ail-note">
-                <Activity size={13} style={{ verticalAlign: "-2px" }} /> No calls recorded for this agent in the latest run.
+                No calls recorded for this agent in the latest run.
               </p>
             )}
           </div>

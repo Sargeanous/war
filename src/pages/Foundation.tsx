@@ -1,4 +1,4 @@
-import { Boxes, Cpu, Database, GitFork, Layers3, Network, Plus, Puzzle, ShieldCheck, Trash2 } from "lucide-react";
+import { Database, Layers3, Plus, Puzzle, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import "./foundation.css";
 import { ApiError, createPieceType, fetchBootstrap, fetchOntology, fetchPlatform } from "../api";
@@ -119,12 +119,11 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
         <Metric label="Ontology classes" value={String(ontology?.classes.length ?? 0)} helper={`${ontology?.relations.length ?? 0} relations | v${ontology?.version ?? "-"}`} tone="info" />
       </MetricGrid>
 
-      <Panel icon={Cpu} title="Multiple simulation engines">
+      <Panel title="Multiple simulation engines">
         <div className="fnd-engine-grid">
           {platform.engines.map((engine) => (
             <article key={engine.id} className="fnd-card">
               <header>
-                <Cpu size={15} />
                 <strong>{engine.name}</strong>
                 <StatusPill label={engine.status} tone={statusTone(engine.status)} />
               </header>
@@ -143,12 +142,11 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
         <p className="fnd-caption">Unified real-time and turn-based engines | multi-resolution space-time | multi-branch COA in parallel | CGF and AI-agent runtime.</p>
       </Panel>
 
-      <Panel icon={Database} title="Unified data foundation">
+      <Panel title="Unified data foundation">
         <div className="fnd-domain-grid">
           {domains.map((domain) => (
             <article key={domain.id} className="fnd-card">
               <header>
-                <Boxes size={15} />
                 <strong>{domain.name}</strong>
                 <StatusPill label={domain.health} tone={statusTone(domain.health)} />
               </header>
@@ -163,7 +161,7 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
       </Panel>
 
       <div className="split-grid equal">
-        <Panel icon={Puzzle} title="One platform - low-code inventory">
+        <Panel title="One platform - low-code inventory">
           <div className="detail-stack">
             <DetailGrid>
               <Detail label="Maps" value={String(platform.lowCode.maps)} />
@@ -187,7 +185,7 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
             )}
           </div>
         </Panel>
-        <Panel icon={Network} title="Runtime wiring">
+        <Panel title="Runtime wiring">
           <div className="detail-stack">
             <DetailGrid>
               <Detail label="Observation API" value={`${formatCount(platform.apiStats.observationCalls)} calls`} />
@@ -203,7 +201,7 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
         </Panel>
       </div>
 
-      <Panel icon={Layers3} title="Ontology explorer" action={<Tag label={`updated ${ontology ? new Date(ontology.updatedAt).toLocaleDateString() : "-"}`} />}>
+      <Panel title="Ontology explorer" action={<Tag label={`updated ${ontology ? new Date(ontology.updatedAt).toLocaleDateString() : "-"}`} />}>
         <div className="fnd-onto">
           <div className="fnd-tree">
             {tree.map(({ cls, depth }) => (
@@ -214,7 +212,6 @@ export default function Foundation({ notify, goTo, profile }: PageProps) {
                 style={{ marginInlineStart: depth * 18 }}
                 onClick={() => setClassId(cls.id)}
               >
-                <GitFork size={12} />
                 <strong>{cls.label}</strong>
                 <Tag label={cls.category} />
                 {cls.domain ? <small>{domainLabels[cls.domain]}</small> : null}
